@@ -1,0 +1,60 @@
+{
+  "root": {
+    "type": "obj",
+    "children": [
+      {
+        "type": "btn",
+        "properties": {
+          "width": 120,
+          "height": 50,
+          "align": "center",
+          "x": 0,
+          "y": -30
+        },
+        "styles": {
+          "default": {
+            "default": {
+              "bg_color": "#007AFF",
+              "radius": 8
+            }
+          }
+        },
+        "children": [
+          {
+            "type": "label",
+            "properties": {
+              "text": "Emulated Btn",
+              "align": "center",
+              "x": 0,
+              "y": 0
+            },
+            "styles": {
+              "default": {
+                "default": {
+                  "text_font": "montserrat_14",
+                  "text_color": "#FFFFFF"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "label",
+        "properties": {
+          "text": "This UI is Emulated (v1.0)",
+          "align": "bottom_mid",
+          "x": 0,
+          "y": -20
+        },
+        "styles": {
+          "default": {
+            "default": {
+              "text_font": "montserrat_14"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

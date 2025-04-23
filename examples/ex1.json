@@ -1,0 +1,92 @@
+{
+  "root": {
+    "type": "obj",
+    "properties": {
+      "width": "100%",
+      "height": "100%"
+    },
+    "styles": {
+      "default": {
+        "bg_color": "#E0E0E0"
+      }
+    },
+    "children": [
+      {
+        "type": "label",
+        "properties": {
+          "text": "Dynamic UI Label",
+          "align": "top_mid",
+          "x": 0,
+          "y": 20
+        },
+        "styles": {
+          "default": {
+            "text_color": "#333333",
+            "text_font": "montserrat_18"
+          }
+        }
+      },
+      {
+        "type": "btn",
+        "properties": {
+          "width": 120,
+          "height": 40,
+          "align": "center",
+          "x": -80,
+          "y": 30
+        },
+        "styles": {
+          "default": {
+            "bg_color": "#007AFF",
+            "radius": 8
+          },
+          "pressed": {
+            "bg_color": "#0056B3"
+          }
+        },
+        "children": [
+          {
+            "type": "label",
+            "properties": {
+              "text": "Button 1",
+              "align": "center"
+            },
+            "styles": {
+              "default": {
+                "text_color": "#FFFFFF"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "slider",
+        "properties": {
+            "width": "80%",
+            "height": 10,
+            "align": "bottom_mid",
+            "y": -40,
+            "range_min": 0,
+            "range_max": 100,
+            "value": 50
+        },
+        "styles": {
+            "default": {
+                 "bg_color": "#CCCCCC",
+                 "radius": 5
+            },
+            "indicator": {
+                 "bg_color": "#007AFF",
+                 "radius": 5
+            },
+            "knob": {
+                "bg_color": "#0056B3",
+                "radius": 8,
+                "width": 20,
+                "height": 20
+            }
+        }
+      }
+    ]
+  }
+}
