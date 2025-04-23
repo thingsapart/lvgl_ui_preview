@@ -1,6 +1,7 @@
 #ifndef EMUL_LVGL_INTERNAL_H
 #define EMUL_LVGL_INTERNAL_H
 
+// Include the public header FIRST to get the definition of lv_obj_t (struct)
 #include "emul_lvgl.h"
 #include "emul_lvgl_config.h"
 #include <stdint.h>
@@ -8,17 +9,11 @@
 
 // --- Data Structures ---
 
-// Union for property/style values
+// Union for property/style values (remains the same)
 typedef enum {
-    VAL_TYPE_NONE,
-    VAL_TYPE_STRING,
-    VAL_TYPE_INT,
-    VAL_TYPE_COORD, // Special handling for pixels vs pct
-    VAL_TYPE_COLOR,
-    VAL_TYPE_BOOL,
-    VAL_TYPE_FONT, // Store pointer, map to name later
-    VAL_TYPE_ALIGN, // Store enum
-    VAL_TYPE_TEXTALIGN // Store enum for text align
+    VAL_TYPE_NONE, VAL_TYPE_STRING, VAL_TYPE_INT, VAL_TYPE_COORD,
+    VAL_TYPE_COLOR, VAL_TYPE_BOOL, VAL_TYPE_FONT, VAL_TYPE_ALIGN,
+    VAL_TYPE_TEXTALIGN
 } ValueType;
 
 typedef struct {
@@ -35,13 +30,13 @@ typedef struct {
     } data;
 } Value;
 
-// Structure for storing a property
+// Structure for storing a property (remains the same)
 typedef struct {
     char* key; // e.g., "width", "text" (must be malloc'd)
     Value value;
 } Property;
 
-// Structure for storing a style property
+// Structure for storing a style property (remains the same)
 typedef struct {
     lv_part_t part;
     lv_state_t state;
@@ -50,13 +45,15 @@ typedef struct {
 } StyleEntry;
 
 // Structure for the emulated object
-typedef struct EmulLvglObject {
+// ** This IS the definition of the struct lv_obj_t points to **
+// Rename internal struct to match the public forward declaration name convention
+typedef struct _lv_obj_t { // Matches public 'struct _lv_obj_t'
     uintptr_t id;             // Use address as ID for simplicity
     char* type;               // e.g., "label", "btn" (static string)
-    struct EmulLvglObject* parent;
+    struct _lv_obj_t* parent; // Pointer to the same struct type
 
     // Dynamic arrays for children, properties, styles
-    struct EmulLvglObject** children;
+    struct _lv_obj_t** children; // Array of pointers to children
     size_t child_count;
     size_t child_capacity;
 
@@ -68,26 +65,20 @@ typedef struct EmulLvglObject {
     size_t style_count;
     size_t style_capacity;
 
-} EmulLvglObject;
-
+} EmulLvglObject; // Keep internal alias if helpful, but the struct name IS _lv_obj_t
 
 // --- Internal Helper Functions ---
-
-// Memory/Array Management
-bool emul_obj_add_child(EmulLvglObject* parent, EmulLvglObject* child);
-void emul_obj_remove_child(EmulLvglObject* parent, EmulLvglObject* child);
-bool emul_obj_add_property(EmulLvglObject* obj, const char* key, Value value);
-bool emul_obj_add_style(EmulLvglObject* obj, lv_part_t part, lv_state_t state, const char* prop_name, Value value);
+// ** These now operate directly on lv_obj_t* (pointers to the internal struct) **
+bool emul_obj_add_child(lv_obj_t *parent, lv_obj_t *child);
+void emul_obj_remove_child(lv_obj_t *parent, lv_obj_t *child);
+bool emul_obj_add_property(lv_obj_t *obj, const char* key, Value value);
+bool emul_obj_add_style(lv_obj_t *obj, lv_part_t part, lv_state_t state, const char* prop_name, Value value);
 void free_value(Value* value);
 void free_property(Property* prop);
 void free_style_entry(StyleEntry* entry);
-void free_emul_object_recursive(EmulLvglObject* obj); // Frees object and its contents/children
-
-// Finders
-Property* find_property(EmulLvglObject* obj, const char* key);
-StyleEntry* find_style(EmulLvglObject* obj, lv_part_t part, lv_state_t state, const char* prop_name);
-
-// Value creators (internal versions if needed)
+void free_emul_object_recursive(lv_obj_t *obj); // Takes pointer
+Property* find_property(lv_obj_t *obj, const char* key); // Takes pointer
+StyleEntry* find_style(lv_obj_t *obj, lv_part_t part, lv_state_t state, const char* prop_name); // Takes pointer
 Value value_mk_string(const char* s);
 Value value_mk_int(int32_t i);
 Value value_mk_coord(lv_coord_t coord);
@@ -97,22 +88,23 @@ Value value_mk_font(lv_font_t font);
 Value value_mk_align(lv_align_t align);
 Value value_mk_textalign(int32_t align); // lv_text_align_t
 
-// Converters for JSON
+// Converters for JSON (remain the same)
 const char* part_to_string(lv_part_t part);
-const char* state_to_string(lv_state_t state); // Gets primary state name
+const char* state_to_string(lv_state_t state);
 const char* align_to_string(lv_align_t align);
-const char* text_align_to_string(int32_t align); // lv_text_align_t
-void color_to_hex_string(lv_color_t color, char* buf); // buf must be >= 8 chars
+const char* text_align_to_string(int32_t align);
+void color_to_hex_string(lv_color_t color, char* buf);
 const char* font_ptr_to_name(lv_font_t font_ptr);
-void coord_to_string(lv_coord_t coord, char* buf); // buf must be sufficient size (e.g., 10 chars)
+void coord_to_string(lv_coord_t coord, char* buf);
 
 // Internal Global State
-extern EmulLvglObject* g_screen_obj;
-extern EmulLvglObject** g_all_objects; // Dynamic array of all allocated objects
+// ** Store pointers to the internal struct type **
+extern lv_obj_t * g_screen_obj; // Pointer to the screen object
+extern lv_obj_t ** g_all_objects; // Array of pointers
 extern size_t g_all_objects_count;
 extern size_t g_all_objects_capacity;
 
-// Font mapping
+// Font mapping (remains the same)
 typedef struct {
     lv_font_t ptr;
     char* name;
