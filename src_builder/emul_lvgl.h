@@ -1,3 +1,5 @@
+// emul_lvgl.h
+
 #ifndef EMUL_LVGL_H
 #define EMUL_LVGL_H
 
@@ -31,6 +33,45 @@ typedef enum {
     LV_ALIGN_LEFT_MID, LV_ALIGN_CENTER, LV_ALIGN_RIGHT_MID,
     LV_ALIGN_BOTTOM_LEFT, LV_ALIGN_BOTTOM_MID, LV_ALIGN_BOTTOM_RIGHT,
 } lv_align_t;
+
+// Grid align
+typedef enum {
+    LV_GRID_ALIGN_START,
+    LV_GRID_ALIGN_CENTER,
+    LV_GRID_ALIGN_END,
+    LV_GRID_ALIGN_STRETCH,
+    LV_GRID_ALIGN_SPACE_EVENLY,
+    LV_GRID_ALIGN_SPACE_AROUND,
+    LV_GRID_ALIGN_SPACE_BETWEEN,
+} lv_grid_align_t;
+
+// Opacity.
+enum {
+    LV_OPA_TRANSP = 0,
+    LV_OPA_0      = 0,
+    LV_OPA_10     = 25,
+    LV_OPA_20     = 51,
+    LV_OPA_30     = 76,
+    LV_OPA_40     = 102,
+    LV_OPA_50     = 127,
+    LV_OPA_60     = 153,
+    LV_OPA_70     = 178,
+    LV_OPA_80     = 204,
+    LV_OPA_90     = 229,
+    LV_OPA_100    = 255,
+    LV_OPA_COVER  = 255,
+};
+
+// Scale mode
+typedef enum {
+    LV_SCALE_MODE_HORIZONTAL_TOP    = 0x00U,
+    LV_SCALE_MODE_HORIZONTAL_BOTTOM = 0x01U,
+    LV_SCALE_MODE_VERTICAL_LEFT     = 0x02U,
+    LV_SCALE_MODE_VERTICAL_RIGHT    = 0x04U,
+    LV_SCALE_MODE_ROUND_INNER       = 0x08U,
+    LV_SCALE_MODE_ROUND_OUTER      = 0x10U,
+    LV_SCALE_MODE_LAST
+} lv_scale_mode_t;
 
 // States
 typedef uint32_t lv_state_t;
@@ -120,7 +161,10 @@ lv_obj_t * lv_obj_create(lv_obj_t *parent);
 lv_obj_t * lv_label_create(lv_obj_t *parent);
 lv_obj_t * lv_btn_create(lv_obj_t *parent);
 lv_obj_t * lv_slider_create(lv_obj_t *parent);
-// Add other lv_<widget>_create functions as needed...
+// TODO:
+// * Add:
+// - lv_bar_create
+// - lv_scale_create
 
 // ** Object Deletion/Cleanup ** Takes pointer
 void lv_obj_del(lv_obj_t *obj);
@@ -153,7 +197,14 @@ void lv_label_set_text_fmt(lv_obj_t *obj, const char * fmt, ...); // Needs vsnpr
 void lv_slider_set_value(lv_obj_t *obj, int32_t value, lv_anim_enable_t anim);
 void lv_slider_set_range(lv_obj_t *obj, int32_t min, int32_t max);
 
-// Add setters for other widgets...
+// TODO:
+// * Add:
+// - lv_bar_set_range
+// - lv_bar_set_value
+// - and all other bar property setters
+// - lv_scale_set_major_tick_every
+// - lv_scale_set_range
+// - and all other scale property setters
 
 
 // ** Style Property Setters ** Take pointer
@@ -179,8 +230,13 @@ void lv_obj_set_style_width(lv_obj_t *obj, lv_coord_t value, lv_style_selector_t
 void lv_obj_set_style_height(lv_obj_t *obj, lv_coord_t value, lv_style_selector_t selector);
 
 
-// Add more style setters as needed...
-
+// TODO:
+// * Add:
+// - lv_obj_set_style_outline_width
+// - lv_obj_set_style_outline_color
+// - lv_obj_set_style_outline_opa
+// - lv_color_white
+// - lv_obj_set_style_min_height
 
 // --- Helper Value Creators (Mimicking LVGL) ---
 lv_color_t lv_color_hex(uint32_t c);

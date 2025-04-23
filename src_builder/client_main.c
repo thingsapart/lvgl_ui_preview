@@ -13,17 +13,7 @@ void lv_obj_center(lv_obj_t * obj) {
     lv_obj_align(obj, LV_ALIGN_CENTER, 0, 0);
 }
 
-int main() {
-    printf("--- Running LVGL Emulation Client (Using lv_obj_t *) ---\n");
-    emul_lvgl_init();
-    emul_lvgl_register_font(&lv_font_montserrat_14, "montserrat_14");
-    emul_lvgl_register_font(&lv_font_montserrat_18, "montserrat_18");
-
-    printf("Creating emulated UI...\n");
-    // ** Use lv_obj_t * for all object variables **
-    lv_obj_t * screen = lv_obj_create(lv_screen_active());
-    lv_obj_set_size(screen, lv_pct(100), lv_pct(100));
-
+void lv_test_screen(lv_obj_t *screen) {
     lv_obj_t * btn = lv_btn_create(screen);
     lv_obj_set_size(btn, 120, 50);
     lv_obj_align(btn, LV_ALIGN_CENTER, 0, -30); // Pass btn directly
@@ -44,6 +34,22 @@ int main() {
     lv_label_set_text(info_label2, "... and more");
     lv_obj_align(info_label2, LV_ALIGN_BOTTOM_MID, 0, -20);
     lv_obj_set_style_text_font(info_label2, lv_font_default(), LV_PART_MAIN | LV_STATE_DEFAULT);
+}
+
+#include "../src/ui/gen_views/feed_rate_view.h"
+
+int main() {
+    printf("--- Running LVGL Emulation Client (Using lv_obj_t *) ---\n");
+    emul_lvgl_init();
+    emul_lvgl_register_font(&lv_font_montserrat_14, "montserrat_14");
+    emul_lvgl_register_font(&lv_font_montserrat_18, "montserrat_18");
+
+    printf("Creating emulated UI...\n");
+    // ** Use lv_obj_t * for all object variables **
+    lv_obj_t * screen = lv_obj_create(lv_screen_active());
+    lv_obj_set_size(screen, lv_pct(100), lv_pct(100));
+
+    feed_rate_view_t *fv = feed_rate_view_create(screen);
 
     printf("Generating JSON...\n");
     // ** Pass pointer to screen object **

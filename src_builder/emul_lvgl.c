@@ -1,3 +1,5 @@
+// emul_lvgl.c
+
 #include "emul_lvgl_internal.h" // Includes public header first
 #include <stdio.h>
 #include <stdlib.h>
