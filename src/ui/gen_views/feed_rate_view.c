@@ -133,6 +133,12 @@ feed_rate_view_t *feed_rate_view_create(lv_obj_t *parent) {
         ;
         __max_client_area(bars);
         self->bars = bars;
+        do {
+          lv_obj_t *_dv_current_widget = bars;
+          lv_style_selector_t _dv_current_selector =
+              LV_PART_MAIN | LV_STATE_DEFAULT;
+          __pad_left(10) __pad_right(10);
+        } while (0);
         lv_obj_t *feed_bar = lv_bar_create(__curr_parent);
         do {
           lv_obj_t *__curr_parent = feed_bar;
@@ -166,8 +172,8 @@ feed_rate_view_t *feed_rate_view_create(lv_obj_t *parent) {
                 LV_PART_MAIN | LV_STATE_DEFAULT;
             __min_height(10)
                 lv_scale_set_mode(feed_scale, LV_SCALE_MODE_HORIZONTAL_BOTTOM);
-            lv_scale_set_major_tick_every(feed_scale, 100);
-            lv_scale_set_range(feed_scale, 0, 10000);
+            lv_scale_set_major_tick_every(feed_scale, 2);
+            lv_scale_set_range(feed_scale, 0, 10);
             ;
           } while (0);
           ;
@@ -249,6 +255,23 @@ feed_rate_view_t *feed_rate_view_create(lv_obj_t *parent) {
       ;
     } while (0);
     self->override = override;
+    lv_obj_t *load_lbl = lv_label_create(__curr_parent);
+    do {
+      lv_obj_t *__curr_parent = load_lbl;
+      lv_obj_set_style_outline_width(load_lbl, 1, 0);
+      lv_obj_set_style_outline_color(load_lbl, lv_color_hex(0xffffff), 0);
+      lv_obj_set_style_outline_opa(load_lbl, LV_OPA_60, 0);
+      ;
+      __max_client_area(load_lbl);
+      do {
+        lv_obj_t *_dv_current_widget = load_lbl;
+        lv_style_selector_t _dv_current_selector =
+            LV_PART_MAIN | LV_STATE_DEFAULT;
+        __text("Load");
+      } while (0);
+      ;
+    } while (0);
+    self->load_lbl = load_lbl;
     lv_obj_t *load = lv_label_create(__curr_parent);
     do {
       lv_obj_t *__curr_parent = load;
@@ -261,7 +284,7 @@ feed_rate_view_t *feed_rate_view_create(lv_obj_t *parent) {
         lv_obj_t *_dv_current_widget = load;
         lv_style_selector_t _dv_current_selector =
             LV_PART_MAIN | LV_STATE_DEFAULT;
-        __text("56%");
+        __text("70%");
       } while (0);
       ;
     } while (0);
@@ -312,7 +335,7 @@ feed_rate_view_t *feed_rate_view_create(lv_obj_t *parent) {
       _layout_v(
           self->right, LV_FLEX_ALIGN_START, _content(self->unit),
           _content(self->override_lbl), _content(self->override),
-          _content(self->load),
+          _content(self->load_lbl), _content(self->load),
           do {
             lv_obj_t *_dv_current_widget = self->right;
             lv_style_selector_t _dv_current_selector =

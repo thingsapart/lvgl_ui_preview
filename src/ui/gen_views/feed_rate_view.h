@@ -21,6 +21,7 @@ struct feed_rate_view_t {
   lv_obj_t *unit;
   lv_obj_t *override_lbl;
   lv_obj_t *override;
+  lv_obj_t *load_lbl;
   lv_obj_t *load;
   ;
 };

@@ -14,12 +14,12 @@ def_view(
                 component(identifier, label, style(identifier,__text("F"),__max_client_area(), __text_font(&lv_font_montserrat_24))),
                 component(value, label, style(value, __text("7000"), __max_client_area(), __text_font(&lv_font_montserrat_24), __size(lv_pct(100), 40))),
                 component(spacer_left, obj, style(spacer_left, __max_client_area(), __bg_opa(LV_OPA_0), __border_width(0))),
-                container(bars, 
+                container(bars, style(bars, __pad_left(10), __pad_right(10)),
                     component(feed_bar, bar, 
                         style(feed_bar, __min_height(20), lv_bar_set_range(feed_bar, 0, 10000); lv_bar_set_value(feed_bar, 7000, LV_ANIM_OFF);)
                     ),
                     component(feed_scale, scale, 
-                        style(feed_scale, __min_height(10), lv_scale_set_mode(feed_scale, LV_SCALE_MODE_HORIZONTAL_BOTTOM); lv_scale_set_major_tick_every(feed_scale, 100); lv_scale_set_range(feed_scale, 0, 10000);)
+                        style(feed_scale, __min_height(10), lv_scale_set_mode(feed_scale, LV_SCALE_MODE_HORIZONTAL_BOTTOM); lv_scale_set_major_tick_every(feed_scale, 2); lv_scale_set_range(feed_scale, 0, 10);)
                     ),
 
                     style(bars, __max_client_area())
@@ -30,7 +30,8 @@ def_view(
             component(unit, label, style(unit, __text("MM/MIN"), __bg_color(lv_color_hex(0xff00ff)), __bg_opa(LV_OPA_100) ) ),
             component(override_lbl, label, style(override_lbl, __text("Override"))),
             component(override, label, style(override, __text("100%"))),
-            component(load, label, style(load, __text("56%"))),
+            component(load_lbl, label, style(load_lbl, __text("Load"))),
+            component(load, label, style(load, __text("70%"))),
         ),
     ),
 
@@ -62,6 +63,7 @@ def_view(
             _content(self->unit),
             _content(self->override_lbl),
             _content(self->override),
+            _content(self->load_lbl),
             _content(self->load),
 
             style(self->right, __size(LV_SIZE_CONTENT, LV_SIZE_CONTENT)),
