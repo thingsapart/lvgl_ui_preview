@@ -40,6 +40,8 @@ INCLUDE(stdlib.h) \
 INCLUDE(ui/layout/lv_vfl.h) \
 INCLUDE(ui/layout/lv_views.h) \
 \
+static const char *TAG = #name; \
+\
 static void _PASTE(name,__impl__start)() {} \
 \
 _PASTE(name, _t) *_PASTE(name, _create)(lv_obj_t *parent) { \

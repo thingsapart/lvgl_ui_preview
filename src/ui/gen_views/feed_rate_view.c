@@ -9,6 +9,7 @@
 #include "string.h"
 #include "ui/layout/lv_vfl.h"
 #include "ui/layout/lv_views.h"
+static const char *TAG = "feed_rate_view";
 static void feed_rate_view__impl__start() {}
 feed_rate_view_t *feed_rate_view_create(lv_obj_t *parent) {
   size_t self_sz = sizeof(feed_rate_view_t);
@@ -22,7 +23,7 @@ feed_rate_view_t *feed_rate_view_create(lv_obj_t *parent) {
   do {
     lv_obj_t *_dv_current_widget = self->main;
     lv_style_selector_t _dv_current_selector = LV_PART_MAIN | LV_STATE_DEFAULT;
-    __text_color(lv_color_white()) __width(lv_pct(100));
+    __text_color(lv_color_white()) __width(lv_pct(50)) __height(lv_pct(50));
   } while (0);
   lv_obj_t *left_mid = lv_obj_create(__curr_parent);
   do {
@@ -54,7 +55,7 @@ feed_rate_view_t *feed_rate_view_create(lv_obj_t *parent) {
           lv_obj_t *_dv_current_widget = caption;
           lv_style_selector_t _dv_current_selector =
               LV_PART_MAIN | LV_STATE_DEFAULT;
-          __text("FEED") __max_client_area();
+          __text("SNEEED") __max_client_area();
         } while (0);
         ;
       } while (0);
@@ -100,8 +101,8 @@ feed_rate_view_t *feed_rate_view_create(lv_obj_t *parent) {
           lv_obj_t *_dv_current_widget = value;
           lv_style_selector_t _dv_current_selector =
               LV_PART_MAIN | LV_STATE_DEFAULT;
-          __text("10000") __max_client_area()
-              __text_font(&lv_font_montserrat_24) __size(lv_pct(100), 40);
+          __text("7000") __max_client_area() __text_font(&lv_font_montserrat_24)
+              __size(lv_pct(100), 40);
         } while (0);
         ;
       } while (0);
@@ -145,7 +146,7 @@ feed_rate_view_t *feed_rate_view_create(lv_obj_t *parent) {
             lv_style_selector_t _dv_current_selector =
                 LV_PART_MAIN | LV_STATE_DEFAULT;
             __min_height(20) lv_bar_set_range(feed_bar, 0, 10000);
-            lv_bar_set_value(feed_bar, 5000, LV_ANIM_OFF);
+            lv_bar_set_value(feed_bar, 7000, LV_ANIM_OFF);
             ;
           } while (0);
           ;

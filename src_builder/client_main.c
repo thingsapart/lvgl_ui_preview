@@ -6,6 +6,7 @@
 // Font pointers remain the same
 const lv_font_t lv_font_montserrat_14 = (const lv_font_t)0xABC14;
 const lv_font_t lv_font_montserrat_18 = (const lv_font_t)0xABC18;
+const lv_font_t lv_font_montserrat_24 = (const lv_font_t)0xABC24;
 #define lv_font_default() (&lv_font_montserrat_14)
 
 // lv_obj_center needs to take lv_obj_t *
@@ -43,6 +44,7 @@ int main() {
     emul_lvgl_init();
     emul_lvgl_register_font(&lv_font_montserrat_14, "montserrat_14");
     emul_lvgl_register_font(&lv_font_montserrat_18, "montserrat_18");
+    emul_lvgl_register_font(&lv_font_montserrat_24, "montserrat_24");
 
     printf("Creating emulated UI...\n");
     // ** Use lv_obj_t * for all object variables **

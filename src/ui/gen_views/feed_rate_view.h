@@ -4,7 +4,7 @@
 * Edit the corresponding '*.def.h' in 'src/ui/components/'.
 **/
 
-#include "emul_lvgl.h"
+#include "lvgl.h"
 struct feed_rate_view_t {
   lv_obj_t *main;
   lv_obj_t *left_mid;

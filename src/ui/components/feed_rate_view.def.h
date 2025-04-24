@@ -4,19 +4,19 @@ def_view(
     feed_rate_view,
 
     components(
-        style(self->main, __text_color(lv_color_white()), __width(lv_pct(100)) ),
+        style(self->main, __text_color(lv_color_white()), __width(lv_pct(50)), __height(lv_pct(50)) ),
 
         container(left_mid,
             container(header_cont,
-                component(caption, label, style(caption, __text("FEED"), __max_client_area())),
+                component(caption, label, style(caption, __text("SNEEED"), __max_client_area())),
             ),
             container(main_cont,
                 component(identifier, label, style(identifier,__text("F"),__max_client_area(), __text_font(&lv_font_montserrat_24))),
-                component(value, label, style(value, __text("10000"), __max_client_area(), __text_font(&lv_font_montserrat_24), __size(lv_pct(100), 40))),
+                component(value, label, style(value, __text("7000"), __max_client_area(), __text_font(&lv_font_montserrat_24), __size(lv_pct(100), 40))),
                 component(spacer_left, obj, style(spacer_left, __max_client_area(), __bg_opa(LV_OPA_0), __border_width(0))),
                 container(bars, 
                     component(feed_bar, bar, 
-                        style(feed_bar, __min_height(20), lv_bar_set_range(feed_bar, 0, 10000); lv_bar_set_value(feed_bar, 5000, LV_ANIM_OFF);)
+                        style(feed_bar, __min_height(20), lv_bar_set_range(feed_bar, 0, 10000); lv_bar_set_value(feed_bar, 7000, LV_ANIM_OFF);)
                     ),
                     component(feed_scale, scale, 
                         style(feed_scale, __min_height(10), lv_scale_set_mode(feed_scale, LV_SCALE_MODE_HORIZONTAL_BOTTOM); lv_scale_set_major_tick_every(feed_scale, 100); lv_scale_set_range(feed_scale, 0, 10000);)

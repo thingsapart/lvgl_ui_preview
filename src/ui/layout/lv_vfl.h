@@ -6,9 +6,12 @@ extern "C" {
 #endif
 
 #include "lvgl.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdarg.h> // For variadic grid item function
+
+#include "debug.h"
 
 #if LVGL_VERSION_MAJOR != 9 || LVGL_VERSION_MINOR < 2
 #warning "lv_vfl requires LVGL version 9.2 or later."
@@ -136,10 +139,10 @@ typedef struct {
 #define _layout_grid(PARENT, COLS_DEF, ROWS_DEF, ...) \
     do { \
         lv_obj_t* _vfl_grid_parent = (PARENT); \
-        if(!_vfl_grid_parent) { LV_LOG_WARN("_layout_grid: NULL parent"); break; } \
+        if(!_vfl_grid_parent) { LOGW(TAG, "_layout_grid: NULL parent"); break; } \
         lv_obj_set_layout(_vfl_grid_parent, LV_LAYOUT_GRID); \
-        static const lv_coord_t _vfl_grid_cols[] = COLS_DEF; \
-        static const lv_coord_t _vfl_grid_rows[] = ROWS_DEF; \
+        static const int32_t _vfl_grid_cols[] = COLS_DEF; \
+        static const int32_t _vfl_grid_rows[] = ROWS_DEF; \
         lv_obj_set_grid_dsc_array(_vfl_grid_parent, _vfl_grid_cols, _vfl_grid_rows); \
         __expand_client_area(PARENT); \
         __scrollable(PARENT, false); \

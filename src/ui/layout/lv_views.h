@@ -874,6 +874,12 @@ static lv_style_selector_t _dv_current_selector = LV_PART_MAIN | LV_STATE_DEFAUL
 #define __pad_ver_2(obj, value)         _APPLY_PAD_VER(obj, value)
 #define __pad_ver(...)                  _PASTE(__pad_ver_, _nargs(__VA_ARGS__))(__VA_ARGS__)
 
+// _margin(value) -> __margin(...)
+#define _APPLY_MARGIN(obj, value)   lv_obj_set_style_margin(obj, value, _dv_current_selector);
+#define __margin_1(value)           _APPLY_MARGIN(_dv_current_widget, value)
+#define __margin_2(obj, value)      _APPLY_MARGIN(obj, value)
+#define __margin(...)               _PASTE(__margin_, _nargs(__VA_ARGS__))(__VA_ARGS__)
+
 // _margin_top(value) -> __margin_top(...)
 #define _APPLY_MARGIN_TOP(obj, value)   lv_obj_set_style_margin_top(obj, value, _dv_current_selector);
 #define __margin_top_1(value)           _APPLY_MARGIN_TOP(_dv_current_widget, value)
