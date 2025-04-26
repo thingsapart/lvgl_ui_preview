@@ -1,13 +1,10 @@
-// emul_lvgl_internal.h
 
 #ifndef EMUL_LVGL_INTERNAL_H
 #define EMUL_LVGL_INTERNAL_H
 
 // Include the public header FIRST to get the definition of lv_obj_t (struct)
 #include "emul_lvgl.h"
-#include "emul_lvgl_config.h"
-#include <stdint.h>
-#include <stdbool.h>
+// Include cJSON header
 #include "cJSON.h"
 
 // --- Data Structures ---
@@ -18,7 +15,8 @@ typedef enum {
     VAL_TYPE_COLOR, VAL_TYPE_BOOL, VAL_TYPE_FONT, VAL_TYPE_ALIGN,
     VAL_TYPE_TEXTALIGN, VAL_TYPE_GRID_ALIGN, VAL_TYPE_INT_ARRAY,
     VAL_TYPE_LAYOUT, VAL_TYPE_FLEX_GROW, VAL_TYPE_FLEX_FLOW,
-    VAL_TYPE_FLEX_ALIGN, VAL_TYPE_SCALE_MODE
+    VAL_TYPE_FLEX_ALIGN, VAL_TYPE_SCALE_MODE, VAL_TYPE_OPA, VAL_TYPE_GRAD_DIR,
+    VAL_TYPE_PTR // Generic pointer type for unknown/complex structs
 } ValueType;
 
 typedef struct {
@@ -37,7 +35,10 @@ typedef struct {
         lv_layout_t layout;
         lv_flex_flow_t flex_flow;
         lv_scale_mode_t scale_mode;
+        lv_opa_t opa;
+        lv_grad_dir_t grad_dir;
         int32_t text_align;     // lv_text_align_t is int32_t based enum
+        void *ptr;              // Generic pointer storage
     } data;
 } Value;
 
@@ -57,10 +58,9 @@ typedef struct {
 
 // Structure for the emulated object
 // ** This IS the definition of the struct lv_obj_t points to **
-// Rename internal struct to match the public forward declaration name convention
-typedef struct _lv_obj_t { // Matches public 'struct _lv_obj_t'
+struct _lv_obj_t {
     uintptr_t id;             // Use address as ID for simplicity
-    char* type;               // e.g., "label", "btn" (static string)
+    const char* type;         // e.g., "label", "btn" (static string from create func)
     struct _lv_obj_t* parent; // Pointer to the same struct type
 
     // Dynamic arrays for children, properties, styles
@@ -75,11 +75,9 @@ typedef struct _lv_obj_t { // Matches public 'struct _lv_obj_t'
     StyleEntry* styles;
     size_t style_count;
     size_t style_capacity;
-
-} EmulLvglObject; // Keep internal alias if helpful, but the struct name IS _lv_obj_t
+};
 
 // --- Internal Helper Functions ---
-// ** These now operate directly on lv_obj_t* (pointers to the internal struct) **
 bool emul_obj_add_child(lv_obj_t *parent, lv_obj_t *child);
 void emul_obj_remove_child(lv_obj_t *parent, lv_obj_t *child);
 bool emul_obj_add_property(lv_obj_t *obj, const char* key, Value value);
@@ -87,9 +85,11 @@ bool emul_obj_add_style(lv_obj_t *obj, lv_part_t part, lv_state_t state, const c
 void free_value(Value* value);
 void free_property(Property* prop);
 void free_style_entry(StyleEntry* entry);
-void free_emul_object_recursive(lv_obj_t *obj); // Takes pointer
-Property* find_property(lv_obj_t *obj, const char* key); // Takes pointer
-StyleEntry* find_style(lv_obj_t *obj, lv_part_t part, lv_state_t state, const char* prop_name); // Takes pointer
+void free_emul_object_contents(lv_obj_t *obj);
+Property* find_property(lv_obj_t *obj, const char* key);
+StyleEntry* find_style(lv_obj_t *obj, lv_part_t part, lv_state_t state, const char* prop_name);
+
+// Value Creators
 Value value_mk_string(const char* s);
 Value value_mk_int_array(const int32_t *array, size_t num_elems);
 Value value_mk_int(int32_t i);
@@ -104,8 +104,12 @@ Value value_mk_layout(lv_layout_t layout);
 Value value_mk_flex_align(lv_flex_align_t al);
 Value value_mk_flex_flow(lv_flex_flow_t al);
 Value value_mk_scale_mode(lv_scale_mode_t val);
+Value value_mk_opa(lv_opa_t val);
+Value value_mk_grad_dir(lv_grad_dir_t val);
+Value value_mk_ptr(void *p);
 
-// Converters for JSON
+
+// JSON Converters
 const char* part_to_string(lv_part_t part);
 const char* state_to_string(lv_state_t state);
 const char* align_to_string(lv_align_t align);
@@ -118,17 +122,17 @@ const char* grid_align_to_string(lv_grid_align_t align);
 const char* flex_align_to_string(lv_flex_align_t align);
 const char* flex_flow_to_string(lv_flex_flow_t flow);
 const char* scale_mode_to_string(lv_scale_mode_t mode);
-cJSON* int_array_to_json_array(const int32_t* arr); // Added declaration
-
+const char* grad_dir_to_string(lv_grad_dir_t dir);
+cJSON* int_array_to_json_array(const int32_t* arr);
+cJSON* build_json_recursive(lv_obj_t *obj);
 
 // Internal Global State
-// ** Store pointers to the internal struct type **
-extern lv_obj_t * g_screen_obj; // Pointer to the screen object
-extern lv_obj_t ** g_all_objects; // Array of pointers
+extern lv_obj_t * g_screen_obj;
+extern lv_obj_t ** g_all_objects;
 extern size_t g_all_objects_count;
 extern size_t g_all_objects_capacity;
 
-// Font mapping (remains the same)
+// Font mapping
 typedef struct {
     lv_font_t ptr;
     char* name;
@@ -136,6 +140,5 @@ typedef struct {
 extern FontMapEntry* g_font_map;
 extern size_t g_font_map_count;
 extern size_t g_font_map_capacity;
-
 
 #endif // EMUL_LVGL_INTERNAL_H

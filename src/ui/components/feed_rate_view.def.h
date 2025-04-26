@@ -12,14 +12,12 @@ def_view(
             ),
             container(main_cont,
                 component(identifier, label, style(identifier,__text("F"),__max_client_area(), __text_font(&lv_font_montserrat_24))),
-                component(value, label, style(value, __text("7000"), __max_client_area(), __text_font(&lv_font_montserrat_24), __size(lv_pct(100), 40))),
+                component(value, label, style(value, __text("8000"), __max_client_area(), __text_font(&lv_font_montserrat_24), __width(lv_pct(100)), __min_height(28))),
                 component(spacer_left, obj, style(spacer_left, __max_client_area(), __bg_opa(LV_OPA_0), __border_width(0))),
                 container(bars, style(bars, __pad_left(10), __pad_right(10)),
-                    component(feed_bar, bar, 
-                        style(feed_bar, __min_height(20), lv_bar_set_range(feed_bar, 0, 10000); lv_bar_set_value(feed_bar, 7000, LV_ANIM_OFF);)
-                    ),
+                    component(feed_bar, bar),
                     component(feed_scale, scale, 
-                        style(feed_scale, __min_height(10), lv_scale_set_mode(feed_scale, LV_SCALE_MODE_HORIZONTAL_BOTTOM); lv_scale_set_major_tick_every(feed_scale, 2); lv_scale_set_range(feed_scale, 0, 10);)
+                        style(feed_scale, __min_height(10), lv_scale_set_mode(feed_scale, LV_SCALE_MODE_HORIZONTAL_BOTTOM); lv_scale_set_major_tick_every(feed_scale, 2); lv_scale_set_range(feed_scale, 0, 10))
                     ),
 
                     style(bars, __max_client_area())
@@ -34,6 +32,12 @@ def_view(
             component(load, label, style(load, __text("70%"))),
         ),
     ),
+
+
+    style(self->feed_bar, __min_height(20), lv_bar_set_range(self->feed_bar, 0, 10000); lv_bar_set_value(self->feed_bar, 8000, LV_ANIM_OFF); __radius(2),
+            selector(LV_PART_INDICATOR, __radius(2), __bg_grad_dir(LV_GRAD_DIR_HOR), __bg_main_stop(120), __bg_color(lv_color_hex(0x22bb00)), __bg_grad_stop(220), __bg_grad_color(lv_color_hex(0xaa3300))),
+            //_bar_indicator(self->feed_bar, feed_bar_cl, LV_OPA_COVER, lv_color_hex(0x00DDDD), lv_color_hex(0x00DD00), LV_GRAD_DIR_HOR, (int)(255 * 0.3f), 3);
+    )
 
     layout(
 
@@ -50,7 +54,7 @@ def_view(
             style(self->main_cont, __max_client_area(), __height(lv_pct(100)), __bg_opa(LV_OPA_0)),
             style(self->identifier, __bg_opa(LV_OPA_0)),
             style(self->value, __min_width(lv_pct(50))),
-            style(self->bars, __bg_opa(LV_OPA_0), __min_width(20), __min_height(30)),
+            style(self->bars, __bg_opa(LV_OPA_0), __min_width(100), __min_height(20)),
             style(self->spacer_left, __size(10, 10))
         ),
 

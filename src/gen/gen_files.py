@@ -1,0 +1,3151 @@
+import json
+import os
+import re
+import argparse
+import textwrap
+
+# --- Configuration ---
+OUTPUT_DIR = "."
+LV_DEF_PATH = "lv_def.json"
+
+EMUL_HEADER_NAME = "emul_lvgl.h"
+EMUL_INTERNAL_HEADER_NAME = "emul_lvgl_internal.h"
+EMUL_SOURCE_NAME = "emul_lvgl.c"
+BUILDER_HEADER_NAME = "ui_builder.h"
+BUILDER_SOURCE_NAME = "ui_builder.c"
+
+# --- Type Mapping (JSON to C) ---
+# Basic mapping, might need refinement for specific cases
+TYPE_MAP = {
+    "int": "int32_t",
+    "char*": "const char *",
+    "const char*": "const char *",
+    "lv_obj_t*": "lv_obj_t *",
+    "void*": "void *",
+    "bool": "bool",
+    "float": "float", # Assuming float for floating point types
+    "double": "double",
+    "uint8_t": "uint8_t",
+    "uint16_t": "uint16_t",
+    "uint32_t": "uint32_t",
+    "int8_t": "int8_t",
+    "int16_t": "int16_t",
+    "int32_t": "int32_t",
+    "unsigned int": "unsigned int",
+    "size_t": "size_t",
+    "lv_coord_t": "lv_coord_t",
+    "lv_color_t": "lv_color_t",
+    "lv_align_t": "lv_align_t",
+    "lv_font_t": "lv_font_t",
+    "lv_style_selector_t": "lv_style_selector_t",
+    "lv_anim_enable_t": "lv_anim_enable_t",
+    "lv_part_t": "lv_part_t",
+    "lv_state_t": "lv_state_t",
+    "lv_event_code_t": "lv_event_code_t", # Guessing
+    "lv_indev_type_t": "lv_indev_type_t", # Guessing
+    "lv_indev_state_t": "lv_indev_state_t", # Guessing
+    "lv_group_t": "lv_group_t *", # Usually pointers
+    "lv_timer_t": "lv_timer_t *", # Usually pointers
+    "lv_disp_t": "lv_disp_t *",   # Usually pointers
+    "lv_indev_t": "lv_indev_t *", # Usually pointers
+    "lv_res_t": "lv_res_t",       # Common result type
+    "lv_layout_t": "lv_layout_t",
+    "lv_grid_align_t": "lv_grid_align_t",
+    "lv_flex_align_t": "lv_flex_align_t",
+    "lv_flex_flow_t": "lv_flex_flow_t",
+    "lv_scale_mode_t": "lv_scale_mode_t",
+    "lv_grad_dir_t": "lv_grad_dir_t",
+    # Structs from lv_def will be mapped directly if simple type name
+    # Add more specific mappings as needed based on lv_def.json content
+    "function pointer": "void (*)(void)", # Placeholder
+    "callback": "void (*)(void)",       # Placeholder
+    "NoneType": "void", # Python's None maps to C's void
+    "None": "void",
+    None: "void",
+}
+
+# Structs that need direct definition in the header (from example)
+DEFINED_STRUCTS = {
+    "lv_color_t": """
+typedef struct {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+    // uint8_t alpha; // Add if LV_COLOR_DEPTH == 32
+} lv_color_t;
+""",
+    # Add lv_point_t, lv_area_t if needed directly
+}
+
+# Hardcoded basic types and constants for emul_lvgl.h
+EMUL_HEADER_STATIC_PART1 = """
+#ifndef EMUL_LVGL_H
+#define EMUL_LVGL_H
+
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h> // For size_t
+
+// Define LV_EXPORT_CONST_INT if not defined elsewhere (e.g., by real LVGL headers)
+// This is just a placeholder to avoid compilation errors if the macro is used.
+#ifndef LV_EXPORT_CONST_INT
+#define LV_EXPORT_CONST_INT(int_value) struct _silence_gcc_warning_ ## int_value {int unused;}
+#endif
+
+
+// --- Basic Type Definitions (Mimicking LVGL) ---
+
+struct _lv_obj_t; // Forward declaration
+typedef struct _lv_obj_t lv_obj_t;
+
+// Coordinates (copied from example)
+typedef int32_t lv_coord_t;
+#define LV_COORD_TYPE_SHIFT    (29U)
+#define LV_COORD_TYPE_MASK     (3 << LV_COORD_TYPE_SHIFT)
+#define LV_COORD_TYPE(x)       ((x) & LV_COORD_TYPE_MASK)
+#define LV_COORD_PLAIN(x)      ((x) & ~LV_COORD_TYPE_MASK)
+#define LV_COORD_TYPE_PX       (0 << LV_COORD_TYPE_SHIFT)
+#define LV_COORD_TYPE_SPEC     (1 << LV_COORD_TYPE_SHIFT)
+#define LV_COORD_TYPE_PX_NEG   (3 << LV_COORD_TYPE_SHIFT)
+#define LV_COORD_IS_PX(x)       (LV_COORD_TYPE(x) == LV_COORD_TYPE_PX || LV_COORD_TYPE(x) == LV_COORD_TYPE_PX_NEG)
+#define LV_COORD_IS_SPEC(x)     (LV_COORD_TYPE(x) == LV_COORD_TYPE_SPEC)
+#define LV_COORD_SET_SPEC(x)    ((x) | LV_COORD_TYPE_SPEC)
+#define LV_COORD_MAX            ((1 << LV_COORD_TYPE_SHIFT) - 1)
+#define LV_COORD_MIN            (-LV_COORD_MAX)
+#define LV_SIZE_CONTENT         LV_COORD_SET_SPEC(LV_COORD_MAX)
+#define LV_PCT_STORED_MAX       (LV_COORD_MAX - 1)
+#if LV_PCT_STORED_MAX % 2 != 0
+#error LV_PCT_STORED_MAX should be an even number
+#endif
+#define LV_PCT_POS_MAX          (LV_PCT_STORED_MAX / 2)
+#define LV_PCT(x)               (LV_COORD_SET_SPEC(((x) < 0 ? (LV_PCT_POS_MAX - LV_MAX((x), -LV_PCT_POS_MAX)) : LV_MIN((x), LV_PCT_POS_MAX))))
+#define LV_COORD_IS_PCT(x)      ((LV_COORD_IS_SPEC(x) && LV_COORD_PLAIN(x) <= LV_PCT_STORED_MAX))
+#define LV_COORD_GET_PCT(x)     (LV_COORD_PLAIN(x) > LV_PCT_POS_MAX ? LV_PCT_POS_MAX - LV_COORD_PLAIN(x) : LV_COORD_PLAIN(x))
+
+// Basic Math helpers (ensure LV_MAX/MIN are defined)
+#ifndef LV_MAX
+#define LV_MAX(a, b) ((a) > (b) ? (a) : (b))
+#endif
+#ifndef LV_MIN
+#define LV_MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
+
+LV_EXPORT_CONST_INT(LV_COORD_MAX);
+LV_EXPORT_CONST_INT(LV_COORD_MIN);
+LV_EXPORT_CONST_INT(LV_SIZE_CONTENT);
+
+// Color (definition provided below if needed, or rely on lv_conf.h via user)
+"""
+
+EMUL_HEADER_STATIC_PART2 = """
+// Opacity (copied from example)
+enum {
+    LV_OPA_TRANSP = 0, OPA_TRANSP = 0,
+    LV_OPA_0      = 0, OPA_0 = 0,
+    LV_OPA_10     = 25, OPA_10 = 25,
+    LV_OPA_20     = 51, OPA_20 = 51,
+    LV_OPA_30     = 76, OPA_30 = 76,
+    LV_OPA_40     = 102, OPA_40 = 102,
+    LV_OPA_50     = 127, OPA_50 = 127,
+    LV_OPA_60     = 153, OPA_60 = 153,
+    LV_OPA_70     = 178, OPA_70 = 178,
+    LV_OPA_80     = 204, OPA_80 = 204,
+    LV_OPA_90     = 229, OPA_90 = 229,
+    LV_OPA_100    = 255, OPA_100 = 255,
+    LV_OPA_COVER  = 255, OPA_COVER = 255,
+};
+typedef uint8_t lv_opa_t;
+
+// Grid Content/Last (copied)
+#define LV_GRID_CONTENT        (LV_COORD_MAX - 101)
+LV_EXPORT_CONST_INT(LV_GRID_CONTENT);
+#define LV_GRID_TEMPLATE_LAST  (LV_COORD_MAX)
+LV_EXPORT_CONST_INT(LV_GRID_TEMPLATE_LAST);
+#define LV_GRID_FR(x)          (LV_COORD_MAX - 100 + (x)) // Basic definition
+
+// --- Forward Declarations for Structs ---
+// (Generated below based on lv_def.json 'structs')
+
+// --- Enums ---
+// (Generated below based on lv_def.json 'enums')
+
+// --- Constants ---
+// (Generated below based on lv_def.json 'int_constants')
+
+// --- Blobs (Extern Declarations) ---
+// (Generated below based on lv_def.json 'blobs')
+
+// --- Emulation Library Control ---
+void emul_lvgl_init(void);
+void emul_lvgl_reset(void);
+void emul_lvgl_deinit(void);
+void emul_lvgl_register_font(lv_font_t font_ptr, const char* name);
+char* emul_lvgl_get_json(lv_obj_t *root_obj);
+
+// --- LVGL API Subset ---
+// (Generated below based on lv_def.json 'objects')
+
+// --- Helper Value Creators (Mimicking LVGL) ---
+// Declare them here for user code convenience
+lv_color_t lv_color_hex(uint32_t c);
+lv_color_t lv_color_make(uint8_t r, uint8_t g, uint8_t b);
+lv_color_t lv_color_white(void);
+lv_color_t lv_color_black(void); // Added
+int32_t lv_pct(int32_t v); // Creates the percentage coordinate
+
+#endif // EMUL_LVGL_H
+"""
+
+# Static parts for emul_lvgl_internal.h (mostly copied from example)
+EMUL_INTERNAL_HEADER_CONTENT = """
+#ifndef EMUL_LVGL_INTERNAL_H
+#define EMUL_LVGL_INTERNAL_H
+
+// Include the public header FIRST to get the definition of lv_obj_t (struct)
+#include "emul_lvgl.h"
+// Include cJSON header
+#include "cJSON.h"
+
+// --- Data Structures ---
+
+// Union for property/style values
+typedef enum {
+    VAL_TYPE_NONE, VAL_TYPE_STRING, VAL_TYPE_INT, VAL_TYPE_COORD,
+    VAL_TYPE_COLOR, VAL_TYPE_BOOL, VAL_TYPE_FONT, VAL_TYPE_ALIGN,
+    VAL_TYPE_TEXTALIGN, VAL_TYPE_GRID_ALIGN, VAL_TYPE_INT_ARRAY,
+    VAL_TYPE_LAYOUT, VAL_TYPE_FLEX_GROW, VAL_TYPE_FLEX_FLOW,
+    VAL_TYPE_FLEX_ALIGN, VAL_TYPE_SCALE_MODE, VAL_TYPE_OPA, VAL_TYPE_GRAD_DIR,
+    VAL_TYPE_PTR // Generic pointer type for unknown/complex structs
+} ValueType;
+
+typedef struct {
+    ValueType type;
+    union {
+        char* s;                // Must be malloc'd
+        int32_t *int_array;     // Must be malloc'd, first member is total length.
+        int32_t i;
+        lv_coord_t coord;
+        lv_color_t color;
+        bool b;
+        lv_font_t font;
+        lv_align_t align;
+        lv_grid_align_t grid_align;
+        lv_flex_align_t flex_align;
+        lv_layout_t layout;
+        lv_flex_flow_t flex_flow;
+        lv_scale_mode_t scale_mode;
+        lv_opa_t opa;
+        lv_grad_dir_t grad_dir;
+        int32_t text_align;     // lv_text_align_t is int32_t based enum
+        void *ptr;              // Generic pointer storage
+    } data;
+} Value;
+
+// Structure for storing a property
+typedef struct {
+    char* key; // e.g., "width", "text" (must be malloc'd)
+    Value value;
+} Property;
+
+// Structure for storing a style property
+typedef struct {
+    lv_part_t part;
+    lv_state_t state;
+    char* prop_name; // e.g., "bg_color", "radius" (must be malloc'd)
+    Value value;
+} StyleEntry;
+
+// Structure for the emulated object
+// ** This IS the definition of the struct lv_obj_t points to **
+struct _lv_obj_t {
+    uintptr_t id;             // Use address as ID for simplicity
+    const char* type;         // e.g., "label", "btn" (static string from create func)
+    struct _lv_obj_t* parent; // Pointer to the same struct type
+
+    // Dynamic arrays for children, properties, styles
+    struct _lv_obj_t** children; // Array of pointers to children
+    size_t child_count;
+    size_t child_capacity;
+
+    Property* properties;
+    size_t prop_count;
+    size_t prop_capacity;
+
+    StyleEntry* styles;
+    size_t style_count;
+    size_t style_capacity;
+};
+
+// --- Internal Helper Functions ---
+bool emul_obj_add_child(lv_obj_t *parent, lv_obj_t *child);
+void emul_obj_remove_child(lv_obj_t *parent, lv_obj_t *child);
+bool emul_obj_add_property(lv_obj_t *obj, const char* key, Value value);
+bool emul_obj_add_style(lv_obj_t *obj, lv_part_t part, lv_state_t state, const char* prop_name, Value value);
+void free_value(Value* value);
+void free_property(Property* prop);
+void free_style_entry(StyleEntry* entry);
+void free_emul_object_contents(lv_obj_t *obj);
+Property* find_property(lv_obj_t *obj, const char* key);
+StyleEntry* find_style(lv_obj_t *obj, lv_part_t part, lv_state_t state, const char* prop_name);
+
+// Value Creators
+Value value_mk_string(const char* s);
+Value value_mk_int_array(const int32_t *array, size_t num_elems);
+Value value_mk_int(int32_t i);
+Value value_mk_coord(lv_coord_t coord);
+Value value_mk_color(lv_color_t color);
+Value value_mk_bool(bool b);
+Value value_mk_font(lv_font_t font);
+Value value_mk_align(lv_align_t align);
+Value value_mk_grid_align(lv_grid_align_t align);
+Value value_mk_textalign(int32_t align); // lv_text_align_t
+Value value_mk_layout(lv_layout_t layout);
+Value value_mk_flex_align(lv_flex_align_t al);
+Value value_mk_flex_flow(lv_flex_flow_t al);
+Value value_mk_scale_mode(lv_scale_mode_t val);
+Value value_mk_opa(lv_opa_t val);
+Value value_mk_grad_dir(lv_grad_dir_t val);
+Value value_mk_ptr(void *p);
+
+
+// JSON Converters
+const char* part_to_string(lv_part_t part);
+const char* state_to_string(lv_state_t state);
+const char* align_to_string(lv_align_t align);
+const char* text_align_to_string(int32_t align);
+void color_to_hex_string(lv_color_t color, char* buf, size_t buf_size);
+const char* font_ptr_to_name(lv_font_t font_ptr);
+void coord_to_string(lv_coord_t coord, char* buf, size_t buf_size);
+const char* layout_to_string(lv_layout_t layout);
+const char* grid_align_to_string(lv_grid_align_t align);
+const char* flex_align_to_string(lv_flex_align_t align);
+const char* flex_flow_to_string(lv_flex_flow_t flow);
+const char* scale_mode_to_string(lv_scale_mode_t mode);
+const char* grad_dir_to_string(lv_grad_dir_t dir);
+cJSON* int_array_to_json_array(const int32_t* arr);
+cJSON* build_json_recursive(lv_obj_t *obj);
+
+// Internal Global State
+extern lv_obj_t * g_screen_obj;
+extern lv_obj_t ** g_all_objects;
+extern size_t g_all_objects_count;
+extern size_t g_all_objects_capacity;
+
+// Font mapping
+typedef struct {
+    lv_font_t ptr;
+    char* name;
+} FontMapEntry;
+extern FontMapEntry* g_font_map;
+extern size_t g_font_map_count;
+extern size_t g_font_map_capacity;
+
+#endif // EMUL_LVGL_INTERNAL_H
+"""
+
+# Static parts for emul_lvgl.c (mostly copied from example)
+EMUL_SOURCE_STATIC_PART1 = """
+#include "emul_lvgl_internal.h" // Includes public header first
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdarg.h>
+#include <inttypes.h> // For PRIuPTR
+
+// --- Debug Logging ---
+// Simple logger (replace with a more robust solution if needed)
+#ifdef EMUL_LVGL_DEBUG
+#define EMUL_LOG(fmt, ...) printf("[EMUL_LVGL] " fmt, ##__VA_ARGS__)
+#else
+#define EMUL_LOG(fmt, ...) do {} while(0)
+#endif
+
+// --- cJSON Configuration ---
+#ifndef JSON_print
+#  ifdef EMUL_LVGL_PRETTY_JSON // Define this macro to enable pretty printing
+#    define JSON_print cJSON_Print
+#  else
+#    define JSON_print cJSON_PrintUnformatted
+#  endif
+#endif
+
+// --- Global State ---
+lv_obj_t * g_screen_obj = NULL;
+lv_obj_t ** g_all_objects = NULL;
+size_t g_all_objects_count = 0;
+size_t g_all_objects_capacity = 0;
+
+FontMapEntry* g_font_map = NULL;
+size_t g_font_map_count = 0;
+size_t g_font_map_capacity = 0;
+
+// --- Grow Array Macro ---
+#define GROW_ARRAY(type, ptr, count, capacity) \\
+    if ((count) >= (capacity)) { \\
+        size_t old_capacity = (capacity); \\
+        (capacity) = ((capacity) == 0) ? 8 : (capacity) * 2; \\
+        type* new_ptr = (type*)realloc(ptr, (capacity) * sizeof(type)); \\
+        if (!new_ptr) { \\
+            EMUL_LOG("ERROR: Failed to realloc array for '%s'\\n", #ptr); \\
+            (capacity) = old_capacity; \\
+            ptr = NULL; /* Indicate failure */ \\
+        } else { \\
+            ptr = new_ptr; \\
+            /* Initialize the new memory block if needed (especially for pointers) */ \\
+            /* memset((char*)ptr + old_capacity * sizeof(type), 0, (capacity - old_capacity) * sizeof(type)); */ \\
+        } \\
+    }
+
+// --- Memory Management Helpers ---
+
+void free_value(Value* value) {
+    if (!value) return;
+    if (value->type == VAL_TYPE_STRING && value->data.s) {
+        free(value->data.s);
+    } else if (value->type == VAL_TYPE_INT_ARRAY && value->data.int_array) {
+        free(value->data.int_array);
+    }
+    // Add other types that need freeing (e.g., VAL_TYPE_PTR if owned)
+    value->data.s = NULL; // Clear the first member as a safety measure
+    value->type = VAL_TYPE_NONE;
+}
+
+void free_property(Property* prop) {
+    if (!prop) return;
+    if (prop->key) free(prop->key);
+    free_value(&prop->value);
+    prop->key = NULL;
+}
+
+void free_style_entry(StyleEntry* entry) {
+     if (!entry) return;
+    if (entry->prop_name) free(entry->prop_name);
+    free_value(&entry->value);
+    entry->prop_name = NULL;
+}
+
+// Frees the contents of an object, not the object itself or children recursively
+void free_emul_object_contents(lv_obj_t *obj) {
+     if (!obj) return;
+    // Free properties
+    for (size_t i = 0; i < obj->prop_count; ++i) {
+        free_property(&obj->properties[i]);
+    }
+    free(obj->properties);
+    obj->properties = NULL;
+    obj->prop_count = 0;
+    obj->prop_capacity = 0;
+
+    // Free styles
+    for (size_t i = 0; i < obj->style_count; ++i) {
+        free_style_entry(&obj->styles[i]);
+    }
+    free(obj->styles);
+    obj->styles = NULL;
+    obj->style_count = 0;
+    obj->style_capacity = 0;
+
+    // Free children array (pointers only, children freed separately)
+    free(obj->children);
+    obj->children = NULL;
+    obj->child_count = 0;
+    obj->child_capacity = 0;
+}
+
+// Function to remove object pointer from global list
+void remove_from_global_list(lv_obj_t *obj) {
+    if (!g_all_objects || g_all_objects_count == 0) return;
+    for (size_t i = 0; i < g_all_objects_count; ++i) {
+        if (g_all_objects[i] == obj) {
+            // Shift remaining elements down
+            if (i < g_all_objects_count - 1) {
+                memmove(&g_all_objects[i], &g_all_objects[i + 1], (g_all_objects_count - 1 - i) * sizeof(lv_obj_t *));
+            }
+            g_all_objects_count--;
+             // Optional: Realloc smaller? Maybe not worth it frequently.
+            return;
+        }
+    }
+    EMUL_LOG("WARN: Object %p not found in global list for removal.\\n", (void*)obj);
+}
+
+bool emul_obj_add_child(lv_obj_t *parent, lv_obj_t *child) {
+    if (!parent || !child) return false;
+    GROW_ARRAY(lv_obj_t *, parent->children, parent->child_count, parent->child_capacity);
+    if (!parent->children) return false; // Grow array failed
+    parent->children[parent->child_count++] = child;
+    child->parent = parent;
+    return true;
+}
+
+void emul_obj_remove_child(lv_obj_t *parent, lv_obj_t *child_to_remove) {
+    if (!parent || !child_to_remove || parent->child_count == 0) return;
+
+    int found_idx = -1;
+    for (size_t i = 0; i < parent->child_count; ++i) {
+        if (parent->children[i] == child_to_remove) {
+            found_idx = (int)i;
+            break;
+        }
+    }
+
+    if (found_idx != -1) {
+        // Shift elements down
+        if ((size_t)found_idx < parent->child_count - 1) {
+             memmove(&parent->children[found_idx], &parent->children[found_idx + 1],
+                     (parent->child_count - 1 - found_idx) * sizeof(lv_obj_t *));
+        }
+        parent->child_count--;
+        child_to_remove->parent = NULL; // Detach child
+    } else {
+         EMUL_LOG("WARN: Child %p not found under parent %p for removal.\\n", (void*)child_to_remove, (void*)parent);
+    }
+}
+
+Property* find_property(lv_obj_t *obj, const char* key) {
+    if (!obj || !key) return NULL;
+    for (size_t i = 0; i < obj->prop_count; ++i) {
+        // Check key before strcmp to handle potential NULL from failed strdup
+        if (obj->properties[i].key && strcmp(obj->properties[i].key, key) == 0) {
+            return &obj->properties[i];
+        }
+    }
+    return NULL;
+}
+
+bool emul_obj_add_property(lv_obj_t *obj, const char* key, Value value) {
+    if (!obj || !key) { free_value(&value); return false; }
+
+    Property* existing = find_property(obj, key);
+    if (existing) {
+        // Update existing property
+        EMUL_LOG("Updating property '%s' on obj %p\\n", key, (void*)obj);
+        free_value(&existing->value); // Free old value
+        existing->value = value;      // Assign new value
+        return true;
+    } else {
+        // Add new property
+        GROW_ARRAY(Property, obj->properties, obj->prop_count, obj->prop_capacity);
+        if (!obj->properties) { free_value(&value); return false; } // Grow array failed
+
+        obj->properties[obj->prop_count].key = strdup(key);
+        if (!obj->properties[obj->prop_count].key) { // strdup failed
+            EMUL_LOG("ERROR: strdup failed for property key '%s'\\n", key);
+            free_value(&value); // Free the value we were trying to add
+            // Don't increment count
+            return false;
+        }
+        obj->properties[obj->prop_count].value = value;
+        obj->prop_count++;
+        EMUL_LOG("Added property '%s' to obj %p\\n", key, (void*)obj);
+        return true;
+    }
+}
+
+StyleEntry* find_style(lv_obj_t *obj, lv_part_t part, lv_state_t state, const char* prop_name) {
+     if (!obj || !prop_name) return NULL;
+     for (size_t i = 0; i < obj->style_count; ++i) {
+         // Check prop_name before strcmp
+         if (obj->styles[i].part == part &&
+             obj->styles[i].state == state &&
+             obj->styles[i].prop_name &&
+             strcmp(obj->styles[i].prop_name, prop_name) == 0)
+         {
+             return &obj->styles[i];
+         }
+     }
+     return NULL;
+}
+
+bool emul_obj_add_style(lv_obj_t *obj, lv_part_t part, lv_state_t state, const char* prop_name, Value value) {
+     if (!obj || !prop_name) { free_value(&value); return false; }
+
+     StyleEntry* existing = find_style(obj, part, state, prop_name);
+     if(existing) {
+         EMUL_LOG("Updating style '%s' [part:0x%X state:0x%X] on obj %p\\n", prop_name, (unsigned int)part, (unsigned int)state, (void*)obj);
+         free_value(&existing->value);
+         existing->value = value;
+         return true;
+     } else {
+         GROW_ARRAY(StyleEntry, obj->styles, obj->style_count, obj->style_capacity);
+         if (!obj->styles) { free_value(&value); return false; } // Grow array failed
+
+         obj->styles[obj->style_count].prop_name = strdup(prop_name);
+         if (!obj->styles[obj->style_count].prop_name) {
+             EMUL_LOG("ERROR: strdup failed for style prop_name '%s'\\n", prop_name);
+             free_value(&value);
+             // Don't increment count
+             return false;
+         }
+         obj->styles[obj->style_count].part = part;
+         obj->styles[obj->style_count].state = state;
+         obj->styles[obj->style_count].value = value;
+         obj->style_count++;
+         EMUL_LOG("Added style '%s' [part:0x%X state:0x%X] to obj %p\\n", prop_name, (unsigned int)part, (unsigned int)state, (void*)obj);
+         return true;
+     }
+}
+
+// --- Value Creators ---
+Value value_mk_string(const char* s) {
+    Value v = {.type = VAL_TYPE_STRING, .data = {.s = NULL}};
+    if (s) {
+        v.data.s = strdup(s);
+        if (!v.data.s) { EMUL_LOG("ERROR: strdup failed for string value\\n"); v.type = VAL_TYPE_NONE; }
+    }
+    return v;
+}
+Value value_mk_int_array(const int32_t *array, size_t num_elems) {
+    Value v = {.type = VAL_TYPE_INT_ARRAY, .data = {.int_array = NULL}};
+    if (array && num_elems > 0) {
+        // Allocate space for length + elements
+        v.data.int_array = malloc((num_elems + 1) * sizeof(int32_t));
+        if (v.data.int_array) {
+            v.data.int_array[0] = (int32_t)num_elems; // Store length at index 0
+            memcpy(&v.data.int_array[1], array, num_elems * sizeof(int32_t)); // Copy elements after length
+        } else {
+             EMUL_LOG("ERROR: malloc failed for int array\\n");
+             v.type = VAL_TYPE_NONE;
+        }
+    } else if (array && num_elems == 0) {
+         // Handle empty array case: allocate just for the length field
+        v.data.int_array = malloc(1 * sizeof(int32_t));
+        if (v.data.int_array) {
+             v.data.int_array[0] = 0;
+        } else {
+             EMUL_LOG("ERROR: malloc failed for empty int array\\n");
+             v.type = VAL_TYPE_NONE;
+        }
+    }
+    return v;
+}
+Value value_mk_int(int32_t i) { return (Value){.type = VAL_TYPE_INT, .data = {.i = i}}; }
+Value value_mk_coord(lv_coord_t coord) { return (Value){.type = VAL_TYPE_COORD, .data = {.coord = coord}}; }
+Value value_mk_color(lv_color_t color) { return (Value){.type = VAL_TYPE_COLOR, .data = {.color = color}}; }
+Value value_mk_bool(bool b) { return (Value){.type = VAL_TYPE_BOOL, .data = {.b = b}}; }
+Value value_mk_font(lv_font_t font) { return (Value){.type = VAL_TYPE_FONT, .data = {.font = font}}; }
+Value value_mk_align(lv_align_t align) { return (Value){.type = VAL_TYPE_ALIGN, .data = {.align = align}}; }
+Value value_mk_layout(lv_layout_t layout) { return (Value){.type = VAL_TYPE_LAYOUT, .data = {.layout = layout}}; }
+Value value_mk_grid_align(lv_grid_align_t align) { return (Value){.type = VAL_TYPE_GRID_ALIGN, .data = {.grid_align = align}}; }
+Value value_mk_textalign(int32_t align) { return (Value){.type = VAL_TYPE_TEXTALIGN, .data = {.text_align = align}}; }
+Value value_mk_flex_align(lv_flex_align_t al) { return (Value){.type = VAL_TYPE_FLEX_ALIGN, .data = {.flex_align = al}}; }
+Value value_mk_flex_flow(lv_flex_flow_t al) { return (Value){.type = VAL_TYPE_FLEX_FLOW, .data = {.flex_flow = al}}; }
+Value value_mk_scale_mode(lv_scale_mode_t val) { return (Value){.type = VAL_TYPE_SCALE_MODE, .data = {.scale_mode = val}}; }
+Value value_mk_opa(lv_opa_t val) { return (Value){.type = VAL_TYPE_OPA, .data = {.opa = val}}; }
+Value value_mk_grad_dir(lv_grad_dir_t val) { return (Value){.type = VAL_TYPE_GRAD_DIR, .data = {.grad_dir = val}}; }
+Value value_mk_ptr(void *p) { return (Value){.type = VAL_TYPE_PTR, .data = {.ptr = p}}; }
+
+// --- Internal Object Creation Helper ---
+static lv_obj_t * create_object_internal(lv_obj_t *parent, const char* type_name) {
+    lv_obj_t *new_obj = (lv_obj_t *)calloc(1, sizeof(lv_obj_t));
+    if (!new_obj) {
+        EMUL_LOG("ERROR: Failed to allocate memory for new object type %s\\n", type_name);
+        return NULL;
+    }
+
+    new_obj->id = (uintptr_t)new_obj; // Use address as ID
+    new_obj->type = type_name; // Assign static type string (pointer comparison is fine)
+    // Parent will be set by emul_obj_add_child if parent is not NULL
+
+    // Add to global list FIRST, so it's tracked even if parent add fails
+    GROW_ARRAY(lv_obj_t *, g_all_objects, g_all_objects_count, g_all_objects_capacity);
+    if (!g_all_objects) { // Grow array failed
+        free(new_obj);
+        EMUL_LOG("ERROR: Failed to grow global object list for new obj %s\\n", type_name);
+        return NULL;
+    }
+    g_all_objects[g_all_objects_count++] = new_obj;
+
+    // Add to parent's children list (also sets new_obj->parent)
+    if (parent) {
+        if (!emul_obj_add_child(parent, new_obj)) {
+            // Failed to add to parent, but it's already in global list. Remove it.
+            remove_from_global_list(new_obj);
+            free(new_obj); // Free the object itself
+            EMUL_LOG("ERROR: Failed to add child %p to parent %p\\n", (void*)new_obj, (void*)parent);
+            return NULL;
+        }
+    } else {
+        new_obj->parent = NULL; // Explicitly NULL if no parent
+    }
+
+    EMUL_LOG("Created object %p (type: %s), parent: %p, global_count: %zu\\n",
+              (void*)new_obj, type_name, (void*)parent, g_all_objects_count);
+
+    return new_obj;
+}
+
+// --- Library Control ---
+
+void emul_lvgl_init(void) {
+    EMUL_LOG("Initializing LVGL Emulation Library\\n");
+    if (g_screen_obj != NULL || g_all_objects_count > 0 || g_font_map_count > 0) {
+        EMUL_LOG("WARN: Already initialized or state not clean. Resetting state first.\\n");
+        emul_lvgl_reset(); // Reset if called again or state is dirty
+    }
+    // Clear any potential leftover pointers from a previous bad state
+    g_screen_obj = NULL;
+    g_all_objects = NULL;
+    g_all_objects_count = 0;
+    g_all_objects_capacity = 0;
+    g_font_map = NULL;
+    g_font_map_count = 0;
+    g_font_map_capacity = 0;
+
+
+    // Create the screen object struct
+    g_screen_obj = (lv_obj_t *)calloc(1, sizeof(lv_obj_t));
+     if (!g_screen_obj) {
+         EMUL_LOG("ERROR: Failed to allocate screen object\\n");
+         return; // Critical failure
+     }
+    g_screen_obj->id = (uintptr_t)g_screen_obj;
+    g_screen_obj->type = "screen"; // Special type
+    g_screen_obj->parent = NULL;
+
+    // Add screen pointer to global list
+    GROW_ARRAY(lv_obj_t *, g_all_objects, g_all_objects_count, g_all_objects_capacity);
+    if (!g_all_objects) { // Grow array failed
+        free(g_screen_obj);
+        g_screen_obj = NULL;
+        EMUL_LOG("ERROR: Failed to allocate global object list during init\\n");
+        return;
+    }
+    g_all_objects[g_all_objects_count++] = g_screen_obj;
+
+    // Init font map (already done by reset/clear above)
+
+    EMUL_LOG("Screen object %p created. Global count: %zu\\n", (void*)g_screen_obj, g_all_objects_count);
+}
+
+void emul_lvgl_reset(void) {
+    EMUL_LOG("Resetting LVGL Emulation state...\\n");
+
+    // Free all non-screen objects from the global list.
+    // Iterate backwards to handle removals safely.
+    if (g_all_objects) {
+        for (size_t i = g_all_objects_count; i > 0; --i) {
+            lv_obj_t *obj_to_check = g_all_objects[i - 1];
+            if (obj_to_check != g_screen_obj) {
+                EMUL_LOG("Reset: Deleting object %p (type: %s)\\n", (void*)obj_to_check, obj_to_check->type);
+                 // Call lv_obj_del, which handles recursion, freeing content, and removal from lists
+                 lv_obj_del(obj_to_check);
+                 // lv_obj_del should modify g_all_objects_count, but loop relies on initial count
+            }
+        }
+    }
+     // After the loop, g_all_objects should ideally only contain g_screen_obj if it existed.
+     // Let's manually clean up the screen object's contents and reset the list.
+    if (g_screen_obj) {
+        EMUL_LOG("Reset: Clearing screen object %p contents\\n", (void*)g_screen_obj);
+        free_emul_object_contents(g_screen_obj); // Clear styles, props, children array
+
+         // Reset global list to only contain the screen object
+         if (g_all_objects && g_all_objects_capacity > 0) {
+             g_all_objects[0] = g_screen_obj;
+             g_all_objects_count = 1;
+         } else {
+             // This case should ideally not happen if init was successful
+             EMUL_LOG("WARN: Global object list invalid during screen reset.\\n");
+             free(g_all_objects); // Free the potentially NULL or invalid pointer
+             g_all_objects = NULL;
+             g_all_objects_count = 0;
+             g_all_objects_capacity = 0;
+             // Try to re-allocate and add screen back
+             GROW_ARRAY(lv_obj_t *, g_all_objects, g_all_objects_count, g_all_objects_capacity);
+             if (g_all_objects) {
+                 g_all_objects[g_all_objects_count++] = g_screen_obj;
+             } else {
+                 EMUL_LOG("ERROR: Failed to re-allocate global list after reset error. Screen object lost!\\n");
+                 free(g_screen_obj); // Cannot keep screen if list fails
+                 g_screen_obj = NULL;
+             }
+         }
+    } else {
+        // Screen object doesn't exist, just clear the list fully
+        free(g_all_objects);
+        g_all_objects = NULL;
+        g_all_objects_count = 0;
+        g_all_objects_capacity = 0;
+    }
+
+
+    // Free font map entries
+    for (size_t i = 0; i < g_font_map_count; ++i) {
+        if (g_font_map[i].name) free(g_font_map[i].name);
+    }
+    free(g_font_map);
+    g_font_map = NULL;
+    g_font_map_count = 0;
+    g_font_map_capacity = 0;
+
+    EMUL_LOG("Reset complete. Screen object: %p, Global count: %zu\\n", (void*)g_screen_obj, g_all_objects_count);
+}
+
+void emul_lvgl_deinit(void) {
+    EMUL_LOG("Deinitializing LVGL Emulation Library...\\n");
+    emul_lvgl_reset(); // Clear all dynamic objects first
+
+    // Free the screen object struct itself now
+    if (g_screen_obj) {
+        EMUL_LOG("Deinit: Freeing screen object %p\\n", (void*)g_screen_obj);
+        free(g_screen_obj);
+        g_screen_obj = NULL;
+    }
+    // Free the global object list array
+    free(g_all_objects);
+    g_all_objects = NULL;
+    g_all_objects_count = 0;
+    g_all_objects_capacity = 0;
+
+     // Font map already freed by reset
+    EMUL_LOG("Deinitialization complete.\\n");
+}
+
+void emul_lvgl_register_font(lv_font_t font_ptr, const char* name) {
+    if (!font_ptr || !name) return;
+
+    // Check if already registered
+    for (size_t i = 0; i < g_font_map_count; ++i) {
+        if (g_font_map[i].ptr == font_ptr) {
+            // Update name if different (optional)
+            if ((g_font_map[i].name && strcmp(g_font_map[i].name, name) != 0) || !g_font_map[i].name) {
+                EMUL_LOG("Updating font name for %p to '%s'\\n", font_ptr, name);
+                free(g_font_map[i].name); // Free old name if it existed
+                g_font_map[i].name = strdup(name);
+                 if (!g_font_map[i].name) {
+                     EMUL_LOG("ERROR: strdup failed updating font name '%s'\\n", name);
+                 }
+            }
+            return;
+        }
+    }
+
+    // Add new entry
+    GROW_ARRAY(FontMapEntry, g_font_map, g_font_map_count, g_font_map_capacity);
+    if (!g_font_map) return; // Grow array failed
+
+    g_font_map[g_font_map_count].ptr = font_ptr;
+    g_font_map[g_font_map_count].name = strdup(name);
+     if (!g_font_map[g_font_map_count].name) {
+         EMUL_LOG("ERROR: strdup failed for font name '%s'\\n", name);
+         // Don't increment count
+         return;
+     }
+    g_font_map_count++;
+    EMUL_LOG("Registered font %p as '%s' (Font map count: %zu)\\n", font_ptr, name, g_font_map_count);
+}
+
+// --- LVGL API Implementation ---
+
+// ** Object Deletion/Cleanup **
+void lv_obj_del(lv_obj_t *obj) {
+    if (!obj) {
+        EMUL_LOG("WARN: lv_obj_del(NULL) called.\\n");
+        return;
+    }
+     if (obj == g_screen_obj) {
+         EMUL_LOG("WARN: Attempt to delete screen object (%p). Clearing content instead.\\n", (void*)obj);
+         lv_obj_clean(obj); // Just clean children, don't delete screen itself
+         return;
+     }
+
+    EMUL_LOG("Deleting object %p (type: %s)... Global count before: %zu\\n", (void*)obj, obj->type, g_all_objects_count);
+
+    // 0. Check if object is still in the global list (prevents double free issues)
+    bool found_in_global = false;
+    size_t global_idx = (size_t)-1;
+    for (size_t i = 0; i < g_all_objects_count; ++i) {
+        if (g_all_objects[i] == obj) {
+            found_in_global = true;
+            global_idx = i;
+            break;
+        }
+    }
+    if (!found_in_global) {
+        EMUL_LOG("WARN: Attempting to delete object %p which is not in the global list (already deleted?). Skipping free.\\n", (void*)obj);
+        // Still try to remove from parent if it has one, as parent might still hold dangling pointer
+        if (obj->parent) {
+            emul_obj_remove_child(obj->parent, obj);
+        }
+        return; // Don't proceed with freeing memory or recursive calls
+    }
+
+    // 1. Remove from parent's children list (if parent exists)
+    if (obj->parent) {
+        emul_obj_remove_child(obj->parent, obj);
+    }
+
+    // 2. Remove pointer from global list *before* freeing/recursion
+    // remove_from_global_list uses memmove, safe to call here
+    remove_from_global_list(obj); // This modifies g_all_objects_count
+
+     // 3. Recursively delete children
+     // Make a copy of the children pointers *before* freeing the object's contents
+     size_t num_children = obj->child_count;
+     lv_obj_t **children_copy = NULL;
+     if(num_children > 0) {
+        children_copy = malloc(num_children * sizeof(lv_obj_t *));
+        if(children_copy) {
+            memcpy(children_copy, obj->children, num_children * sizeof(lv_obj_t *));
+            EMUL_LOG(" Copied %zu children pointers for obj %p recursive delete.\\n", num_children, (void*)obj);
+        } else {
+             EMUL_LOG("ERROR: Failed to allocate children copy for delete of obj %p\\n", (void*)obj);
+             // Continue deletion of the object itself, children might leak if copy failed
+             num_children = 0; // Prevent loop below
+        }
+     }
+
+     // 4. Free current object's direct contents (props, styles, children *array*)
+     // This invalidates obj->children pointer but children_copy still holds the actual child object pointers
+     free_emul_object_contents(obj);
+
+     // 5. Free the object struct itself
+     EMUL_LOG(" Freeing obj %p struct memory.\\n", (void*)obj);
+     free(obj);
+
+     // 6. Now recursively delete children using the copied pointers
+     if(children_copy) {
+         EMUL_LOG(" Recursively deleting %zu children of formerly obj %p...\\n", num_children, (void*)obj);
+         for(size_t i = 0; i < num_children; ++i) {
+             lv_obj_t *child_ptr = children_copy[i];
+             // lv_obj_del itself handles double-deletion checks via global list
+             lv_obj_del(child_ptr); // Recursive call
+         }
+         free(children_copy);
+     }
+
+     EMUL_LOG("Deletion complete for obj %p. Global count after: %zu\\n", (void*)obj, g_all_objects_count);
+}
+
+void lv_obj_clean(lv_obj_t *obj) {
+     if (!obj) return;
+     EMUL_LOG("Cleaning children of object %p (current child count: %zu)\\n", (void*)obj, obj->child_count);
+
+     // Make a copy of children pointers FIRST
+     size_t num_children = obj->child_count;
+     if (num_children == 0) return; // Nothing to clean
+
+     lv_obj_t **children_to_delete = malloc(num_children * sizeof(lv_obj_t *));
+     if (!children_to_delete) {
+         EMUL_LOG("ERROR: Failed alloc for clean child copy on obj %p\\n", (void*)obj);
+         return; // Cannot proceed without copy
+     }
+     memcpy(children_to_delete, obj->children, num_children * sizeof(lv_obj_t *));
+
+     // Delete each child using lv_obj_del with the pointer from the copy
+     // lv_obj_del will modify obj->children and obj->child_count via emul_obj_remove_child
+     for (size_t i = 0; i < num_children; ++i) {
+         EMUL_LOG(" Cleaning: deleting child %p\\n", (void*)children_to_delete[i]);
+         lv_obj_del(children_to_delete[i]);
+     }
+     free(children_to_delete);
+
+     // Sanity check: After deletion, the child count should be 0
+     if (obj->child_count != 0) {
+        EMUL_LOG("WARN: Child count not zero after clean (%zu) for obj %p. Forcibly clearing array.\\n", obj->child_count, (void*)obj);
+        obj->child_count = 0;
+        // The children array pointer itself might still be valid if realloc happened,
+        // but free_emul_object_contents or the next GROW_ARRAY should handle it.
+        // Let's just nullify count and capacity. free()ing obj->children here might be unsafe if lv_obj_del realloc'd smaller.
+        obj->child_capacity = 0; // Prevent reuse until grow
+        // free(obj->children); // Avoid potential double-free or invalid pointer free
+        // obj->children = NULL;
+     }
+     EMUL_LOG("Cleaning complete for obj %p. Final child count: %zu\\n", (void*)obj, obj->child_count);
+}
+
+// ** Screen Access ** Returns pointer
+lv_obj_t * lv_screen_active(void) {
+    if (!g_screen_obj) {
+        EMUL_LOG("WARN: lv_screen_active called before emul_lvgl_init or after failed init. Returning NULL.\\n");
+        return NULL;
+    }
+    return g_screen_obj; // Return the pointer stored globally
+}
+
+//Alias
+// lv_obj_t * lv_scr_act(void) {
+//     return lv_screen_active();
+// }
+
+
+// ** Hierarchy **
+void lv_obj_set_parent(lv_obj_t *obj, lv_obj_t *parent_new) {
+    if (!obj) return;
+    if (obj == g_screen_obj) {
+        EMUL_LOG("WARN: Cannot set parent of the screen object.\\n");
+        return;
+    }
+
+    lv_obj_t* parent_old = obj->parent;
+
+    if(parent_old == parent_new) {
+        EMUL_LOG("Object %p already child of %p. No change needed.\\n", (void*)obj, (void*)parent_new);
+        return; // No change needed
+    }
+
+    EMUL_LOG("Setting parent of obj %p from %p to %p\\n", (void*)obj, (void*)parent_old, (void*)parent_new);
+
+    // 1. Remove from old parent's children list
+    if (parent_old) {
+        emul_obj_remove_child(parent_old, obj);
+    } else {
+        // If it had no parent, it might be a detached object or a top-level one (other than screen)
+        // No removal needed in this case.
+    }
+
+    // 2. Add to new parent's children list (sets obj->parent internally)
+    if (parent_new) {
+        if (!emul_obj_add_child(parent_new, obj)) {
+             EMUL_LOG("ERROR: Failed to add obj %p as child of new parent %p! Object might be detached.\\n", (void*)obj, (void*)parent_new);
+             // Object is now detached, parent pointer is likely NULL from failed add_child.
+        }
+    } else {
+         obj->parent = NULL; // Explicitly set parent to NULL if new parent is NULL
+         EMUL_LOG(" Obj %p is now detached (parent set to NULL).\\n", (void*)obj);
+    }
+    // No specific property added; hierarchy is the source of truth.
+}
+
+// --- Style ADD_STYLE Macro ---
+// Macro to simplify adding styles
+#define ADD_STYLE(obj_ptr, selector, prop_name_str, value_func) \\
+    do { \\
+        if (!(obj_ptr)) break; /* Check the pointer */ \\
+        /* Extract part and state from selector more robustly */ \\
+        lv_part_t part = (selector) & (LV_PART_MAIN | LV_PART_SCROLLBAR | LV_PART_INDICATOR | \\
+                                       LV_PART_KNOB | LV_PART_SELECTED | LV_PART_ITEMS | \\
+                                       LV_PART_CURSOR | LV_PART_CUSTOM_FIRST); /* Mask for known parts */ \\
+        /* Handle LV_PART_ANY if needed, though specific parts are preferred */ \\
+        if (((selector) & LV_PART_ANY) == LV_PART_ANY) part = LV_PART_ANY; \\
+        /* Extract state */ \\
+        lv_state_t state = (selector) & (LV_STATE_DEFAULT | LV_STATE_CHECKED | LV_STATE_FOCUSED | \\
+                                         LV_STATE_FOCUS_KEY | LV_STATE_EDITED | LV_STATE_HOVERED | \\
+                                         LV_STATE_PRESSED | LV_STATE_SCROLLED | LV_STATE_DISABLED); /* Mask for known states */ \\
+        /* Handle LV_STATE_ANY */ \\
+        if (((selector) & LV_STATE_ANY) == LV_STATE_ANY) state = LV_STATE_ANY; \\
+        else if (state == 0 && selector != 0) { /* If selector has part but no known state bits, assume DEFAULT */ \
+             state = LV_STATE_DEFAULT; \
+        } \
+        /* Add the style */ \\
+        emul_obj_add_style(obj_ptr, part, state, prop_name_str, value_func); \\
+    } while(0)
+
+
+// --- Helper Value Creators Implementation ---
+lv_color_t lv_color_hex(uint32_t c) {
+    return lv_color_make((uint8_t)((c >> 16) & 0xFF), (uint8_t)((c >> 8) & 0xFF), (uint8_t)(c & 0xFF));
+}
+lv_color_t lv_color_make(uint8_t r, uint8_t g, uint8_t b) {
+    // Assumes lv_color_t has r, g, b fields. Adjust if using different color format internally.
+    return (lv_color_t){.r = r, .g = g, .b = b};
+}
+lv_color_t lv_color_white(void) { return lv_color_make(255, 255, 255); }
+lv_color_t lv_color_black(void) { return lv_color_make(0, 0, 0); }
+int32_t lv_pct(int32_t v) { return LV_PCT(v); } // Use the macro defined in the header
+
+// --- JSON Generation ---
+"""
+
+# Static part for emul_lvgl.c JSON helpers (copied from example)
+EMUL_SOURCE_STATIC_JSON_HELPERS = """
+// --- JSON Generation Helpers ---
+
+const char* part_to_string(lv_part_t part) {
+    // Map defined parts back to strings used in viewer JSON
+    // This needs to be kept in sync with ui_builder's parse_part
+    switch(part) {
+        case LV_PART_MAIN: return "main"; // Use "main" instead of "default" for clarity? Let's stick to example: "default"
+        case LV_PART_SCROLLBAR: return "scrollbar";
+        case LV_PART_INDICATOR: return "indicator";
+        case LV_PART_KNOB: return "knob";
+        case LV_PART_SELECTED: return "selected";
+        case LV_PART_ITEMS: return "items";
+        case LV_PART_CURSOR: return "cursor";
+        case LV_PART_ANY: return "part_any"; // Special case for ANY selector
+        // Add others if used...
+        default: {
+            // Handle custom parts if needed
+            if(part >= LV_PART_CUSTOM_FIRST) {
+                static char custom_buf[32];
+                snprintf(custom_buf, sizeof(custom_buf), "custom_part_%u", (unsigned int)(part - LV_PART_CUSTOM_FIRST));
+                return custom_buf;
+            }
+            // Fallback for unknown values (shouldn't happen with masked ADD_STYLE)
+            static char unknown_buf[32];
+            snprintf(unknown_buf, sizeof(unknown_buf), "unknown_part_0x%X", (unsigned int)part);
+             EMUL_LOG("WARN: Unknown part value 0x%X encountered during JSON generation.\\n", (unsigned int)part);
+            return unknown_buf;
+        }
+    }
+}
+
+const char* state_to_string(lv_state_t state) {
+     // Map states to strings. Prioritize common overrides.
+     // This needs to be kept in sync with ui_builder's parse_state
+     if (state == LV_STATE_ANY) return "state_any"; // Special case for ANY selector
+
+     // Build a string for combined states? Or just pick one? Example implies picking one.
+     // Let's try building a combined string if multiple bits are set (more complex).
+     // Simplified: return highest priority single state found.
+     if (state & LV_STATE_DISABLED) return "disabled"; // Highest priority visual override usually
+     if (state & LV_STATE_PRESSED) return "pressed";
+     if (state & LV_STATE_CHECKED) return "checked"; // Checked before focused? Depends on widget.
+     if (state & LV_STATE_FOCUSED) return "focused"; // Includes FOCUS_KEY? Assume yes for simplicity. LVGL combines them.
+     if (state & LV_STATE_EDITED) return "edited";
+     if (state & LV_STATE_HOVERED) return "hovered";
+     if (state & LV_STATE_SCROLLED) return "scrolled";
+
+     // If only default or no bits set
+     if (state == LV_STATE_DEFAULT) return "default";
+
+     // Fallback for unknown/combinations not handled above
+     static char combined_buf[32];
+     snprintf(combined_buf, sizeof(combined_buf), "state_0x%X", (unsigned int)state);
+     EMUL_LOG("WARN: Unhandled state value 0x%X during JSON generation. Using fallback string.\\n", (unsigned int)state);
+     return combined_buf;
+}
+
+const char* align_to_string(lv_align_t align) {
+    // Keep in sync with ui_builder parse_align
+    switch(align) {
+        case LV_ALIGN_DEFAULT: return "default"; // LV_ALIGN_DEFAULT is often 0 or LV_ALIGN_TOP_LEFT
+        case LV_ALIGN_TOP_LEFT: return "top_left";
+        case LV_ALIGN_TOP_MID: return "top_mid";
+        case LV_ALIGN_TOP_RIGHT: return "top_right";
+        case LV_ALIGN_LEFT_MID: return "left_mid";
+        case LV_ALIGN_CENTER: return "center";
+        case LV_ALIGN_RIGHT_MID: return "right_mid";
+        case LV_ALIGN_BOTTOM_LEFT: return "bottom_left";
+        case LV_ALIGN_BOTTOM_MID: return "bottom_mid";
+        case LV_ALIGN_BOTTOM_RIGHT: return "bottom_right";
+        // Add OUT alignments if needed
+        default: return "default"; // Fallback
+    }
+}
+
+const char* text_align_to_string(int32_t align) { // lv_text_align_t enum values
+     // Keep in sync with ui_builder apply_single_style_prop
+     switch(align) {
+         // Assumes standard LV_TEXT_ALIGN_... values
+         case 0: return "auto";   // LV_TEXT_ALIGN_AUTO (check actual value)
+         case 1: return "left";   // LV_TEXT_ALIGN_LEFT
+         case 2: return "center"; // LV_TEXT_ALIGN_CENTER
+         case 3: return "right";  // LV_TEXT_ALIGN_RIGHT
+         default: return "auto";
+     }
+ }
+
+void color_to_hex_string(lv_color_t color, char* buf, size_t buf_size) {
+    // Simple hex conversion #RRGGBB
+    // Assumes color has r,g,b fields
+    snprintf(buf, buf_size, "#%02X%02X%02X", color.r, color.g, color.b);
+    // Handle alpha if needed: snprintf(buf, buf_size, "#%02X%02X%02X%02X", color.r, color.g, color.b, color.alpha);
+}
+
+const char* font_ptr_to_name(lv_font_t font_ptr) {
+    if (!font_ptr) return "default"; // Or NULL? Let's return "default"
+
+    // Check against known standard fonts first (if available)
+    // This requires the generator or user to provide these symbols if they want nice names
+    // extern const lv_font_t lv_font_montserrat_14; // Example declaration needed elsewhere
+    // if (font_ptr == &lv_font_montserrat_14) return "montserrat_14";
+
+    // Check registered fonts
+    for (size_t i = 0; i < g_font_map_count; ++i) {
+        if (g_font_map[i].ptr == font_ptr) {
+            return g_font_map[i].name ? g_font_map[i].name : "unnamed_font";
+        }
+    }
+
+    // Fallback if not registered and not a known standard font
+    // Generate a stable name based on pointer address?
+    static char unknown_buf[32];
+    snprintf(unknown_buf, sizeof(unknown_buf), "font_ptr_%p", font_ptr);
+    EMUL_LOG("WARN: Font pointer %p not registered. Using '%s'.\\n", font_ptr, unknown_buf);
+    return unknown_buf;
+}
+
+void coord_to_string(lv_coord_t coord, char* buf, size_t buf_size) {
+    // Keep in sync with ui_builder parse_coord
+    if (LV_COORD_IS_PCT(coord)) {
+        snprintf(buf, buf_size, "%"PRId32"%%", LV_COORD_GET_PCT(coord));
+    } else if (coord == LV_SIZE_CONTENT) {
+        snprintf(buf, buf_size, "content");
+    } else if (LV_COORD_IS_SPEC(coord)) { // Handle other special coords? Like Grid FR?
+         // LV_GRID_FR(x) = (LV_COORD_MAX - 100 + x)
+         if (coord >= (LV_COORD_MAX - 100) && coord < LV_COORD_MAX) {
+             snprintf(buf, buf_size, "%"PRId32"fr", coord - (LV_COORD_MAX - 100));
+         } else {
+             snprintf(buf, buf_size, "spec_%"PRId32, LV_COORD_PLAIN(coord)); // Generic special
+         }
+    } else { // Plain coordinate
+        snprintf(buf, buf_size, "%"PRId32, coord); // Use PRId32 for int32_t
+    }
+}
+
+const char* layout_to_string(lv_layout_t layout) {
+     // Keep in sync with ui_builder parse_layout
+    switch(layout) {
+        case LV_LAYOUT_NONE: return "none";
+        case LV_LAYOUT_FLEX: return "flex";
+        case LV_LAYOUT_GRID: return "grid";
+        default: return "unknown";
+    }
+}
+
+const char* grid_align_to_string(lv_grid_align_t align) {
+    // Keep in sync with ui_builder parse_grid_align
+    switch(align) {
+        case LV_GRID_ALIGN_START: return "start";
+        case LV_GRID_ALIGN_CENTER: return "center";
+        case LV_GRID_ALIGN_END: return "end";
+        case LV_GRID_ALIGN_STRETCH: return "stretch";
+        case LV_GRID_ALIGN_SPACE_EVENLY: return "space_evenly";
+        case LV_GRID_ALIGN_SPACE_AROUND: return "space_around";
+        case LV_GRID_ALIGN_SPACE_BETWEEN: return "space_between";
+        default: return "unknown";
+    }
+}
+
+const char* flex_align_to_string(lv_flex_align_t align) {
+    // Keep in sync with ui_builder parse_flex_align
+    switch(align) {
+        case LV_FLEX_ALIGN_START: return "start";
+        case LV_FLEX_ALIGN_END: return "end";
+        case LV_FLEX_ALIGN_CENTER: return "center";
+        case LV_FLEX_ALIGN_SPACE_EVENLY: return "space_evenly";
+        case LV_FLEX_ALIGN_SPACE_AROUND: return "space_around";
+        case LV_FLEX_ALIGN_SPACE_BETWEEN: return "space_between";
+        default: return "unknown";
+    }
+}
+
+const char* flex_flow_to_string(lv_flex_flow_t flow) {
+    // Keep in sync with ui_builder parse_flex_flow
+    switch(flow) {
+        case LV_FLEX_FLOW_ROW: return "row";
+        case LV_FLEX_FLOW_COLUMN: return "column";
+        case LV_FLEX_FLOW_ROW_WRAP: return "row_wrap";
+        case LV_FLEX_FLOW_ROW_REVERSE: return "row_reverse";
+        case LV_FLEX_FLOW_ROW_WRAP_REVERSE: return "row_wrap_reverse";
+        case LV_FLEX_FLOW_COLUMN_WRAP: return "column_wrap";
+        case LV_FLEX_FLOW_COLUMN_REVERSE: return "column_reverse";
+        case LV_FLEX_FLOW_COLUMN_WRAP_REVERSE: return "column_wrap_reverse";
+        default: return "unknown";
+    }
+}
+
+const char* scale_mode_to_string(lv_scale_mode_t mode) {
+     // Keep in sync with ui_builder parse_scale_mode
+     switch(mode) {
+         case LV_SCALE_MODE_HORIZONTAL_TOP: return "horizontal_top";
+         case LV_SCALE_MODE_HORIZONTAL_BOTTOM: return "horizontal_bottom";
+         case LV_SCALE_MODE_VERTICAL_LEFT: return "vertical_left";
+         case LV_SCALE_MODE_VERTICAL_RIGHT: return "vertical_right";
+         case LV_SCALE_MODE_ROUND_INNER: return "round_inner";
+         case LV_SCALE_MODE_ROUND_OUTER: return "round_outer";
+         default: return "unknown";
+     }
+}
+const char* grad_dir_to_string(lv_grad_dir_t dir) {
+    switch(dir) {
+        case LV_GRAD_DIR_NONE: return "none";
+        case LV_GRAD_DIR_VER: return "ver";
+        case LV_GRAD_DIR_HOR: return "hor";
+        case LV_GRAD_DIR_LINEAR: return "linear";
+        case LV_GRAD_DIR_RADIAL: return "radial";
+        case LV_GRAD_DIR_CONICAL: return "conical";
+        default: return "unknown";
+    }
+}
+
+
+cJSON* int_array_to_json_array(const int32_t* arr) {
+    if (!arr) return NULL; // Return NULL for null pointer
+
+    cJSON* json_arr = cJSON_CreateArray();
+    if (!json_arr) {
+        EMUL_LOG("ERROR: Failed to create cJSON array for int_array\\n");
+        return NULL;
+    }
+
+    int32_t len = arr[0]; // Length stored at index 0
+    if (len < 0) {
+         EMUL_LOG("WARN: Negative length (%d) found in int_array, treating as empty.\\n", len);
+         len = 0;
+    }
+
+    for (int32_t i = 0; i < len; i++) {
+        // Access elements starting from index 1
+        cJSON* num_item = cJSON_CreateNumber((double)arr[i + 1]); // cJSON uses doubles for numbers
+        if (num_item) {
+            cJSON_AddItemToArray(json_arr, num_item);
+        } else {
+            EMUL_LOG("ERROR: Failed to create cJSON number for int_array element %d\\n", i);
+            // Continue adding other elements if possible
+        }
+    }
+    return json_arr;
+}
+
+// --- Recursive JSON Builder ---
+cJSON* build_json_recursive(lv_obj_t *obj) {
+    if (!obj) return NULL;
+
+    cJSON* json_obj = cJSON_CreateObject();
+    if (!json_obj) return NULL;
+
+    // Type
+    cJSON_AddStringToObject(json_obj, "type", obj->type ? obj->type : "unknown");
+
+    // Object ID (Pointer Address) - useful for debugging linkage
+    char id_buf[32];
+    snprintf(id_buf, sizeof(id_buf), "%p", (void*)obj);
+    cJSON_AddStringToObject(json_obj, "id", id_buf);
+
+
+    // Properties
+    if (obj->prop_count > 0) {
+        cJSON* props_json = cJSON_CreateObject();
+        if (!props_json) { cJSON_Delete(json_obj); return NULL; }
+        cJSON_AddItemToObject(json_obj, "properties", props_json);
+        char buf[32]; // Shared buffer for string conversions
+
+        for (size_t i = 0; i < obj->prop_count; ++i) {
+            Property* prop = &obj->properties[i];
+            if (!prop->key) continue; // Skip if key allocation failed
+
+            switch (prop->value.type) {
+                case VAL_TYPE_STRING:
+                    cJSON_AddStringToObject(props_json, prop->key, prop->value.data.s ? prop->value.data.s : "");
+                    break;
+                case VAL_TYPE_INT: // Includes simple enums stored as int
+                    cJSON_AddNumberToObject(props_json, prop->key, prop->value.data.i);
+                    break;
+                 case VAL_TYPE_OPA: // Opa is uint8_t but stored as int32_t in union maybe? Treat as number.
+                    cJSON_AddNumberToObject(props_json, prop->key, prop->value.data.opa);
+                    break;
+                case VAL_TYPE_COORD:
+                    coord_to_string(prop->value.data.coord, buf, sizeof(buf));
+                    // Store percentages, content, fr as strings, numbers as numbers
+                    if (strchr(buf, '%') || strcmp(buf, "content") == 0 || strstr(buf, "fr"))
+                        cJSON_AddStringToObject(props_json, prop->key, buf);
+                    else
+                        cJSON_AddNumberToObject(props_json, prop->key, prop->value.data.coord);
+                    break;
+                case VAL_TYPE_BOOL:
+                    cJSON_AddBoolToObject(props_json, prop->key, prop->value.data.b);
+                    break;
+                case VAL_TYPE_ALIGN:
+                    cJSON_AddStringToObject(props_json, prop->key, align_to_string(prop->value.data.align));
+                    break;
+                case VAL_TYPE_LAYOUT:
+                    cJSON_AddStringToObject(props_json, prop->key, layout_to_string(prop->value.data.layout));
+                    break;
+                case VAL_TYPE_GRID_ALIGN:
+                    cJSON_AddStringToObject(props_json, prop->key, grid_align_to_string(prop->value.data.grid_align));
+                    break;
+                case VAL_TYPE_FLEX_ALIGN:
+                    cJSON_AddStringToObject(props_json, prop->key, flex_align_to_string(prop->value.data.flex_align));
+                    break;
+                case VAL_TYPE_FLEX_FLOW:
+                     cJSON_AddStringToObject(props_json, prop->key, flex_flow_to_string(prop->value.data.flex_flow));
+                     break;
+                case VAL_TYPE_SCALE_MODE:
+                     cJSON_AddStringToObject(props_json, prop->key, scale_mode_to_string(prop->value.data.scale_mode));
+                     break;
+                case VAL_TYPE_GRAD_DIR:
+                     cJSON_AddStringToObject(props_json, prop->key, grad_dir_to_string(prop->value.data.grad_dir));
+                     break;
+                case VAL_TYPE_INT_ARRAY: {
+                    cJSON* arr_json = int_array_to_json_array(prop->value.data.int_array);
+                    if (arr_json) cJSON_AddItemToObject(props_json, prop->key, arr_json);
+                    // else: Error creating array logged in helper
+                    break;
+                }
+                 case VAL_TYPE_PTR:
+                    snprintf(buf, sizeof(buf), "ptr_%p", prop->value.data.ptr);
+                    cJSON_AddStringToObject(props_json, prop->key, buf);
+                    break;
+                // Types usually handled by styles:
+                case VAL_TYPE_COLOR:
+                case VAL_TYPE_FONT:
+                case VAL_TYPE_TEXTALIGN:
+                     EMUL_LOG("WARN: Property '%s' has style-like type %d. Skipping in properties section.\\n", prop->key, prop->value.type);
+                    break;
+                case VAL_TYPE_NONE: // Explicitly ignore NONE type
+                default:
+                     EMUL_LOG("WARN: Skipping unknown/unhandled property type %d for key '%s'\\n", prop->value.type, prop->key);
+                     break;
+            }
+        }
+    }
+
+    // Styles
+    if (obj->style_count > 0) {
+        cJSON* styles_json = cJSON_CreateObject();
+         if (!styles_json) { cJSON_Delete(json_obj); return NULL; }
+        cJSON_AddItemToObject(json_obj, "styles", styles_json);
+
+        for (size_t i = 0; i < obj->style_count; ++i) {
+            StyleEntry* entry = &obj->styles[i];
+            if (!entry->prop_name) continue; // Skip if prop_name allocation failed
+
+            const char* part_str = part_to_string(entry->part);
+            const char* state_str = state_to_string(entry->state);
+
+            // Get or create Part object
+            cJSON* part_obj = cJSON_GetObjectItemCaseSensitive(styles_json, part_str);
+            if (!part_obj) {
+                part_obj = cJSON_CreateObject();
+                if (!part_obj) { EMUL_LOG("ERROR: Failed create part obj %s\\n", part_str); continue; }
+                cJSON_AddItemToObject(styles_json, part_str, part_obj);
+             } else if (!cJSON_IsObject(part_obj)) {
+                 EMUL_LOG("ERROR: Existing item '%s' is not an object in styles.\\n", part_str);
+                 continue;
+             }
+
+             // Get or create State object within Part object
+            cJSON* state_obj = cJSON_GetObjectItemCaseSensitive(part_obj, state_str);
+            if (!state_obj) {
+                 state_obj = cJSON_CreateObject();
+                 if (!state_obj) { EMUL_LOG("ERROR: Failed create state obj %s\\n", state_str); continue; }
+                 cJSON_AddItemToObject(part_obj, state_str, state_obj);
+             } else if (!cJSON_IsObject(state_obj)) {
+                 EMUL_LOG("ERROR: Existing item '%s' is not an object in part '%s'.\\n", state_str, part_str);
+                 continue;
+             }
+
+            // Add the style property to the state object
+            char buf[32]; // Shared buffer for conversions
+            switch (entry->value.type) {
+                case VAL_TYPE_COLOR:
+                    color_to_hex_string(entry->value.data.color, buf, sizeof(buf));
+                    cJSON_AddStringToObject(state_obj, entry->prop_name, buf);
+                    break;
+                case VAL_TYPE_COORD:
+                    coord_to_string(entry->value.data.coord, buf, sizeof(buf));
+                    // Store percentages, content, fr as strings, numbers as numbers
+                     if (strchr(buf, '%') || strcmp(buf, "content") == 0 || strstr(buf, "fr"))
+                        cJSON_AddStringToObject(state_obj, entry->prop_name, buf);
+                     else
+                        cJSON_AddNumberToObject(state_obj, entry->prop_name, entry->value.data.coord);
+                    break;
+                case VAL_TYPE_INT: // Often used for opa, border_width, padding etc. Stored as int32
+                    cJSON_AddNumberToObject(state_obj, entry->prop_name, entry->value.data.i);
+                    break;
+                 case VAL_TYPE_OPA: // Stored as opa_t (uint8)
+                    cJSON_AddNumberToObject(state_obj, entry->prop_name, entry->value.data.opa);
+                    break;
+                case VAL_TYPE_FONT:
+                    cJSON_AddStringToObject(state_obj, entry->prop_name, font_ptr_to_name(entry->value.data.font));
+                    break;
+                 case VAL_TYPE_TEXTALIGN:
+                     cJSON_AddStringToObject(state_obj, entry->prop_name, text_align_to_string(entry->value.data.text_align));
+                     break;
+                 case VAL_TYPE_FLEX_FLOW: // Style property
+                     cJSON_AddStringToObject(state_obj, entry->prop_name, flex_flow_to_string(entry->value.data.flex_flow));
+                     break;
+                 case VAL_TYPE_GRAD_DIR:
+                     cJSON_AddStringToObject(state_obj, entry->prop_name, grad_dir_to_string(entry->value.data.grad_dir));
+                     break;
+                  case VAL_TYPE_PTR: // Pointer style (e.g., transition)
+                     snprintf(buf, sizeof(buf), "ptr_%p", entry->value.data.ptr);
+                     cJSON_AddStringToObject(state_obj, entry->prop_name, buf);
+                     break;
+                 // Add cases for other VAL_TYPEs if needed for styles
+                 case VAL_TYPE_NONE: // Explicitly ignore NONE type
+                 // Types usually handled by properties:
+                 case VAL_TYPE_STRING:
+                 case VAL_TYPE_BOOL:
+                 case VAL_TYPE_ALIGN:
+                 case VAL_TYPE_GRID_ALIGN:
+                 case VAL_TYPE_LAYOUT:
+                 case VAL_TYPE_FLEX_ALIGN:
+                 case VAL_TYPE_SCALE_MODE:
+                 case VAL_TYPE_INT_ARRAY:
+                 default:
+                      EMUL_LOG("WARN: Skipping unknown/unhandled style type %d for key '%s'\\n", entry->value.type, entry->prop_name);
+                      break;
+            }
+        }
+    }
+
+    // Children
+    if (obj->child_count > 0) {
+        cJSON* children_json = cJSON_CreateArray();
+         if (!children_json) { cJSON_Delete(json_obj); return NULL; }
+        cJSON_AddItemToObject(json_obj, "children", children_json);
+
+        for (size_t i = 0; i < obj->child_count; ++i) {
+            cJSON* child_json_obj = build_json_recursive(obj->children[i]);
+            if (child_json_obj) {
+                cJSON_AddItemToArray(children_json, child_json_obj);
+            } else {
+                EMUL_LOG("WARN: Failed to build JSON for child object %p (index %zu)\\n", (void*)obj->children[i], i);
+                // Add a placeholder null or skip? Let's skip.
+            }
+        }
+    }
+
+    return json_obj;
+}
+
+
+// --- Public JSON Generator ---
+char* emul_lvgl_get_json(lv_obj_t *root_obj) {
+    if (!root_obj) {
+        EMUL_LOG("ERROR: emul_lvgl_get_json called with NULL root object pointer\\n");
+        return NULL;
+    }
+     if (root_obj != g_screen_obj) {
+          EMUL_LOG("WARN: emul_lvgl_get_json called with object %p which is not the screen object %p. Output might be incomplete.\\n", (void*)root_obj, (void*)g_screen_obj);
+     }
+
+    // Create a top-level container (optional, but good practice)
+    cJSON *root_container = cJSON_CreateObject();
+     if (!root_container) {
+         EMUL_LOG("ERROR: Failed to create root cJSON container\\n");
+         return NULL;
+     }
+
+    // Call recursive builder with the root pointer
+    EMUL_LOG("Starting JSON build from root %p...\\n", (void*)root_obj);
+    cJSON* ui_tree_json = build_json_recursive(root_obj);
+    if (!ui_tree_json) {
+        cJSON_Delete(root_container);
+        EMUL_LOG("ERROR: Failed to build JSON structure recursively from root %p\\n", (void*)root_obj);
+        return NULL;
+    }
+
+    // Add the generated tree under a "root" key in the container
+    cJSON_AddItemToObject(root_container, "root", ui_tree_json);
+
+    // Convert the cJSON object to a string
+    char* json_string = JSON_print(root_container);
+    cJSON_Delete(root_container); // Delete the container and its children
+
+    if (!json_string) {
+        EMUL_LOG("ERROR: cJSON_Print failed\\n");
+    } else {
+        EMUL_LOG("Generated JSON string successfully (root %p)\\n", (void*)root_obj);
+    }
+    return json_string;
+}
+
+// --- Add Placeholder Functions ---
+// (Generated Below)
+
+"""
+
+# Static part for ui_builder.h (exact copy from example)
+BUILDER_HEADER_CONTENT = """
+#ifndef UI_BUILDER_H
+#define UI_BUILDER_H
+
+// Include base LVGL types and cJSON
+#include "lvgl.h" // Assumes lvgl.h is available in the include path
+#include "cJSON.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @brief Clears the active screen and builds a new UI based on JSON data.
+ *
+ * Parses the provided JSON string which describes an LVGL UI hierarchy,
+ * properties, and styles, then creates the corresponding LVGL objects
+ * on the currently active screen (after cleaning it).
+ *
+ * @param json_string A null-terminated C string containing the UI definition in JSON format.
+ *                    The format should match the one produced by the lvgl_emulation library.
+ * @return true if parsing and building the UI was successful, false on error
+ *         (e.g., invalid JSON, memory allocation failure, unknown object type).
+ *         Check logs for specific error details.
+ */
+bool build_ui_from_json(const char *json_string);
+
+/**
+ * @brief Registers a custom font symbol to be used by the builder.
+ *
+ * Allows the UI builder to find fonts referenced by name in the JSON.
+ * Call this before build_ui_from_json for any custom or non-default fonts used.
+ *
+ * @param name The name of the font as it appears in the JSON (e.g., "montserrat_16").
+ * @param font Pointer to the actual lv_font_t variable.
+ * @return true if registration was successful (or updated), false on error (e.g., OOM).
+ */
+bool ui_builder_register_font(const char *name, const lv_font_t *font);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // UI_BUILDER_H
+"""
+
+# Static part for ui_builder.c (mostly copied from example)
+BUILDER_SOURCE_CONTENT = """
+#include "ui_builder.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h> // For strtol, strtod
+
+// Include necessary LVGL headers for widget creation and property setting
+// Include core first
+#include "lvgl.h"
+// Include specific widget/feature headers USED BY THE BUILDER
+#include "src/core/lv_obj_class_private.h" // For lv_obj_check_type
+#include "src/widgets/label/lv_label.h"
+#include "src/widgets/button/lv_button.h"
+#include "src/widgets/slider/lv_slider.h"
+#include "src/widgets/bar/lv_bar.h"
+#include "src/widgets/scale/lv_scale.h"
+// Add more includes for widgets referenced in create_lvgl_object_recursive
+// e.g., #include "src/widgets/checkbox/lv_checkbox.h"
+
+// --- Logging Macros ---
+// Define simple logging macros if not provided elsewhere
+#ifndef UI_BUILDER_LOG_INFO
+#define UI_BUILDER_LOG_INFO(s, ...) printf("[UI_BUILDER INFO] " s "\\n" __VA_OPT__(,) __VA_ARGS__)
+#endif
+#ifndef UI_BUILDER_LOG_ERROR
+#define UI_BUILDER_LOG_ERROR(s, ...) printf("[UI_BUILDER ERROR] " s "\\n" __VA_OPT__(,) __VA_ARGS__)
+#endif
+#ifndef UI_BUILDER_LOG_WARN
+#define UI_BUILDER_LOG_WARN(s, ...) printf("[UI_BUILDER WARN] " s "\\n" __VA_OPT__(,) __VA_ARGS__)
+#endif
+
+
+// --- Font Registry ---
+typedef struct {
+    char *name;
+    const lv_font_t *font;
+} ui_builder_font_entry_t;
+
+static ui_builder_font_entry_t *g_font_registry = NULL;
+static size_t g_font_registry_count = 0;
+static size_t g_font_registry_capacity = 0;
+
+// --- Forward Declarations ---
+static lv_obj_t* create_lvgl_object_recursive(cJSON *json_node, lv_obj_t *parent);
+static void apply_properties(lv_obj_t *obj, cJSON *props_json);
+static void apply_styles(lv_obj_t *obj, cJSON *styles_json);
+static void apply_single_style_prop(lv_obj_t *obj, const char *prop_key, cJSON *style_prop, lv_style_selector_t selector);
+static const lv_font_t* get_font_by_name(const char* name); // Now uses registry
+
+// --- Helper Functions ---
+
+// Helper to parse color string (e.g., "#RRGGBB" or "#RGB")
+static lv_color_t parse_color(const char *color_str) {
+    if (!color_str || color_str[0] != '#') {
+         UI_BUILDER_LOG_WARN("Invalid color string format: %s. Using black.", color_str ? color_str : "NULL");
+        return lv_color_black(); // Default or error color
+    }
+    // Skip '#' and parse hex
+    char *end_ptr;
+    unsigned long cval_ul = strtoul(color_str + 1, &end_ptr, 16);
+
+    // Check if parsing consumed the whole string after '#'
+    if (*end_ptr != '\\0') {
+        UI_BUILDER_LOG_WARN("Invalid characters in color string: %s. Using black.", color_str);
+        return lv_color_black();
+    }
+    uint32_t cval = (uint32_t)cval_ul; // Cast result
+
+    size_t len = strlen(color_str);
+    if (len == 7) { // #RRGGBB
+        return lv_color_hex(cval);
+    } else if (len == 4) { // #RGB -> #RRGGBB
+        uint8_t r = (cval >> 8) & 0xF;
+        uint8_t g = (cval >> 4) & 0xF;
+        uint8_t b = cval & 0xF;
+        return lv_color_make(r * 17, g * 17, b * 17);
+     } // Add support for #AARRGGBB or #ARGB if needed
+     else {
+        UI_BUILDER_LOG_WARN("Unsupported color string length (%zu): %s. Using black.", len, color_str);
+        return lv_color_black();
+     }
+}
+
+// Helper to parse alignment string
+static lv_align_t parse_align(const char *align_str) {
+    if (!align_str) return LV_ALIGN_DEFAULT;
+    if (strcmp(align_str, "default") == 0) return LV_ALIGN_DEFAULT;
+    if (strcmp(align_str, "top_left") == 0) return LV_ALIGN_TOP_LEFT;
+    if (strcmp(align_str, "top_mid") == 0) return LV_ALIGN_TOP_MID;
+    if (strcmp(align_str, "top_right") == 0) return LV_ALIGN_TOP_RIGHT;
+    if (strcmp(align_str, "left_mid") == 0) return LV_ALIGN_LEFT_MID;
+    if (strcmp(align_str, "center") == 0) return LV_ALIGN_CENTER;
+    if (strcmp(align_str, "right_mid") == 0) return LV_ALIGN_RIGHT_MID;
+    if (strcmp(align_str, "bottom_left") == 0) return LV_ALIGN_BOTTOM_LEFT;
+    if (strcmp(align_str, "bottom_mid") == 0) return LV_ALIGN_BOTTOM_MID;
+    if (strcmp(align_str, "bottom_right") == 0) return LV_ALIGN_BOTTOM_RIGHT;
+    // Add other alignments like out_... if needed
+    UI_BUILDER_LOG_WARN("Unknown align value: %s, using default.", align_str);
+    return LV_ALIGN_DEFAULT;
+}
+
+// Helper to parse state string
+static lv_state_t parse_state(const char *state_str) {
+    if (!state_str || strcmp(state_str, "default") == 0) return LV_STATE_DEFAULT;
+    if (strcmp(state_str, "checked") == 0) return LV_STATE_CHECKED;
+    if (strcmp(state_str, "focused") == 0) return LV_STATE_FOCUSED;
+    if (strcmp(state_str, "focus_key") == 0) return LV_STATE_FOCUS_KEY;
+    if (strcmp(state_str, "edited") == 0) return LV_STATE_EDITED;
+    if (strcmp(state_str, "hovered") == 0) return LV_STATE_HOVERED;
+    if (strcmp(state_str, "pressed") == 0) return LV_STATE_PRESSED;
+    if (strcmp(state_str, "scrolled") == 0) return LV_STATE_SCROLLED;
+    if (strcmp(state_str, "disabled") == 0) return LV_STATE_DISABLED;
+    if (strcmp(state_str, "state_any") == 0) return LV_STATE_ANY;
+    // Check for numeric state values (hex) if the emulator generates them
+    if (strncmp(state_str, "state_0x", 8) == 0) {
+        return (lv_state_t)strtoul(state_str + 8, NULL, 16);
+    }
+    UI_BUILDER_LOG_WARN("Unknown state value: '%s', using default.", state_str);
+    return LV_STATE_DEFAULT;
+}
+
+// Helper to parse part string
+static lv_part_t parse_part(const char *part_str) {
+    if (!part_str || strcmp(part_str, "default") == 0) return LV_PART_MAIN; // "default" in JSON maps to MAIN part
+    if (strcmp(part_str, "main") == 0) return LV_PART_MAIN; // Allow "main" explicitly too
+    if (strcmp(part_str, "indicator") == 0) return LV_PART_INDICATOR;
+    if (strcmp(part_str, "knob") == 0) return LV_PART_KNOB;
+    if (strcmp(part_str, "scrollbar") == 0) return LV_PART_SCROLLBAR;
+    if (strcmp(part_str, "selected") == 0) return LV_PART_SELECTED;
+    if (strcmp(part_str, "items") == 0) return LV_PART_ITEMS;
+    if (strcmp(part_str, "cursor") == 0) return LV_PART_CURSOR;
+    if (strcmp(part_str, "part_any") == 0) return LV_PART_ANY;
+    // Check for numeric part values (hex) or custom parts
+    if (strncmp(part_str, "unknown_part_0x", 15) == 0) {
+        return (lv_part_t)strtoul(part_str + 15, NULL, 16);
+    }
+    if (strncmp(part_str, "custom_part_", 12) == 0) {
+        return LV_PART_CUSTOM_FIRST + (lv_part_t)strtoul(part_str + 12, NULL, 10);
+    }
+    UI_BUILDER_LOG_WARN("Unknown part value: '%s', using main part.", part_str);
+    return LV_PART_MAIN;
+}
+
+// Helper to parse coordinate (number, "N%", "content", "Nfr")
+static lv_coord_t parse_coord(cJSON *value) {
+    if (cJSON_IsNumber(value)) {
+        return (lv_coord_t)cJSON_GetNumberValue(value);
+    } else if (cJSON_IsString(value)) {
+        const char *str = cJSON_GetStringValue(value);
+        if (!str) return 0; // Handle null string case
+
+        if (strcmp(str, "content") == 0) {
+            return LV_SIZE_CONTENT;
+        }
+
+        char *endptr;
+        long num_val = strtol(str, &endptr, 10);
+
+        // Check what follows the number
+        if (endptr == str) { // No number parsed
+            UI_BUILDER_LOG_WARN("Invalid coordinate string (no number): '%s'", str);
+            return 0;
+        }
+
+        if (*endptr == '%') { // Percentage
+             // Check if string ends right after '%'
+             if (*(endptr + 1) == '\\0') {
+                // Clamp LV_PCT range if necessary (though lv_pct might do this)
+                if (num_val < -LV_PCT_POS_MAX) num_val = -LV_PCT_POS_MAX;
+                if (num_val > LV_PCT_POS_MAX) num_val = LV_PCT_POS_MAX;
+                return lv_pct((int32_t)num_val);
+             } else {
+                 UI_BUILDER_LOG_WARN("Invalid coordinate string (extra chars after %%): '%s'", str);
+                 return 0;
+             }
+        } else if (strncmp(endptr, "fr", 2) == 0) { // Flex/Grid Fraction
+             // Check if string ends right after 'fr'
+             if (*(endptr + 2) == '\\0') {
+                 // LV_GRID_FR expects uint8_t, clamp if necessary
+                 if (num_val < 0) num_val = 0;
+                 if (num_val > 255) num_val = 255; // Example clamp
+                 return LV_GRID_FR((uint8_t)num_val); // Use LV_GRID_FR macro
+             } else {
+                  UI_BUILDER_LOG_WARN("Invalid coordinate string (extra chars after fr): '%s'", str);
+                  return 0;
+             }
+        } else if (*endptr == '\\0') { // Plain number string
+            return (lv_coord_t)num_val;
+        } else { // Invalid format
+             UI_BUILDER_LOG_WARN("Invalid coordinate string format: '%s'", str);
+            return 0;
+        }
+    }
+    UI_BUILDER_LOG_WARN("Invalid coordinate JSON type (expected number or string)");
+    return 0;
+}
+
+
+// --- Font Registry Functions ---
+
+bool ui_builder_register_font(const char *name, const lv_font_t *font) {
+    if (!name || !font) return false;
+
+    // Check if already exists
+    for (size_t i = 0; i < g_font_registry_count; ++i) {
+        if (g_font_registry[i].name && strcmp(g_font_registry[i].name, name) == 0) {
+            UI_BUILDER_LOG_INFO("Updating registered font '%s'", name);
+            g_font_registry[i].font = font; // Update pointer
+            return true;
+        }
+    }
+
+    // Grow registry if needed
+    if (g_font_registry_count >= g_font_registry_capacity) {
+        size_t old_capacity = g_font_registry_capacity;
+        size_t new_capacity = (old_capacity == 0) ? 4 : old_capacity * 2;
+        ui_builder_font_entry_t *new_registry = realloc(g_font_registry, new_capacity * sizeof(ui_builder_font_entry_t));
+        if (!new_registry) {
+            UI_BUILDER_LOG_ERROR("Failed to realloc font registry");
+            return false;
+        }
+        g_font_registry = new_registry;
+        g_font_registry_capacity = new_capacity;
+    }
+
+    // Add new entry
+    g_font_registry[g_font_registry_count].name = strdup(name);
+    if (!g_font_registry[g_font_registry_count].name) {
+        UI_BUILDER_LOG_ERROR("Failed to allocate memory for font name '%s'", name);
+        return false;
+    }
+    g_font_registry[g_font_registry_count].font = font;
+    g_font_registry_count++;
+    UI_BUILDER_LOG_INFO("Registered font '%s'", name);
+    return true;
+}
+
+// Helper to get font by name using the registry
+static const lv_font_t* get_font_by_name(const char* name) {
+    if (!name || strcmp(name, "default") == 0) {
+        return LV_FONT_DEFAULT;
+    }
+
+    // Check registry
+    for (size_t i = 0; i < g_font_registry_count; ++i) {
+        if (g_font_registry[i].name && strcmp(g_font_registry[i].name, name) == 0) {
+            return g_font_registry[i].font;
+        }
+    }
+
+    // Check known built-in fonts as a fallback (requires LVGL symbols)
+    #if LV_FONT_MONTSERRAT_14
+    if (strcmp(name, "montserrat_14") == 0) return &lv_font_montserrat_14;
+    #endif
+    #if LV_FONT_MONTSERRAT_18
+    if (strcmp(name, "montserrat_18") == 0) return &lv_font_montserrat_18;
+    #endif
+    #if LV_FONT_MONTSERRAT_24
+    if (strcmp(name, "montserrat_24") == 0) return &lv_font_montserrat_24;
+    #endif
+    // Add more built-ins if needed...
+
+    // Check for pointer address format generated by emulator as last resort
+     if (strncmp(name, "font_ptr_", 9) == 0) {
+        void *ptr = NULL;
+        if (sscanf(name + 9, "%p", &ptr) == 1 && ptr != NULL) {
+            // WARNING: This is generally unsafe! Using a pointer address from a different
+            // run/process is highly unreliable. Only works if the font address is constant
+            // across the emulator and builder runs (e.g., ROM constant).
+             UI_BUILDER_LOG_WARN("Attempting to use font pointer address '%s'. This is unsafe unless the address is constant.", name);
+            return (const lv_font_t*)ptr;
+        }
+     }
+
+
+    UI_BUILDER_LOG_WARN("Font '%s' not found in registry or built-ins. Using default.", name);
+    return LV_FONT_DEFAULT;
+}
+
+// Free the font registry (call this on deinit if needed)
+static void ui_builder_free_font_registry() {
+    for (size_t i = 0; i < g_font_registry_count; ++i) {
+        free(g_font_registry[i].name);
+    }
+    free(g_font_registry);
+    g_font_registry = NULL;
+    g_font_registry_count = 0;
+    g_font_registry_capacity = 0;
+}
+
+// --- Layout/Grid/Flex Parsers ---
+
+static lv_layout_t parse_layout(const char *layout_str) {
+    if (!layout_str) return LV_LAYOUT_NONE;
+    if (strcmp(layout_str, "flex") == 0) return LV_LAYOUT_FLEX;
+    if (strcmp(layout_str, "grid") == 0) return LV_LAYOUT_GRID;
+    if (strcmp(layout_str, "none") == 0) return LV_LAYOUT_NONE;
+    UI_BUILDER_LOG_WARN("Unknown layout type: %s, using none.", layout_str);
+    return LV_LAYOUT_NONE;
+}
+
+static lv_grid_align_t parse_grid_align(const char *align_str) {
+    if (!align_str) return LV_GRID_ALIGN_START; // Default
+    if (strcmp(align_str, "start") == 0) return LV_GRID_ALIGN_START;
+    if (strcmp(align_str, "center") == 0) return LV_GRID_ALIGN_CENTER;
+    if (strcmp(align_str, "end") == 0) return LV_GRID_ALIGN_END;
+    if (strcmp(align_str, "stretch") == 0) return LV_GRID_ALIGN_STRETCH;
+    if (strcmp(align_str, "space_evenly") == 0) return LV_GRID_ALIGN_SPACE_EVENLY;
+    if (strcmp(align_str, "space_around") == 0) return LV_GRID_ALIGN_SPACE_AROUND;
+    if (strcmp(align_str, "space_between") == 0) return LV_GRID_ALIGN_SPACE_BETWEEN;
+    UI_BUILDER_LOG_WARN("Unknown grid align value: %s, using start.", align_str);
+    return LV_GRID_ALIGN_START;
+}
+
+static lv_flex_align_t parse_flex_align(const char *align_str) {
+    if (!align_str) return LV_FLEX_ALIGN_START; // Default
+    if (strcmp(align_str, "start") == 0) return LV_FLEX_ALIGN_START;
+    if (strcmp(align_str, "end") == 0) return LV_FLEX_ALIGN_END;
+    if (strcmp(align_str, "center") == 0) return LV_FLEX_ALIGN_CENTER;
+    if (strcmp(align_str, "space_evenly") == 0) return LV_FLEX_ALIGN_SPACE_EVENLY;
+    if (strcmp(align_str, "space_around") == 0) return LV_FLEX_ALIGN_SPACE_AROUND;
+    if (strcmp(align_str, "space_between") == 0) return LV_FLEX_ALIGN_SPACE_BETWEEN;
+    UI_BUILDER_LOG_WARN("Unknown flex align value: %s, using start.", align_str);
+    return LV_FLEX_ALIGN_START;
+}
+
+static lv_flex_flow_t parse_flex_flow(const char *flow_str) {
+    if (!flow_str) return LV_FLEX_FLOW_ROW; // Default
+    if (strcmp(flow_str, "row") == 0) return LV_FLEX_FLOW_ROW;
+    if (strcmp(flow_str, "column") == 0) return LV_FLEX_FLOW_COLUMN;
+    if (strcmp(flow_str, "row_wrap") == 0) return LV_FLEX_FLOW_ROW_WRAP;
+    if (strcmp(flow_str, "row_reverse") == 0) return LV_FLEX_FLOW_ROW_REVERSE;
+    if (strcmp(flow_str, "row_wrap_reverse") == 0) return LV_FLEX_FLOW_ROW_WRAP_REVERSE;
+    if (strcmp(flow_str, "column_wrap") == 0) return LV_FLEX_FLOW_COLUMN_WRAP;
+    if (strcmp(flow_str, "column_reverse") == 0) return LV_FLEX_FLOW_COLUMN_REVERSE;
+    if (strcmp(flow_str, "column_wrap_reverse") == 0) return LV_FLEX_FLOW_COLUMN_WRAP_REVERSE;
+    UI_BUILDER_LOG_WARN("Unknown flex flow value: %s, using row.", flow_str);
+    return LV_FLEX_FLOW_ROW;
+}
+
+static lv_scale_mode_t parse_scale_mode(const char *mode_str) {
+    if (!mode_str) return LV_SCALE_MODE_HORIZONTAL_BOTTOM; // Default? Check LVGL default
+    if (strcmp(mode_str, "horizontal_top") == 0) return LV_SCALE_MODE_HORIZONTAL_TOP;
+    if (strcmp(mode_str, "horizontal_bottom") == 0) return LV_SCALE_MODE_HORIZONTAL_BOTTOM;
+    if (strcmp(mode_str, "vertical_left") == 0) return LV_SCALE_MODE_VERTICAL_LEFT;
+    if (strcmp(mode_str, "vertical_right") == 0) return LV_SCALE_MODE_VERTICAL_RIGHT;
+    if (strcmp(mode_str, "round_inner") == 0) return LV_SCALE_MODE_ROUND_INNER;
+    if (strcmp(mode_str, "round_outer") == 0) return LV_SCALE_MODE_ROUND_OUTER;
+    UI_BUILDER_LOG_WARN("Unknown scale mode value: %s, using horizontal_bottom.", mode_str);
+    return LV_SCALE_MODE_HORIZONTAL_BOTTOM;
+}
+
+static lv_grad_dir_t parse_grad_dir(const char *dir_str) {
+    if(!dir_str) return LV_GRAD_DIR_NONE;
+    if(strcmp(dir_str, "none") == 0) return LV_GRAD_DIR_NONE;
+    if(strcmp(dir_str, "ver") == 0) return LV_GRAD_DIR_VER;
+    if(strcmp(dir_str, "hor") == 0) return LV_GRAD_DIR_HOR;
+    if(strcmp(dir_str, "linear") == 0) return LV_GRAD_DIR_LINEAR;
+    if(strcmp(dir_str, "radial") == 0) return LV_GRAD_DIR_RADIAL;
+    if(strcmp(dir_str, "conical") == 0) return LV_GRAD_DIR_CONICAL;
+    UI_BUILDER_LOG_WARN("Unknown grad dir value: %s, using none.", dir_str);
+    return LV_GRAD_DIR_NONE;
+}
+
+
+// Helper to parse a JSON array into a dynamically allocated lv_coord_t array ending with LV_GRID_TEMPLATE_LAST
+// The caller is responsible for freeing the returned array!
+static lv_coord_t* parse_coord_array_for_grid(cJSON *json_array) {
+    if (!cJSON_IsArray(json_array)) {
+        UI_BUILDER_LOG_WARN("Expected JSON array for grid descriptor, got other type.");
+        return NULL;
+    }
+
+    int size = cJSON_GetArraySize(json_array);
+    // Need size + 1 for the LV_GRID_TEMPLATE_LAST terminator
+    lv_coord_t *coord_array = malloc((size + 1) * sizeof(lv_coord_t));
+    if (!coord_array) {
+        UI_BUILDER_LOG_ERROR("Failed to allocate memory for grid coordinate array (%d elements)", size);
+        return NULL;
+    }
+
+    for (int i = 0; i < size; i++) {
+        cJSON *item = cJSON_GetArrayItem(json_array, i);
+        coord_array[i] = parse_coord(item); // Use the existing coord parser
+    }
+    coord_array[size] = LV_GRID_TEMPLATE_LAST; // Terminate the array
+
+    return coord_array;
+}
+
+// --- Main Recursive Builder ---
+
+static lv_obj_t* create_lvgl_object_recursive(cJSON *json_node, lv_obj_t *parent) {
+    if (!json_node || !cJSON_IsObject(json_node)) return NULL;
+
+    cJSON *type_json = cJSON_GetObjectItemCaseSensitive(json_node, "type");
+    if (!cJSON_IsString(type_json) || !type_json->valuestring) {
+        UI_BUILDER_LOG_ERROR("Object definition missing 'type' string");
+        return NULL;
+    }
+    const char *type = type_json->valuestring;
+
+    // Log the object ID from JSON for correlation if present
+    cJSON *id_json = cJSON_GetObjectItemCaseSensitive(json_node, "id");
+    const char *json_id_str = cJSON_IsString(id_json) ? id_json->valuestring : "N/A";
+
+    UI_BUILDER_LOG_INFO("Creating object type '%s' (JSON ID: %s) with parent %p", type, json_id_str, (void*)parent);
+
+
+    lv_obj_t *obj = NULL;
+
+    // --- Create Object based on Type ---
+    if (strcmp(type, "obj") == 0 || strcmp(type, "cont") == 0 || strcmp(type, "screen") == 0) {
+        // Special case: if type is "screen", we don't create a new object,
+        // we use the parent passed in (which should be the actual screen).
+        if (strcmp(type, "screen") == 0) {
+             obj = parent; // Use the screen object directly
+             if (parent != lv_screen_active()) {
+                 UI_BUILDER_LOG_WARN("JSON 'screen' type found, but parent %p is not the active screen %p!", (void*)parent, (void*)lv_screen_active());
+                 // Still proceed using the passed parent
+             } else {
+                  UI_BUILDER_LOG_INFO(" Applying properties/styles to existing screen object %p", (void*)obj);
+             }
+        } else {
+             obj = lv_obj_create(parent); // Create a standard object
+        }
+    } else if (strcmp(type, "label") == 0) {
+        obj = lv_label_create(parent);
+    } else if (strcmp(type, "btn") == 0) {
+        obj = lv_button_create(parent); // Use lv_button_create
+    } else if (strcmp(type, "slider") == 0) {
+        obj = lv_slider_create(parent);
+    }
+    else if (strcmp(type, "bar") == 0) {
+        obj = lv_bar_create(parent);
+    } else if (strcmp(type, "scale") == 0) {
+        obj = lv_scale_create(parent);
+    }
+    // --- Add more widget types here ---
+    // Example:
+    // else if (strcmp(type, "checkbox") == 0) { obj = lv_checkbox_create(parent); }
+    // else if (strcmp(type, "textarea") == 0) { obj = lv_textarea_create(parent); }
+    // else if (strcmp(type, "image") == 0) { obj = lv_image_create(parent); }
+    // ... etc ...
+    else {
+        UI_BUILDER_LOG_ERROR("Unknown object type in JSON: '%s'", type);
+        return NULL; // Stop creation if type is unknown
+    }
+
+    if (!obj) {
+        // If obj is NULL here and type wasn't "screen", creation failed
+        if (strcmp(type, "screen") != 0) {
+            UI_BUILDER_LOG_ERROR("Failed to create object of type: %s", type);
+            return NULL;
+        }
+        // If type was "screen", obj is expected to be the parent (screen)
+        if (!obj) {
+             UI_BUILDER_LOG_ERROR("Parent (screen) is NULL for 'screen' type node.");
+             return NULL;
+        }
+    }
+
+     UI_BUILDER_LOG_INFO(" Object %p created/assigned for type '%s'", (void*)obj, type);
+
+    // --- Apply Properties ---
+    cJSON *props_json = cJSON_GetObjectItemCaseSensitive(json_node, "properties");
+    if (cJSON_IsObject(props_json)) {
+        apply_properties(obj, props_json);
+    }
+
+    // --- Apply Styles ---
+    cJSON *styles_json = cJSON_GetObjectItemCaseSensitive(json_node, "styles");
+    if (cJSON_IsObject(styles_json)) {
+        apply_styles(obj, styles_json);
+    }
+
+    // --- Create Children ---
+    // Do not create children for the special "screen" type node,
+    // as its children in JSON represent top-level objects on the screen.
+    if (strcmp(type, "screen") != 0) {
+        cJSON *children_json = cJSON_GetObjectItemCaseSensitive(json_node, "children");
+        if (cJSON_IsArray(children_json)) {
+            cJSON *child_json = NULL;
+            cJSON_ArrayForEach(child_json, children_json) {
+                // Pass the newly created object 'obj' as the parent for its children
+                lv_obj_t *child_obj = create_lvgl_object_recursive(child_json, obj);
+                if (!child_obj) {
+                     UI_BUILDER_LOG_ERROR("Failed to create child object for parent %p (type %s). Skipping remaining children.", (void*)obj, type);
+                     // Optionally stop processing further children of this node on error
+                     // return NULL; // Or just continue
+                }
+            }
+        }
+    } else {
+        // If the current node is the "screen" type, its "children" in JSON
+        // should be created directly on the screen object.
+        cJSON *children_json = cJSON_GetObjectItemCaseSensitive(json_node, "children");
+        if (cJSON_IsArray(children_json)) {
+             UI_BUILDER_LOG_INFO(" Creating screen's top-level children...");
+            cJSON *child_json = NULL;
+            cJSON_ArrayForEach(child_json, children_json) {
+                 // Pass the screen object 'obj' as the parent
+                 lv_obj_t *child_obj = create_lvgl_object_recursive(child_json, obj);
+                 if (!child_obj) {
+                      UI_BUILDER_LOG_ERROR("Failed to create top-level child object for screen %p. Skipping remaining children.", (void*)obj);
+                 }
+            }
+        }
+
+    }
+
+
+    return obj;
+}
+
+// --- Property Application ---
+
+static void apply_properties(lv_obj_t *obj, cJSON *props_json) {
+    cJSON *prop = NULL;
+    // Temp storage for multi-part properties that need applying together
+    lv_coord_t* temp_col_dsc = NULL;
+    lv_coord_t* temp_row_dsc = NULL;
+    lv_grid_align_t temp_grid_col_align = LV_GRID_ALIGN_START; // Default
+    lv_grid_align_t temp_grid_row_align = LV_GRID_ALIGN_START; // Default
+    bool grid_align_set = false; // Track if grid align was explicitly set
+
+    lv_flex_align_t temp_flex_main = LV_FLEX_ALIGN_START;
+    lv_flex_align_t temp_flex_cross = LV_FLEX_ALIGN_START;
+    lv_flex_align_t temp_flex_track = LV_FLEX_ALIGN_START;
+    bool flex_align_set = false; // Track if flex align was explicitly set
+
+    int32_t temp_range_min = 0, temp_range_max = 100; // For slider/bar/scale defaults
+    bool range_min_set = false, range_max_set = false;
+
+    // --- First Pass: Apply simple, direct properties ---
+    cJSON_ArrayForEach(prop, props_json) {
+        const char *key = prop->string;
+        if (!key) continue;
+
+        // --- Common Properties ---
+        if (strcmp(key, "width") == 0) lv_obj_set_width(obj, parse_coord(prop));
+        else if (strcmp(key, "height") == 0) lv_obj_set_height(obj, parse_coord(prop));
+        else if (strcmp(key, "x") == 0) lv_obj_set_x(obj, parse_coord(prop)); // Coord can be pct
+        else if (strcmp(key, "y") == 0) lv_obj_set_y(obj, parse_coord(prop)); // Coord can be pct
+        else if (strcmp(key, "align") == 0 && cJSON_IsString(prop)) lv_obj_set_align(obj, parse_align(prop->valuestring));
+
+        // --- Flags ---
+        // Handle individual flags if needed (e.g., "clickable": true)
+        // Or handle a single "flags" property that sets all flags at once
+        else if (strcmp(key, "flags") == 0 && cJSON_IsNumber(prop)) {
+            // Overwrite all flags (consider clearing existing first?)
+            uint32_t flags_to_set = (uint32_t)cJSON_GetNumberValue(prop);
+             // lv_obj_remove_flag(obj, ~0); // Clear all existing - maybe too destructive?
+             // Let's just add the flags specified in the JSON.
+             // If clearing is needed, the JSON should explicitly list flags to remove?
+             // Or we assume "flags" property OVERWRITES all others. Let's assume overwrite for now.
+             // This is complex. Let's stick to ADDING flags from the JSON value for now.
+             // To achieve overwrite, one would need to know the original flags.
+             // For simplicity: This will ADD the flags from the number.
+             lv_obj_add_flag(obj, flags_to_set);
+             UI_BUILDER_LOG_INFO(" Added flags 0x%X to obj %p", flags_to_set, (void*)obj);
+
+             // Alternative: if specific flag keys exist, handle them:
+             // else if (strcmp(key, "clickable") == 0 && cJSON_IsBool(prop)) {
+             //     if(cJSON_IsTrue(prop)) lv_obj_add_flag(obj, LV_OBJ_FLAG_CLICKABLE);
+             //     else lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICKABLE);
+             // } // etc.
+        }
+
+        // --- Layout Base Type ---
+        else if (strcmp(key, "layout") == 0 && cJSON_IsString(prop)) {
+             lv_obj_set_layout(obj, parse_layout(prop->valuestring));
+        }
+
+        // --- Widget Specific Simple Properties ---
+        // Label
+        else if (strcmp(key, "text") == 0 && cJSON_IsString(prop) && lv_obj_has_class(obj, &lv_label_class)) {
+            lv_label_set_text(obj, prop->valuestring);
+        }
+        // Slider / Bar Value (handle both 'value' and 'val')
+        else if ((strcmp(key, "value") == 0 || strcmp(key, "val") == 0) && cJSON_IsNumber(prop)) {
+             if (lv_obj_has_class(obj, &lv_slider_class)) {
+                lv_slider_set_value(obj, (int32_t)cJSON_GetNumberValue(prop), LV_ANIM_OFF);
+             } else if (lv_obj_has_class(obj, &lv_bar_class)) {
+                 lv_bar_set_value(obj, (int32_t)cJSON_GetNumberValue(prop), LV_ANIM_OFF);
+             }
+             // Scale doesn't have a simple 'set_value'
+        }
+        // Scale Major Tick
+         else if (strcmp(key, "scale_major_tick_every") == 0 && cJSON_IsNumber(prop) && lv_obj_has_class(obj, &lv_scale_class)) {
+             lv_scale_set_major_tick_every(obj, (uint32_t)cJSON_GetNumberValue(prop));
+         }
+         // Scale Mode
+         else if (strcmp(key, "scale_mode") == 0 && cJSON_IsString(prop) && lv_obj_has_class(obj, &lv_scale_class)) {
+             lv_scale_set_mode(obj, parse_scale_mode(prop->valuestring));
+         }
+
+        // --- Store values for multi-part properties ---
+        // Flexbox Align
+        else if (strcmp(key, "flex_align_main_place") == 0 && cJSON_IsString(prop)) { temp_flex_main = parse_flex_align(prop->valuestring); flex_align_set = true; }
+        else if (strcmp(key, "flex_align_cross_place") == 0 && cJSON_IsString(prop)) { temp_flex_cross = parse_flex_align(prop->valuestring); flex_align_set = true; }
+        else if (strcmp(key, "flex_align_track_cross_place") == 0 && cJSON_IsString(prop)) { temp_flex_track = parse_flex_align(prop->valuestring); flex_align_set = true; }
+        // Flexbox Flow (can be applied directly)
+        else if (strcmp(key, "flex_flow") == 0 && cJSON_IsString(prop)) {
+            lv_obj_set_flex_flow(obj, parse_flex_flow(prop->valuestring));
+        }
+        // Flex Grow (can be applied directly)
+        else if (strcmp(key, "flex_grow") == 0 && cJSON_IsNumber(prop)) {
+            lv_obj_set_flex_grow(obj, (uint8_t)cJSON_GetNumberValue(prop));
+        }
+        // Grid DSC Arrays
+        else if (strcmp(key, "grid_dsc_array_col_dsc") == 0 && cJSON_IsArray(prop)) {
+            free(temp_col_dsc); // Free previous if reparsed
+            temp_col_dsc = parse_coord_array_for_grid(prop);
+        }
+        else if (strcmp(key, "grid_dsc_array_row_dsc") == 0 && cJSON_IsArray(prop)) {
+            free(temp_row_dsc); // Free previous if reparsed
+            temp_row_dsc = parse_coord_array_for_grid(prop);
+        }
+        // Grid Align
+        else if (strcmp(key, "grid_column_align") == 0 && cJSON_IsString(prop)) { temp_grid_col_align = parse_grid_align(prop->valuestring); grid_align_set = true; }
+        else if (strcmp(key, "grid_row_align") == 0 && cJSON_IsString(prop)) { temp_grid_row_align = parse_grid_align(prop->valuestring); grid_align_set = true; }
+        // Grid Cell (Applied directly as these are per-child)
+        else if (strcmp(key, "grid_cell_column_align") == 0 && cJSON_IsString(prop)) {
+            // Assume other grid_cell props are also present if this one is
+            lv_grid_align_t cell_col_align = parse_grid_align(prop->valuestring);
+            int32_t col_pos = 0;
+            int32_t col_span = 1;
+            lv_grid_align_t cell_row_align = LV_GRID_ALIGN_STRETCH; // Default cell align? Check LVGL
+            int32_t row_pos = 0;
+            int32_t row_span = 1;
+
+            cJSON *val = cJSON_GetObjectItemCaseSensitive(props_json, "grid_cell_col_pos");
+            if(cJSON_IsNumber(val)) col_pos = (int32_t)val->valuedouble;
+            val = cJSON_GetObjectItemCaseSensitive(props_json, "grid_cell_col_span");
+            if(cJSON_IsNumber(val)) col_span = (int32_t)val->valuedouble;
+
+            val = cJSON_GetObjectItemCaseSensitive(props_json, "grid_cell_row_align");
+             if(cJSON_IsString(val)) cell_row_align = parse_grid_align(val->valuestring);
+             val = cJSON_GetObjectItemCaseSensitive(props_json, "grid_cell_row_pos");
+             if(cJSON_IsNumber(val)) row_pos = (int32_t)val->valuedouble;
+             val = cJSON_GetObjectItemCaseSensitive(props_json, "grid_cell_row_span");
+             if(cJSON_IsNumber(val)) row_span = (int32_t)val->valuedouble;
+
+             lv_obj_set_grid_cell(obj, cell_col_align, col_pos, col_span, cell_row_align, row_pos, row_span);
+             UI_BUILDER_LOG_INFO(" Applied grid cell to obj %p: col(pos:%d span:%d align:%d) row(pos:%d span:%d align:%d)",
+                                (void*)obj, col_pos, col_span, cell_col_align, row_pos, row_span, cell_row_align);
+        }
+        // Range (Slider/Bar/Scale)
+        else if (strcmp(key, "range_min") == 0 && cJSON_IsNumber(prop)) { temp_range_min = (int32_t)cJSON_GetNumberValue(prop); range_min_set = true; }
+        else if (strcmp(key, "range_max") == 0 && cJSON_IsNumber(prop)) { temp_range_max = (int32_t)cJSON_GetNumberValue(prop); range_max_set = true; }
+         // Handle scale specific aliases if needed ("scale_range_min")
+         else if (strcmp(key, "scale_range_min") == 0 && cJSON_IsNumber(prop)) { temp_range_min = (int32_t)cJSON_GetNumberValue(prop); range_min_set = true; }
+         else if (strcmp(key, "scale_range_max") == 0 && cJSON_IsNumber(prop)) { temp_range_max = (int32_t)cJSON_GetNumberValue(prop); range_max_set = true; }
+
+        // --- Other property handlers ---
+        else {
+            // Don't warn about keys handled in multi-part application below
+            if (strncmp(key, "grid_cell_", 10) != 0 &&
+                strncmp(key, "flex_align_", 11) != 0 &&
+                 strncmp(key, "grid_dsc_array_", 15) != 0 &&
+                 strncmp(key, "grid_", 5) != 0 && // Catches grid_column/row_align
+                 strncmp(key, "range_", 6) != 0 &&
+                 strncmp(key, "scale_range_", 12) != 0 )
+             {
+                UI_BUILDER_LOG_WARN("Unknown or unhandled property: '%s' for object type %s", key, lv_obj_get_class(obj)->name);
+             }
+        }
+    }
+
+    // --- Second Pass: Apply multi-part properties ---
+    if (temp_col_dsc || temp_row_dsc) {
+         // LVGL requires both arrays, even if one is NULL (which parse returns if not found/invalid)
+         UI_BUILDER_LOG_INFO(" Applying grid dsc array to obj %p (col: %p, row: %p)", (void*)obj, (void*)temp_col_dsc, (void*)temp_row_dsc);
+        lv_obj_set_grid_dsc_array(obj, temp_col_dsc, temp_row_dsc);
+        // Free the arrays after LVGL has potentially copied them (check LVGL docs)
+        // Assuming LVGL copies the descriptor arrays, we free them.
+        // If LVGL uses the pointers directly, DO NOT FREE here.
+        // Based on LVGL v8/v9 behavior, it *copies* the descriptors.
+        free(temp_col_dsc);
+        free(temp_row_dsc);
+    }
+
+    if (grid_align_set) {
+        UI_BUILDER_LOG_INFO(" Applying grid align to obj %p (col: %d, row: %d)", (void*)obj, temp_grid_col_align, temp_grid_row_align);
+        lv_obj_set_grid_align(obj, temp_grid_col_align, temp_grid_row_align);
+    }
+
+    if (flex_align_set) {
+        UI_BUILDER_LOG_INFO(" Applying flex align to obj %p (main: %d, cross: %d, track: %d)", (void*)obj, temp_flex_main, temp_flex_cross, temp_flex_track);
+        lv_obj_set_flex_align(obj, temp_flex_main, temp_flex_cross, temp_flex_track);
+    }
+
+    if (range_min_set || range_max_set) {
+         // Apply range to relevant widgets
+         if (lv_obj_has_class(obj, &lv_slider_class)) {
+             // If only one was set, get the current value for the other?
+             if (!range_min_set) temp_range_min = lv_slider_get_min_value(obj);
+             if (!range_max_set) temp_range_max = lv_slider_get_max_value(obj);
+             UI_BUILDER_LOG_INFO(" Applying slider range to obj %p (min: %d, max: %d)", (void*)obj, temp_range_min, temp_range_max);
+             lv_slider_set_range(obj, temp_range_min, temp_range_max);
+         } else if (lv_obj_has_class(obj, &lv_bar_class)) {
+             if (!range_min_set) temp_range_min = lv_bar_get_min_value(obj);
+             if (!range_max_set) temp_range_max = lv_bar_get_max_value(obj);
+             UI_BUILDER_LOG_INFO(" Applying bar range to obj %p (min: %d, max: %d)", (void*)obj, temp_range_min, temp_range_max);
+             lv_bar_set_range(obj, temp_range_min, temp_range_max);
+         } else if (lv_obj_has_class(obj, &lv_scale_class)) {
+             // Scale has its own range function, assuming defaults if not set
+             UI_BUILDER_LOG_INFO(" Applying scale range to obj %p (min: %d, max: %d)", (void*)obj, temp_range_min, temp_range_max);
+             lv_scale_set_range(obj, temp_range_min, temp_range_max);
+         }
+    }
+}
+
+
+// --- Style Application Helper ---
+
+static void apply_single_style_prop(lv_obj_t *obj, const char *prop_key, cJSON *style_prop, lv_style_selector_t selector) {
+    if (!prop_key || !style_prop) return;
+
+    // --- Apply Style Properties ---
+    if (strcmp(prop_key, "bg_color") == 0 && cJSON_IsString(style_prop)) lv_obj_set_style_bg_color(obj, parse_color(style_prop->valuestring), selector);
+    else if (strcmp(prop_key, "bg_opa") == 0 && cJSON_IsNumber(style_prop)) lv_obj_set_style_bg_opa(obj, (lv_opa_t)cJSON_GetNumberValue(style_prop), selector);
+    else if (strcmp(prop_key, "radius") == 0) lv_obj_set_style_radius(obj, parse_coord(style_prop), selector);
+
+    else if (strcmp(prop_key, "border_width") == 0) lv_obj_set_style_border_width(obj, parse_coord(style_prop), selector);
+    else if (strcmp(prop_key, "border_color") == 0 && cJSON_IsString(style_prop)) lv_obj_set_style_border_color(obj, parse_color(style_prop->valuestring), selector);
+    else if (strcmp(prop_key, "border_opa") == 0 && cJSON_IsNumber(style_prop)) lv_obj_set_style_border_opa(obj, (lv_opa_t)cJSON_GetNumberValue(style_prop), selector);
+
+    else if (strcmp(prop_key, "outline_width") == 0) lv_obj_set_style_outline_width(obj, parse_coord(style_prop), selector);
+    else if (strcmp(prop_key, "outline_color") == 0 && cJSON_IsString(style_prop)) lv_obj_set_style_outline_color(obj, parse_color(style_prop->valuestring), selector);
+    else if (strcmp(prop_key, "outline_opa") == 0 && cJSON_IsNumber(style_prop)) lv_obj_set_style_outline_opa(obj, (lv_opa_t)cJSON_GetNumberValue(style_prop), selector);
+    else if (strcmp(prop_key, "outline_pad") == 0) lv_obj_set_style_outline_pad(obj, parse_coord(style_prop), selector);
+
+    else if (strcmp(prop_key, "pad_all") == 0) lv_obj_set_style_pad_all(obj, parse_coord(style_prop), selector);
+    else if (strcmp(prop_key, "pad_top") == 0) lv_obj_set_style_pad_top(obj, parse_coord(style_prop), selector);
+    else if (strcmp(prop_key, "pad_left") == 0) lv_obj_set_style_pad_left(obj, parse_coord(style_prop), selector);
+    else if (strcmp(prop_key, "pad_right") == 0) lv_obj_set_style_pad_right(obj, parse_coord(style_prop), selector);
+    else if (strcmp(prop_key, "pad_bottom") == 0) lv_obj_set_style_pad_bottom(obj, parse_coord(style_prop), selector);
+    else if (strcmp(prop_key, "pad_row") == 0) lv_obj_set_style_pad_row(obj, parse_coord(style_prop), selector);
+    else if (strcmp(prop_key, "pad_column") == 0) lv_obj_set_style_pad_column(obj, parse_coord(style_prop), selector);
+
+    else if (strcmp(prop_key, "margin_all") == 0) lv_obj_set_style_margin_all(obj, parse_coord(style_prop), selector);
+    else if (strcmp(prop_key, "margin_top") == 0) lv_obj_set_style_margin_top(obj, parse_coord(style_prop), selector);
+    else if (strcmp(prop_key, "margin_left") == 0) lv_obj_set_style_margin_left(obj, parse_coord(style_prop), selector);
+    else if (strcmp(prop_key, "margin_right") == 0) lv_obj_set_style_margin_right(obj, parse_coord(style_prop), selector);
+    else if (strcmp(prop_key, "margin_bottom") == 0) lv_obj_set_style_margin_bottom(obj, parse_coord(style_prop), selector);
+
+    else if (strcmp(prop_key, "width") == 0) lv_obj_set_style_width(obj, parse_coord(style_prop), selector);
+    else if (strcmp(prop_key, "height") == 0) lv_obj_set_style_height(obj, parse_coord(style_prop), selector);
+    else if (strcmp(prop_key, "min_width") == 0) lv_obj_set_style_min_width(obj, parse_coord(style_prop), selector);
+    else if (strcmp(prop_key, "max_width") == 0) lv_obj_set_style_max_width(obj, parse_coord(style_prop), selector);
+    else if (strcmp(prop_key, "min_height") == 0) lv_obj_set_style_min_height(obj, parse_coord(style_prop), selector);
+    else if (strcmp(prop_key, "max_height") == 0) lv_obj_set_style_max_height(obj, parse_coord(style_prop), selector);
+
+    else if (strcmp(prop_key, "text_color") == 0 && cJSON_IsString(style_prop)) lv_obj_set_style_text_color(obj, parse_color(style_prop->valuestring), selector);
+    else if (strcmp(prop_key, "text_font") == 0 && cJSON_IsString(style_prop)) lv_obj_set_style_text_font(obj, get_font_by_name(style_prop->valuestring), selector);
+    else if (strcmp(prop_key, "text_align") == 0 && cJSON_IsString(style_prop)) {
+        lv_text_align_t align = LV_TEXT_ALIGN_AUTO; // Default
+        const char* align_str = style_prop->valuestring;
+        if(strcmp(align_str, "left") == 0) align = LV_TEXT_ALIGN_LEFT;
+        else if(strcmp(align_str, "center") == 0) align = LV_TEXT_ALIGN_CENTER;
+        else if(strcmp(align_str, "right") == 0) align = LV_TEXT_ALIGN_RIGHT;
+        else if(strcmp(align_str, "auto") != 0) { // Warn if not known and not auto
+             UI_BUILDER_LOG_WARN("Unknown text_align value: %s", align_str);
+        }
+        lv_obj_set_style_text_align(obj, align, selector);
+    }
+     else if (strcmp(prop_key, "text_opa") == 0 && cJSON_IsNumber(style_prop)) lv_obj_set_style_text_opa(obj, (lv_opa_t)cJSON_GetNumberValue(style_prop), selector);
+     else if (strcmp(prop_key, "line_width") == 0) lv_obj_set_style_line_width(obj, parse_coord(style_prop), selector);
+     else if (strcmp(prop_key, "line_color") == 0 && cJSON_IsString(style_prop)) lv_obj_set_style_line_color(obj, parse_color(style_prop->valuestring), selector);
+     else if (strcmp(prop_key, "line_opa") == 0 && cJSON_IsNumber(style_prop)) lv_obj_set_style_line_opa(obj, (lv_opa_t)cJSON_GetNumberValue(style_prop), selector);
+     // Arc properties...
+     else if (strcmp(prop_key, "arc_width") == 0) lv_obj_set_style_arc_width(obj, parse_coord(style_prop), selector);
+     else if (strcmp(prop_key, "arc_color") == 0 && cJSON_IsString(style_prop)) lv_obj_set_style_arc_color(obj, parse_color(style_prop->valuestring), selector);
+     else if (strcmp(prop_key, "arc_opa") == 0 && cJSON_IsNumber(style_prop)) lv_obj_set_style_arc_opa(obj, (lv_opa_t)cJSON_GetNumberValue(style_prop), selector);
+     // Gradient properties...
+    else if (strcmp(prop_key, "bg_grad_dir") == 0 && cJSON_IsString(style_prop)) lv_obj_set_style_bg_grad_dir(obj, parse_grad_dir(style_prop->valuestring), selector);
+    else if (strcmp(prop_key, "bg_main_stop") == 0) lv_obj_set_style_bg_main_stop(obj, parse_coord(style_prop), selector);
+    else if (strcmp(prop_key, "bg_grad_stop") == 0) lv_obj_set_style_bg_grad_stop(obj, parse_coord(style_prop), selector);
+    else if (strcmp(prop_key, "bg_grad_color") == 0 && cJSON_IsString(style_prop)) lv_obj_set_style_bg_grad_color(obj, parse_color(style_prop->valuestring), selector);
+    // Flex/Grid styles (can also be properties)
+    else if (strcmp(prop_key, "flex_flow") == 0 && cJSON_IsString(style_prop)) {
+        lv_obj_set_style_flex_flow(obj, parse_flex_flow(style_prop->valuestring), selector);
+    }
+    // Add more style properties here... e.g., shadow, image, transform, etc.
+
+    else {
+        UI_BUILDER_LOG_WARN("Unknown or unhandled style property: '%s' for part/state selector 0x%X", prop_key, selector);
+    }
+}
+
+// --- Style Application Main Function ---
+static void apply_styles(lv_obj_t *obj, cJSON *styles_json) {
+    cJSON *part_style_obj = NULL;
+
+    // Iterate through parts ("default", "indicator", "knob", etc.)
+    cJSON_ArrayForEach(part_style_obj, styles_json) {
+        const char *part_key = part_style_obj->string;
+        if (!part_key || !cJSON_IsObject(part_style_obj)) continue;
+
+        lv_part_t part = parse_part(part_key);
+
+        cJSON *state_style_obj = NULL;
+        // Iterate through states ("default", "pressed", etc.) within the part
+        cJSON_ArrayForEach(state_style_obj, part_style_obj) {
+            const char *state_key = state_style_obj->string;
+            if (!state_key || !cJSON_IsObject(state_style_obj)) continue;
+
+            lv_state_t state = parse_state(state_key);
+            lv_style_selector_t selector = part | state;
+
+            cJSON *style_prop = NULL;
+            // Iterate through the actual style properties (bg_color, radius, etc.)
+            cJSON_ArrayForEach(style_prop, state_style_obj) {
+                apply_single_style_prop(obj, style_prop->string, style_prop, selector);
+            }
+        }
+    }
+}
+
+
+// --- Public API ---
+
+bool build_ui_from_json(const char *json_string) {
+    if (!json_string) {
+        UI_BUILDER_LOG_ERROR("build_ui_from_json called with NULL string");
+        return false;
+    }
+
+    cJSON *root_json = cJSON_Parse(json_string);
+    if (root_json == NULL) {
+        const char *error_ptr = cJSON_GetErrorPtr();
+        if (error_ptr != NULL) {
+            // Calculate rough position for context
+            int error_offset = (int)(error_ptr - json_string);
+            int context_before = (error_offset > 20) ? 20 : error_offset;
+            int context_after = 20;
+            char context_buf[41]; // 20 + 1 + 20
+            strncpy(context_buf, error_ptr - context_before, 40);
+            context_buf[40] = '\\0';
+            UI_BUILDER_LOG_ERROR("JSON Parse Error near offset %d: ...%s...", error_offset, context_buf);
+        } else {
+            UI_BUILDER_LOG_ERROR("JSON Parse Error (unknown location)");
+        }
+        return false;
+    }
+
+    // Expecting the actual UI tree under a "root" key
+    cJSON *root_obj_json = cJSON_GetObjectItemCaseSensitive(root_json, "root");
+    if (!cJSON_IsObject(root_obj_json)) {
+         UI_BUILDER_LOG_ERROR("JSON missing 'root' object or it's not an object");
+         cJSON_Delete(root_json);
+         return false;
+    }
+
+    // --- Get Active Screen ---
+    lv_obj_t *scr = lv_screen_active(); // lv_scr_act() deprecated
+    if (!scr) {
+         UI_BUILDER_LOG_ERROR("No active screen found! Cannot build UI.");
+         cJSON_Delete(root_json);
+         return false;
+    }
+
+    // --- Clear Screen ---
+    UI_BUILDER_LOG_INFO("Cleaning active screen %p...", (void*)scr);
+    lv_obj_clean(scr); // Remove all children from the screen
+
+    // --- Build UI ---
+    UI_BUILDER_LOG_INFO("Building UI recursively from JSON root...");
+    // The root node in JSON often represents the screen itself.
+    // create_lvgl_object_recursive handles the "screen" type specially.
+    lv_obj_t *created_root = create_lvgl_object_recursive(root_obj_json, scr);
+
+    cJSON_Delete(root_json); // Clean up cJSON object tree
+
+    if (!created_root) {
+        // If the root was the "screen" type, created_root will be == scr,
+        // so this check might indicate failure during processing screen properties/styles/children.
+        // If root was a different type, it means the top-level object failed creation.
+        UI_BUILDER_LOG_ERROR("Failed to create root UI element(s) from JSON");
+        // Screen might be partially populated if error occurred mid-build.
+        // Consider cleaning again? lv_obj_clean(scr);
+        return false;
+    }
+     // Check if the returned object is indeed the screen if the root type was screen
+     if(cJSON_IsObject(root_obj_json)) {
+         cJSON *type_json = cJSON_GetObjectItemCaseSensitive(root_obj_json, "type");
+         if(cJSON_IsString(type_json) && strcmp(type_json->valuestring, "screen") == 0 && created_root != scr) {
+             UI_BUILDER_LOG_WARN("JSON root type was 'screen', but builder returned %p instead of screen %p", (void*)created_root, (void*)scr);
+         }
+     }
+
+
+    UI_BUILDER_LOG_INFO("UI Built Successfully from JSON on screen %p", (void*)scr);
+
+    // Optional: Invalidate the screen to force redraw
+    lv_obj_invalidate(scr);
+
+    return true;
+}
+"""
+
+# --- Helper Functions for Generation ---
+
+def map_json_type_to_c(json_type, structs, enums):
+    """Maps JSON type string to C type string."""
+    json_type = str(json_type).strip() if json_type else "None"
+
+    # Handle pointer types first
+    if json_type.endswith('*'):
+        base_type = json_type[:-1].strip()
+        # Check if the base type is known, otherwise assume void*
+        if base_type in TYPE_MAP:
+            mapped_base = TYPE_MAP[base_type]
+            # Avoid double pointers unless intended (e.g. lv_obj_t**)
+            if mapped_base.endswith('*'):
+                return mapped_base # Already a pointer
+            else:
+                return mapped_base + " *"
+        elif base_type in structs:
+             return f"{base_type} *" # Pointer to known struct
+        elif base_type in enums:
+             return f"{base_type} *" # Pointer to known enum type? Unlikely but possible
+        else:
+            # Assume it's a struct we don't have full info for
+            # Check if base_type itself is in TYPE_MAP (e.g. lv_obj_t mapped to lv_obj_t *)
+            if base_type in TYPE_MAP and TYPE_MAP[base_type].endswith('*'):
+                 return TYPE_MAP[base_type] # Use the mapped pointer type directly
+            # It's likely a pointer to a struct defined elsewhere
+            return f"struct {base_type} *" # Fallback
+
+    # Handle non-pointer types
+    if json_type in TYPE_MAP:
+        return TYPE_MAP[json_type]
+    if json_type in structs:
+        # Check if we have a direct definition (like lv_color_t)
+        # Or just return the type name for typedef'd structs
+        return json_type # Assumes typedef lv_struct_t lv_struct_t; exists
+    if json_type in enums:
+        return json_type # Assumes typedef enum ... lv_enum_t; exists
+    if json_type.startswith("enum "): # Handle cases like "enum <anonymous>"
+        return "int" # Map anonymous enums to int
+
+    # Fallback for unknown types
+    print(f"Warning: Unknown JSON type '{json_type}', mapping to 'void *'")
+    return "void *"
+
+
+def generate_func_signature(func_name, func_data, structs, enums, is_declaration=True):
+    """Generates C function signature string."""
+    return_type_json = func_data.get("return_type", "NoneType")
+    return_type_c = map_json_type_to_c(return_type_json, structs, enums)
+
+    args_c = []
+    args_data = func_data.get("args", [])
+    if args_data:
+        for i, arg in enumerate(args_data):
+            arg_type_json = arg.get("type")
+            arg_type_c = map_json_type_to_c(arg_type_json, structs, enums)
+            arg_name = arg.get("name")
+            if not arg_name:
+                # Generate a placeholder name if missing
+                arg_name = f"arg{i+1}"
+            # Clean up arg names that might be C keywords
+            if arg_name in ["default", "case", "char", "int", "float", "double", "long", "short", "unsigned", "signed", "void", "struct", "enum", "union", "typedef", "extern", "static", "auto", "register", "const", "volatile", "return", "goto", "if", "else", "switch", "for", "while", "do", "break", "continue", "sizeof"]:
+                 arg_name = f"lv_{arg_name}"
+
+            # Handle function pointer types specially in declaration
+            if arg_type_json == "function pointer" or arg_type_json == "callback":
+                 # Try to get signature from 'function' field if present (micropython specific?)
+                 cb_sig = "void (*)(void)" # Default callback signature
+                 if arg_type_json == "callback" and isinstance(arg.get("function"), dict):
+                     cb_func_data = arg["function"]
+                     cb_ret_type = map_json_type_to_c(cb_func_data.get("return_type", "NoneType"), structs, enums)
+                     cb_args_list = []
+                     for cb_arg in cb_func_data.get("args", []):
+                         cb_arg_type = map_json_type_to_c(cb_arg.get("type"), structs, enums)
+                         cb_args_list.append(cb_arg_type)
+                     if not cb_args_list:
+                         cb_args_list.append("void")
+                     cb_sig = f"{cb_ret_type} (*)({', '.join(cb_args_list)})"
+
+                 if is_declaration:
+                      args_c.append(f"{cb_sig} {arg_name}")
+                 else: # In definition, just use the name
+                      args_c.append(f"{cb_sig} {arg_name}") # Keep type for definition too
+            else:
+                args_c.append(f"{arg_type_c} {arg_name}")
+
+    if not args_c:
+        args_str = "void"
+    else:
+        args_str = ", ".join(args_c)
+
+    signature = f"{return_type_c} {func_name}({args_str})"
+    return signature
+
+
+def generate_enum_def(enum_name, enum_data):
+    """Generates C enum definition string."""
+    c_code = f"typedef enum {{\n"
+    members = enum_data.get("members", {})
+    if members:
+        for member_name in members:
+            # LVGL convention uses LV_ENUMNAME_MEMBERNAME usually
+            c_code += f"    LV_{enum_name.upper()}_{member_name.upper()},\n"
+        # Add a sentinel value often used in LVGL
+        c_code += f"    _LV_{enum_name.upper()}_LAST #if defined(LVGL_VERSION_MAJOR) && LVGL_VERSION_MAJOR < 9 \n    ,\n    _LV_{enum_name.upper()}_DEF_LAST = 0xFFFF\n    #endif\n"
+    else:
+        c_code += f"    // No members defined in JSON\n"
+        c_code += f"    _LV_{enum_name.upper()}_LAST,\n"
+
+    c_code += f"}} lv_{enum_name.lower()}_t;\n\n"
+    return c_code
+
+
+def generate_struct_fwd_decl(struct_name):
+    """Generates C struct forward declaration or typedef."""
+    # Assume structs are typically used via typedefs
+    # Check if it's one we define directly
+    if struct_name in DEFINED_STRUCTS:
+        return DEFINED_STRUCTS[struct_name] + "\n"
+    else:
+        # Generate both forward declaration and typedef
+        # return f"struct {struct_name};\ntypedef struct {struct_name} {struct_name};\n"
+        # Simpler: Assume typedef exists or will be provided externally
+        return f"typedef struct {struct_name} {struct_name};\n"
+
+
+def generate_blob_decl(blob_name, lv_defs):
+    """Generates C extern declaration for blobs (best guess type)."""
+    # Blobs lack type info in lv_def.json. We rely on common patterns or the examples.
+    # Common types: lv_obj_class_t, lv_font_t, lv_theme_t
+    c_type = "const void *" # Default guess
+    if blob_name.endswith("_class"):
+        c_type = "const lv_obj_class_t *" # Likely a class pointer
+    elif blob_name.startswith("font_"):
+        c_type = "const lv_font_t *" # Likely a font pointer
+    elif blob_name.startswith("theme_"):
+        c_type = "const lv_theme_t *" # Likely a theme pointer
+
+    # Add lv_obj_class_t and lv_font_t to TYPE_MAP if not present
+    if "lv_obj_class_t" not in TYPE_MAP: TYPE_MAP["lv_obj_class_t"] = "lv_obj_class_t"
+    if "lv_font_t" not in TYPE_MAP: TYPE_MAP["lv_font_t"] = "lv_font_t" # Already there maybe
+    if "lv_theme_t" not in TYPE_MAP: TYPE_MAP["lv_theme_t"] = "lv_theme_t"
+
+    # Ensure the type itself is declared (struct forward decl)
+    type_declaration = ""
+    if c_type == "const lv_obj_class_t *":
+         type_declaration = "typedef struct lv_obj_class_t lv_obj_class_t;\n"
+    elif c_type == "const lv_theme_t *":
+         type_declaration = "typedef struct lv_theme_t lv_theme_t;\n"
+    elif c_type == "const lv_font_t *":
+         # lv_font_t is already handled as a basic type mapping
+         pass
+
+
+    return f"{type_declaration}extern {c_type} {blob_name};\n"
+
+
+def generate_int_const_def(const_name):
+    """Generates C #define for integer constants."""
+    # lv_def.json doesn't provide values, so just define the name
+    # The user's example header *does* have values for some.
+    # Let's copy the known important ones.
+    if const_name == "LV_RADIUS_CIRCLE":
+        return "#define LV_RADIUS_CIRCLE       LV_COORD_MAX\n"
+    if const_name == "LV_SIZE_CONTENT":
+         return "// #define LV_SIZE_CONTENT defined via coord helpers\n" # Already defined
+    if const_name == "LV_GRID_CONTENT":
+        return "// #define LV_GRID_CONTENT defined via coord helpers\n"
+    if const_name == "LV_GRID_TEMPLATE_LAST":
+        return "// #define LV_GRID_TEMPLATE_LAST defined via coord helpers\n"
+
+    # For others, define without a value for now
+    return f"#define {const_name.upper()} {const_name.upper()}\n"
+
+
+def sanitize_c_identifier(name):
+    """Ensure the name is a valid C identifier."""
+    # Replace invalid characters (like '-') with underscore
+    name = re.sub(r'[^a-zA-Z0-9_]', '_', name)
+    # Ensure it doesn't start with a digit
+    if name[0].isdigit():
+        name = '_' + name
+    return name
+
+def generate_setter_impl(func_name, func_data, structs, enums):
+    """Generate implementation for property/style setters."""
+    # Basic heuristic: extract property name from function name
+    impl = ""
+    if func_name.startswith("lv_obj_set_style_"):
+        # Style Setter
+        style_prop_name = func_name[len("lv_obj_set_style_"):].lower()
+        if style_prop_name == "text_align": # Handle potential keyword clash
+            style_prop_name = "text_align_style"
+
+        args = func_data.get("args", [])
+        if len(args) >= 3 and args[0]['type'] == 'lv_obj_t*' and args[-1]['type'] == 'lv_style_selector_t':
+            value_arg = args[1] # Assume value is the second arg for simple styles
+            value_arg_name = sanitize_c_identifier(value_arg['name'])
+            value_arg_type = value_arg['type']
+            selector_arg_name = sanitize_c_identifier(args[-1]['name'])
+
+            value_mk_func = ""
+            # Map C type to value_mk function
+            if value_arg_type == "lv_color_t": value_mk_func = f"value_mk_color({value_arg_name})"
+            elif value_arg_type == "lv_coord_t": value_mk_func = f"value_mk_coord({value_arg_name})"
+            elif value_arg_type == "int" or value_arg_type == "int32_t" : value_mk_func = f"value_mk_int({value_arg_name})"
+            elif value_arg_type == "uint8_t": # Often Opa
+                 # Check arg name for hint
+                 if "opa" in value_arg_name.lower():
+                     value_mk_func = f"value_mk_opa((lv_opa_t){value_arg_name})"
+                 else: # Assume it's a general int
+                     value_mk_func = f"value_mk_int((int32_t){value_arg_name})"
+            elif value_arg_type == "lv_font_t": value_mk_func = f"value_mk_font({value_arg_name})"
+            elif value_arg_type == "lv_align_t": value_mk_func = f"value_mk_align({value_arg_name})"
+            elif value_arg_type == "lv_flex_flow_t": value_mk_func = f"value_mk_flex_flow({value_arg_name})"
+            elif value_arg_type == "lv_grad_dir_t": value_mk_func = f"value_mk_grad_dir({value_arg_name})"
+            # Special case: text_align uses int32 in lv_def.json but is lv_text_align_t
+            elif style_prop_name == "text_align_style" and value_arg_type == "int":
+                value_mk_func = f"value_mk_textalign({value_arg_name})"
+            elif value_arg_type == "const char*": value_mk_func = f"value_mk_string({value_arg_name})"
+            elif value_arg_type == "void*": value_mk_func = f"value_mk_ptr({value_arg_name})" # Store generic pointers
+
+            # Add more mappings...
+
+            if value_mk_func:
+                impl = f'    ADD_STYLE(obj, {selector_arg_name}, "{style_prop_name}", {value_mk_func});\n'
+            else:
+                impl = f'    // TODO: Implement style setter for {func_name} - unknown value type {value_arg_type}\n'
+                impl += '    (void)obj; (void)value; (void)selector;\n' # Silence warnings
+
+        elif len(args) >= 2 and args[0]['type'] == 'lv_obj_t*' and args[1].get('type') == 'lv_style_selector_t' and func_name.endswith("_clear"):
+             # Handle clear style property? Not directly supported by ADD_STYLE, skip for now
+             impl = f'    // TODO: Implement style clear for {func_name}\n'
+             impl += '    (void)obj; (void)selector;\n'
+        else:
+            impl = f'    // TODO: Implement style setter for {func_name} - unexpected args\n'
+            impl += '    (void)obj;\n' # Silence warnings for obj if possible
+
+    elif func_name.startswith("lv_obj_set_") or func_name.startswith("lv_label_set_") or \
+         func_name.startswith("lv_bar_set_") or func_name.startswith("lv_slider_set_") or \
+         func_name.startswith("lv_scale_set_") or func_name.startswith("lv_btn_set_") or \
+         func_name.startswith("lv_chart_set_") or func_name.startswith("lv_table_set_"): # Add more widgets prefixes
+        # Property Setter
+        prop_name = ""
+        prefix_len = 0
+        if func_name.startswith("lv_obj_set_"): prefix_len=len("lv_obj_set_")
+        elif func_name.startswith("lv_label_set_"): prefix_len=len("lv_label_set_")
+        elif func_name.startswith("lv_bar_set_"): prefix_len=len("lv_bar_set_")
+        elif func_name.startswith("lv_slider_set_"): prefix_len=len("lv_slider_set_")
+        elif func_name.startswith("lv_scale_set_"): prefix_len=len("lv_scale_set_")
+        elif func_name.startswith("lv_btn_set_"): prefix_len=len("lv_btn_set_")
+        elif func_name.startswith("lv_chart_set_"): prefix_len=len("lv_chart_set_")
+        elif func_name.startswith("lv_table_set_"): prefix_len=len("lv_table_set_")
+
+        if prefix_len > 0:
+            prop_name = func_name[prefix_len:].lower()
+
+        args = func_data.get("args", [])
+        if len(args) >= 2 and args[0]['type'] == 'lv_obj_t*':
+            # Simple 1-value setter
+            if len(args) == 2 or (len(args) == 3 and args[2]['type'] == 'lv_anim_enable_t'): # Handle slider/bar set_value
+                 value_arg = args[1]
+                 value_arg_name = sanitize_c_identifier(value_arg['name'])
+                 value_arg_type = value_arg['type']
+                 value_mk_func = ""
+
+                 # Map C type to value_mk function
+                 if value_arg_type == "lv_coord_t": value_mk_func = f"value_mk_coord({value_arg_name})"
+                 elif value_arg_type == "int" or value_arg_type == "int32_t": value_mk_func = f"value_mk_int({value_arg_name})"
+                 elif value_arg_type == "uint32_t": value_mk_func = f"value_mk_int((int32_t){value_arg_name})" # Cast unsigned to signed int
+                 elif value_arg_type == "uint8_t": value_mk_func = f"value_mk_int((int32_t){value_arg_name})" # Cast unsigned to signed int
+                 elif value_arg_type == "const char*": value_mk_func = f"value_mk_string({value_arg_name})"
+                 elif value_arg_type == "char*": value_mk_func = f"value_mk_string({value_arg_name})"
+                 elif value_arg_type == "bool": value_mk_func = f"value_mk_bool({value_arg_name})"
+                 elif value_arg_type == "lv_align_t": value_mk_func = f"value_mk_align({value_arg_name})"
+                 elif value_arg_type == "lv_layout_t": value_mk_func = f"value_mk_layout({value_arg_name})"
+                 elif value_arg_type == "lv_flex_flow_t": value_mk_func = f"value_mk_flex_flow({value_arg_name})"
+                 elif value_arg_type == "lv_scale_mode_t": value_mk_func = f"value_mk_scale_mode({value_arg_name})"
+                 elif value_arg_type == "lv_color_t": value_mk_func = f"value_mk_color({value_arg_name})" # e.g., lv_obj_set_shadow_color
+                 elif value_arg_type == "void*": value_mk_func = f"value_mk_ptr({value_arg_name})" # Store generic pointers
+
+                 if value_mk_func:
+                     impl = f'    if(obj) emul_obj_add_property(obj, "{prop_name}", {value_mk_func});\n'
+                     # Handle anim enable arg if present
+                     if len(args) == 3 and args[2]['type'] == 'lv_anim_enable_t':
+                          anim_arg_name = sanitize_c_identifier(args[2]['name'])
+                          impl += f'    // Animation parameter "{anim_arg_name}" ignored in emulation\n'
+                          impl += f'    (void){anim_arg_name};\n'
+                 else:
+                     impl = f'    // TODO: Implement property setter for {func_name} - unknown value type {value_arg_type}\n'
+                     impl += f'    (void)obj; (void){value_arg_name};\n' # Silence warnings
+
+            # Special cases for multi-value setters
+            elif func_name == "lv_obj_set_size" and len(args) == 3 and args[1]['type'] == 'lv_coord_t' and args[2]['type'] == 'lv_coord_t':
+                 w_name = sanitize_c_identifier(args[1]['name'])
+                 h_name = sanitize_c_identifier(args[2]['name'])
+                 impl = f'    if(obj) {{\n'
+                 impl += f'        emul_obj_add_property(obj, "width", value_mk_coord({w_name}));\n'
+                 impl += f'        emul_obj_add_property(obj, "height", value_mk_coord({h_name}));\n'
+                 impl += f'    }}\n'
+            elif func_name == "lv_obj_set_pos" and len(args) == 3 and args[1]['type'] == 'lv_coord_t' and args[2]['type'] == 'lv_coord_t':
+                 x_name = sanitize_c_identifier(args[1]['name'])
+                 y_name = sanitize_c_identifier(args[2]['name'])
+                 impl = f'    if(obj) {{\n'
+                 impl += f'        emul_obj_add_property(obj, "x", value_mk_coord({x_name}));\n'
+                 impl += f'        emul_obj_add_property(obj, "y", value_mk_coord({y_name}));\n'
+                 impl += f'    }}\n'
+            elif func_name == "lv_obj_align" and len(args) == 4 and args[1]['type'] == 'lv_align_t' and args[2]['type'] == 'lv_coord_t' and args[3]['type'] == 'lv_coord_t':
+                 align_name = sanitize_c_identifier(args[1]['name'])
+                 x_name = sanitize_c_identifier(args[2]['name'])
+                 y_name = sanitize_c_identifier(args[3]['name'])
+                 impl = f'    if(obj) {{\n'
+                 impl += f'        emul_obj_add_property(obj, "align", value_mk_align({align_name}));\n'
+                 impl += f'        emul_obj_add_property(obj, "x", value_mk_coord({x_name})); // Store offset as x\n'
+                 impl += f'        emul_obj_add_property(obj, "y", value_mk_coord({y_name})); // Store offset as y\n'
+                 impl += f'    }}\n'
+            elif func_name == "lv_slider_set_range" or func_name == "lv_bar_set_range" or func_name == "lv_scale_set_range":
+                 min_name = sanitize_c_identifier(args[1]['name'])
+                 max_name = sanitize_c_identifier(args[2]['name'])
+                 prop_prefix = "range"
+                 if func_name.startswith("lv_scale"): prop_prefix = "scale_range"
+                 impl = f'    if(obj) {{\n'
+                 impl += f'        emul_obj_add_property(obj, "{prop_prefix}_min", value_mk_int({min_name}));\n'
+                 impl += f'        emul_obj_add_property(obj, "{prop_prefix}_max", value_mk_int({max_name}));\n'
+                 impl += f'    }}\n'
+            elif func_name == "lv_obj_set_grid_dsc_array" and len(args) == 3:
+                 col_name = sanitize_c_identifier(args[1]['name'])
+                 row_name = sanitize_c_identifier(args[2]['name'])
+                 # Need to calculate length for value_mk_int_array
+                 impl = f'    if (!obj) return;\n'
+                 impl += f'    size_t collen = 0;\n'
+                 impl += f'    if ({col_name}) while({col_name}[collen] != LV_GRID_TEMPLATE_LAST) collen++;\n'
+                 impl += f'    size_t rowlen = 0;\n'
+                 impl += f'    if ({row_name}) while({row_name}[rowlen] != LV_GRID_TEMPLATE_LAST) rowlen++;\n'
+                 impl += f'    emul_obj_add_property(obj, "grid_dsc_array_col_dsc", value_mk_int_array({col_name}, collen));\n'
+                 impl += f'    emul_obj_add_property(obj, "grid_dsc_array_row_dsc", value_mk_int_array({row_name}, rowlen));\n'
+            elif func_name == "lv_obj_set_grid_align" and len(args) == 3:
+                 col_align_name = sanitize_c_identifier(args[1]['name'])
+                 row_align_name = sanitize_c_identifier(args[2]['name'])
+                 impl = f'    if(obj) {{\n'
+                 impl += f'        emul_obj_add_property(obj, "grid_column_align", value_mk_grid_align({col_align_name}));\n'
+                 impl += f'        emul_obj_add_property(obj, "grid_row_align", value_mk_grid_align({row_align_name}));\n'
+                 impl += f'    }}\n'
+            elif func_name == "lv_obj_set_grid_cell" and len(args) == 7:
+                 col_align_name = sanitize_c_identifier(args[1]['name'])
+                 col_pos_name = sanitize_c_identifier(args[2]['name'])
+                 col_span_name = sanitize_c_identifier(args[3]['name'])
+                 row_align_name = sanitize_c_identifier(args[4]['name'])
+                 row_pos_name = sanitize_c_identifier(args[5]['name'])
+                 row_span_name = sanitize_c_identifier(args[6]['name'])
+                 impl = f'    if(obj) {{\n'
+                 impl += f'        emul_obj_add_property(obj, "grid_cell_column_align", value_mk_grid_align({col_align_name}));\n'
+                 impl += f'        emul_obj_add_property(obj, "grid_cell_col_pos", value_mk_int({col_pos_name}));\n'
+                 impl += f'        emul_obj_add_property(obj, "grid_cell_col_span", value_mk_int({col_span_name}));\n'
+                 impl += f'        emul_obj_add_property(obj, "grid_cell_row_align", value_mk_grid_align({row_align_name}));\n'
+                 impl += f'        emul_obj_add_property(obj, "grid_cell_row_pos", value_mk_int({row_pos_name}));\n'
+                 impl += f'        emul_obj_add_property(obj, "grid_cell_row_span", value_mk_int({row_span_name}));\n'
+                 impl += f'    }}\n'
+            elif func_name == "lv_obj_set_flex_align" and len(args) == 4:
+                  main_name = sanitize_c_identifier(args[1]['name'])
+                  cross_name = sanitize_c_identifier(args[2]['name'])
+                  track_name = sanitize_c_identifier(args[3]['name'])
+                  impl = f'    if(obj) {{\n'
+                  impl += f'        emul_obj_add_property(obj, "flex_align_main_place", value_mk_flex_align({main_name}));\n'
+                  impl += f'        emul_obj_add_property(obj, "flex_align_cross_place", value_mk_flex_align({cross_name}));\n'
+                  impl += f'        emul_obj_add_property(obj, "flex_align_track_cross_place", value_mk_flex_align({track_name}));\n'
+                  impl += f'    }}\n'
+
+            # Formatted text setter
+            elif func_name.endswith("_fmt") and args[1]['type'] == "const char*":
+                text_setter_name = func_name[:-len("_fmt")]
+                fmt_arg_name = sanitize_c_identifier(args[1]['name'])
+                # Need to handle varargs
+                impl = textwrap.dedent(f"""\
+                    if (!obj) return;
+                    char *buf = NULL;
+                    int len = 0;
+                    va_list args;
+
+                    va_start(args, {fmt_arg_name});
+                    len = vsnprintf(NULL, 0, {fmt_arg_name}, args); // Get required length
+                    va_end(args);
+
+                    if (len < 0) {{
+                        EMUL_LOG("ERROR: vsnprintf failed to determine length for format in {func_name}\\n");
+                        return;
+                    }}
+
+                    buf = malloc(len + 1);
+                    if (!buf) {{
+                        EMUL_LOG("ERROR: malloc failed for format buffer in {func_name}\\n");
+                        return;
+                    }}
+
+                    va_start(args, {fmt_arg_name});
+                    vsnprintf(buf, len + 1, {fmt_arg_name}, args);
+                    va_end(args);
+
+                    // Call the non-formatted setter (assuming it exists)
+                    {text_setter_name}(obj, buf);
+                    free(buf);
+                """)
+            else:
+                impl = f'    // TODO: Implement property setter for {func_name} - args mismatch?\n'
+                impl += '    (void)obj;\n' # Silence warning for obj
+        else:
+            impl = f'    // TODO: Implement property setter for {func_name} - does not match expected pattern\n'
+            impl += '    (void)obj;\n'
+
+    elif func_name.startswith("lv_obj_add_flag"):
+        flag_arg_name = sanitize_c_identifier(func_data['args'][1]['name'])
+        impl = textwrap.dedent(f"""\
+            if (!obj) return;
+            Property* prop = find_property(obj, "flags");
+            uint32_t current_flags = 0;
+            if (prop && prop->value.type == VAL_TYPE_INT) {{
+                current_flags = (uint32_t)prop->value.data.i;
+            }}
+            current_flags |= {flag_arg_name};
+            emul_obj_add_property(obj, "flags", value_mk_int((int32_t)current_flags));""")
+    elif func_name.startswith("lv_obj_clear_flag"):
+        flag_arg_name = sanitize_c_identifier(func_data['args'][1]['name'])
+        impl = textwrap.dedent(f"""\
+            if (!obj) return;
+            Property* prop = find_property(obj, "flags");
+            uint32_t current_flags = 0;
+            if (prop && prop->value.type == VAL_TYPE_INT) {{
+                current_flags = (uint32_t)prop->value.data.i;
+            }}
+            current_flags &= ~{flag_arg_name};
+            emul_obj_add_property(obj, "flags", value_mk_int((int32_t)current_flags));""")
+    elif func_name.startswith("lv_obj_update_layout") or func_name.startswith("lv_obj_invalidate") or func_name.startswith("lv_obj_refresh_style"):
+         impl = "    /* No-op in emulation */\n    (void)obj;\n"
+    elif func_name.startswith("lv_obj_center"):
+         impl = "    if(obj) emul_obj_add_property(obj, \"align\", value_mk_align(LV_ALIGN_CENTER));\n" # Approximate
+    # Add more specific function handlers here...
+    elif func_name == "lv_tick_inc":
+        impl = "    /* No-op in emulation */\n    (void)ms;\n" # Assuming arg name is ms
+    elif func_name == "lv_timer_handler":
+        impl = "    /* No-op in emulation */\n    return 0;\n" # Return dummy value
+    elif func_name == "lv_event_send":
+        impl = "    /* No-op in emulation */\n    (void)obj; (void)event_code; (void)user_data;\n return LV_RES_OK;" # Return dummy value
+    elif func_name == "lv_obj_add_event_cb":
+         impl = "    /* No-op in emulation - callbacks not handled */\n    (void)obj; (void)event_cb; (void)filter; (void)user_data;\n return NULL;"
+    elif func_name == "lv_obj_remove_event_cb":
+         impl = "    /* No-op in emulation - callbacks not handled */\n    (void)obj; (void)dsc;\n return false;"
+
+    # Default fallback for unknown functions
+    if not impl:
+        impl = f"    /* Emulation not implemented for {func_name} */\n"
+        # Add (void) casts for all arguments to prevent unused warnings
+        args = func_data.get("args", [])
+        if args:
+            impl += "    " + " ".join([f"(void){sanitize_c_identifier(arg['name'])};" for arg in args]) + "\n"
+        # Add default return if function has non-void return type
+        return_type = map_json_type_to_c(func_data.get("return_type", "NoneType"), structs, enums)
+        if return_type != "void":
+            if " *" in return_type or "*" in return_type: # Pointer type
+                 impl += "    return NULL;\n"
+            elif return_type == "bool":
+                 impl += "    return false;\n"
+            elif return_type == "lv_res_t":
+                 impl += "    return LV_RES_OK; // Assuming LV_RES_OK = 0 or similar\n"
+            else: # Assume numeric type
+                 impl += "    return 0;\n"
+
+    return textwrap.indent(impl, "") # No extra indent needed here
+
+# --- Main Generation Logic ---
+
+def generate_emul_header(lv_defs, output_path):
+    print(f"Generating {output_path}...")
+    struct_names = set(lv_defs.get("structs", []))
+    enum_names = set(lv_defs.get("enums", {}).keys())
+
+    with open(output_path, "w") as f:
+        f.write(EMUL_HEADER_STATIC_PART1)
+
+        # Define essential structs directly
+        for name in DEFINED_STRUCTS:
+             if name in struct_names: # Only define if listed in lv_def
+                  f.write(DEFINED_STRUCTS[name])
+
+        f.write("// Forward Declarations for other known structs/typedefs\n")
+        # Generate typedefs for structs listed in lv_def.json (excluding those already defined)
+        for name in sorted(list(struct_names)):
+             if name not in DEFINED_STRUCTS:
+                  f.write(generate_struct_fwd_decl(name))
+        f.write("\n")
+
+        f.write("// Enums\n")
+        for name, data in sorted(lv_defs.get("enums", {}).items()):
+             f.write(generate_enum_def(name, data))
+        f.write("\n")
+
+        f.write("// Constants\n")
+        for name in sorted(lv_defs.get("int_constants", [])):
+            f.write(generate_int_const_def(name))
+        f.write("\n")
+
+        # Add necessary typedefs for blob types if missing struct defs
+        if "lv_obj_class_t" not in struct_names and "lv_obj_class_t" not in DEFINED_STRUCTS:
+            f.write("typedef struct lv_obj_class_t lv_obj_class_t;\n")
+        if "lv_theme_t" not in struct_names and "lv_theme_t" not in DEFINED_STRUCTS:
+             f.write("typedef struct lv_theme_t lv_theme_t;\n")
+        # lv_font_t is usually just const void* or a struct*, handle via TYPE_MAP
+
+        f.write("// Blobs (Extern Declarations)\n")
+        for name in sorted(lv_defs.get("blobs", [])):
+            # Skip internal blobs like _nesting
+            if name.startswith("_"): continue
+            f.write(generate_blob_decl(name, lv_defs))
+        f.write("\n")
+
+        f.write(EMUL_HEADER_STATIC_PART2) # Includes control funcs and API subset start
+
+        f.write("// --- LVGL API Subset Declarations ---\n")
+        # Generate function declarations
+        for func_name, func_data in sorted(lv_defs.get("objects", {}).items()):
+             # Filter out internal micropython functions etc.
+             if func_name.startswith("mp_") or func_name.startswith("_"):
+                 continue
+             if func_data.get("type") == "function":
+                signature = generate_func_signature(f"lv_{func_name}", func_data, struct_names, enum_names, is_declaration=True)
+                f.write(f"{signature};\n")
+        f.write("\n")
+
+        # Add known font externs from example
+        f.write("// --- Font Definitions (Placeholders - Define these in your application) ---\n")
+        f.write("extern const lv_font_t lv_font_montserrat_14;\n")
+        f.write("extern const lv_font_t lv_font_montserrat_18;\n")
+        f.write("extern const lv_font_t lv_font_montserrat_24;\n")
+        # Add more as needed
+
+        f.write("\n#endif // EMUL_LVGL_H\n")
+
+    print(f"Generated {output_path} successfully.")
+
+
+def generate_emul_internal_header(output_path):
+     print(f"Generating {output_path}...")
+     with open(output_path, "w") as f:
+         f.write(EMUL_INTERNAL_HEADER_CONTENT)
+     print(f"Generated {output_path} successfully.")
+
+def generate_emul_source(lv_defs, output_path):
+    print(f"Generating {output_path}...")
+    struct_names = set(lv_defs.get("structs", []))
+    enum_names = set(lv_defs.get("enums", {}).keys())
+
+    with open(output_path, "w") as f:
+        f.write(EMUL_SOURCE_STATIC_PART1)
+        f.write(EMUL_SOURCE_STATIC_JSON_HELPERS)
+
+        # Generate function implementations
+        f.write("\n// --- LVGL API Implementations ---\n\n")
+        for func_name_orig, func_data in sorted(lv_defs.get("objects", {}).items()):
+             # Filter out internal micropython functions etc.
+             if func_name_orig.startswith("mp_") or func_name_orig.startswith("_"):
+                 continue
+
+             if func_data.get("type") == "function":
+                 func_name = f"lv_{func_name_orig}"
+                 signature = generate_func_signature(func_name, func_data, struct_names, enum_names, is_declaration=False)
+                 f.write(f"{signature} {{\n")
+
+                 # --- Determine Implementation ---
+                 impl = "// Default: No implementation generated\n"
+                 if func_name_orig.endswith("_create") and func_data.get("return_type") == "lv_obj_t*":
+                     # Object creator
+                     widget_type = func_name_orig[:-len("_create")]
+                     parent_arg_name = "parent" # Assume first arg is parent
+                     if func_data.get("args"):
+                         parent_arg_name = sanitize_c_identifier(func_data['args'][0]['name'])
+
+                     impl = f'    return create_object_internal({parent_arg_name}, "{widget_type}");\n'
+
+                 elif func_name_orig == "init":
+                     impl = "    emul_lvgl_init(); // Map lv_init to emulator init\n"
+                 elif func_name_orig == "deinit":
+                     impl = "    emul_lvgl_deinit(); // Map lv_deinit to emulator deinit\n"
+
+                 # Add specific handlers before generic setters
+                 elif func_name == "lv_obj_del":
+                     impl = "// Implementation copied from static part\n" # Already defined
+                 elif func_name == "lv_obj_clean":
+                      impl = "// Implementation copied from static part\n" # Already defined
+                 elif func_name == "lv_screen_active": # lv_scr_act is often an alias
+                      impl = "// Implementation copied from static part\n" # Already defined
+                 elif func_name == "lv_obj_set_parent":
+                      impl = "// Implementation copied from static part\n" # Already defined
+
+                 else:
+                     # Try generic setter generation
+                     impl = generate_setter_impl(func_name, func_data, struct_names, enum_names)
+
+
+                 f.write(impl)
+                 f.write("}\n\n")
+
+    print(f"Generated {output_path} successfully.")
+
+def generate_builder_header(output_path):
+    print(f"Generating {output_path}...")
+    with open(output_path, "w") as f:
+        f.write(BUILDER_HEADER_CONTENT)
+    print(f"Generated {output_path} successfully.")
+
+def generate_builder_source(output_path):
+    print(f"Generating {output_path}...")
+    # This function mostly copies the static content provided in the example,
+    # as the builder logic is complex and less directly derivable function-by-function
+    # from lv_def.json compared to the emulator stubs.
+    with open(output_path, "w") as f:
+        f.write(BUILDER_SOURCE_CONTENT)
+    print(f"Generated {output_path} successfully.")
+
+
+# --- Main Execution ---
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Generate LVGL emulation library and UI builder from lv_def.json")
+    parser.add_argument("-j", "--json", default=LV_DEF_PATH, help="Path to lv_def.json input file")
+    parser.add_argument("-o", "--outdir", default=OUTPUT_DIR, help="Directory to output generated C files")
+    args = parser.parse_args()
+
+    # Ensure output directory exists
+    os.makedirs(args.outdir, exist_ok=True)
+
+    # Load lv_def.json
+    try:
+        with open(args.json, "r") as f:
+            print(f"Loading definitions from {args.json}...")
+            lv_defs = json.load(f)
+            print("Definitions loaded.")
+    except FileNotFoundError:
+        print(f"Error: Input JSON file not found at {args.json}")
+        exit(1)
+    except json.JSONDecodeError as e:
+        print(f"Error: Failed to parse JSON file {args.json}: {e}")
+        exit(1)
+
+    # Generate Files
+    generate_emul_header(lv_defs, os.path.join(args.outdir, EMUL_HEADER_NAME))
+    generate_emul_internal_header(os.path.join(args.outdir, EMUL_INTERNAL_HEADER_NAME))
+    generate_emul_source(lv_defs, os.path.join(args.outdir, EMUL_SOURCE_NAME))
+    generate_builder_header(os.path.join(args.outdir, BUILDER_HEADER_NAME))
+    generate_builder_source(os.path.join(args.outdir, BUILDER_SOURCE_NAME))
+
+    print("\nGeneration complete.")
+    print(f"Generated files are in: {os.path.abspath(args.outdir)}")
+    print("Remember to:")
+    print("1. Add cJSON library to your project.")
+    print("2. Link the real LVGL library when compiling the 'display app' using ui_builder.")
+    print("3. Provide necessary lv_conf.h settings for the ui_builder compilation.")
+    print("4. Define actual font pointers (e.g., lv_font_montserrat_14) in your application using the emulator.")
+    print("5. Register fonts using emul_lvgl_register_font() in the emulated app.")
+    print("6. Register fonts using ui_builder_register_font() in the display app.")

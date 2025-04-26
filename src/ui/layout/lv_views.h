@@ -2172,4 +2172,50 @@ lv_obj_t *_fill_parent(lv_obj_t *obj);
 //#define __layout(obj, layout) lv_obj_set_layout(obj, layout)
 #define __update_layout(obj) lv_obj_update_layout(obj)
 
+
+
+#define COMBINE1(X, Y, Z) X##Y##Z
+#define TEMP_VAR(X, Y, Z) COMBINE1(X, Y, Z)
+
+#define _bar_indicator(bar, name, bg_oa, bg_color, bg_grad_color, bg_grad_dir, \
+                       bg_main_stop, radius)                                   \
+  do {                                                                         \
+    static lv_style_t TEMP_VAR(style_indic_, __func__, name);                  \
+    lv_style_init(&TEMP_VAR(style_indic_, __func__, name));                    \
+    lv_style_set_bg_opa(&TEMP_VAR(style_indic_, __func__, name),               \
+                        LV_OPA_COVER);                                         \
+    lv_style_set_bg_color(&TEMP_VAR(style_indic_, __func__, name),             \
+                          lv_color_hex(0x00DD00));                             \
+    lv_style_set_bg_grad_color(&TEMP_VAR(style_indic_, __func__, name),        \
+                               lv_color_hex(0x0000DD));                        \
+    lv_style_set_bg_grad_dir(&TEMP_VAR(style_indic_, __func__, name),          \
+                             LV_GRAD_DIR_HOR);                                 \
+    lv_style_set_bg_main_stop(&TEMP_VAR(style_indic_, __func__, name), 175);   \
+    lv_style_set_radius(&TEMP_VAR(style_indic_, __func__, name), 3);           \
+    lv_obj_add_style(msm->bar_feed, &TEMP_VAR(style_indic_, __func__, name),   \
+                     LV_PART_INDICATOR);                                       \
+  } while (0);
+
+#define _style_gradient(obj, main_color, grad_color, grad_dir, main_stop,      \
+                        border_width, border_color, shadow_w, shadow_color,    \
+                        line_color, radius)                                    \
+  do {                                                                         \
+    if (!lv_color_eq(main_color, lv_color_hex(0x00000000)) &&                  \
+        lv_color_eq(grad_color, lv_color_hex(0x00000000))) {                   \
+      _bg_opa(obj, LV_OPA_COVER, _M);                                          \
+      _bg_color(obj, main_color, _M);                                          \
+      lv_obj_set_style_bg_grad_color(obj, grad_color, _M);                     \
+      lv_obj_set_style_bg_grad_dir(obj, grad_dir, _M);                         \
+      lv_obj_set_style_bg_main_stop(obj, main_stop, _M);                       \
+    } else {                                                                   \
+      _bg_opa(obj, LV_OPA_0, _M);                                              \
+    }                                                                          \
+    _border_width(obj, border_width, _M);                                      \
+    _border_color(obj, border_color, _M);                                      \
+    lv_obj_set_style_shadow_width(obj, shadow_w, _M);                          \
+    lv_obj_set_style_shadow_color(obj, shadow_color, _M);                      \
+    lv_obj_set_style_line_color(obj, line_color, _M);                          \
+    _radius(obj, radius, _M);                                                  \
+  } while (0);
+
 #endif // VIEW_DEFINE_MACROS_H

@@ -281,7 +281,7 @@ int main(int argc, char *argv[]) {
 
         // --- Handle LVGL Tasks (using target code's style) ---
         // Use SDL_Delay for general yielding/pacing
-        SDL_Delay(5); // Keep the 5ms delay from target code
+        SDL_Delay(10);
 
         // Update LVGL tick (keep from target code)
         uint32_t current = SDL_GetTicks(); // Fetch potentially updated ticks

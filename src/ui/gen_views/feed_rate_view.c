@@ -101,8 +101,8 @@ feed_rate_view_t *feed_rate_view_create(lv_obj_t *parent) {
           lv_obj_t *_dv_current_widget = value;
           lv_style_selector_t _dv_current_selector =
               LV_PART_MAIN | LV_STATE_DEFAULT;
-          __text("7000") __max_client_area() __text_font(&lv_font_montserrat_24)
-              __size(lv_pct(100), 40);
+          __text("8000") __max_client_area() __text_font(&lv_font_montserrat_24)
+              __width(lv_pct(100)) __min_height(28);
         } while (0);
         ;
       } while (0);
@@ -147,14 +147,6 @@ feed_rate_view_t *feed_rate_view_create(lv_obj_t *parent) {
           lv_obj_set_style_outline_opa(feed_bar, LV_OPA_60, 0);
           ;
           __max_client_area(feed_bar);
-          do {
-            lv_obj_t *_dv_current_widget = feed_bar;
-            lv_style_selector_t _dv_current_selector =
-                LV_PART_MAIN | LV_STATE_DEFAULT;
-            __min_height(20) lv_bar_set_range(feed_bar, 0, 10000);
-            lv_bar_set_value(feed_bar, 7000, LV_ANIM_OFF);
-            ;
-          } while (0);
           ;
         } while (0);
         self->feed_bar = feed_bar;
@@ -174,7 +166,6 @@ feed_rate_view_t *feed_rate_view_create(lv_obj_t *parent) {
                 lv_scale_set_mode(feed_scale, LV_SCALE_MODE_HORIZONTAL_BOTTOM);
             lv_scale_set_major_tick_every(feed_scale, 2);
             lv_scale_set_range(feed_scale, 0, 10);
-            ;
           } while (0);
           ;
         } while (0);
@@ -292,6 +283,16 @@ feed_rate_view_t *feed_rate_view_create(lv_obj_t *parent) {
     ;
   } while (0);
   __size(right, lv_pct(100), lv_pct(100));
+  do {
+    lv_obj_t *_dv_current_widget = self->feed_bar;
+    lv_style_selector_t _dv_current_selector = LV_PART_MAIN | LV_STATE_DEFAULT;
+    __min_height(20) lv_bar_set_range(self->feed_bar, 0, 10000);
+    lv_bar_set_value(self->feed_bar, 8000, LV_ANIM_OFF);
+    __radius(2)
+        selector(LV_PART_INDICATOR, __radius(2), __bg_grad_dir(LV_GRAD_DIR_HOR),
+                 __bg_main_stop(120), __bg_color(lv_color_hex(0x22bb00)),
+                 __bg_grad_stop(220), __bg_grad_color(lv_color_hex(0xaa3300)));
+  } while (0);
   _layout_grid(
       self->main_cont, _rows(LV_GRID_CONTENT, LV_GRID_FR(1)),
       _cols(LV_GRID_CONTENT, LV_GRID_CONTENT), _cell(self->identifier, 0, 0),
@@ -321,7 +322,7 @@ feed_rate_view_t *feed_rate_view_create(lv_obj_t *parent) {
         lv_obj_t *_dv_current_widget = self->bars;
         lv_style_selector_t _dv_current_selector =
             LV_PART_MAIN | LV_STATE_DEFAULT;
-        __bg_opa(LV_OPA_0) __min_width(20) __min_height(30);
+        __bg_opa(LV_OPA_0) __min_width(100) __min_height(20);
       } while (0);
       ,
       do {
