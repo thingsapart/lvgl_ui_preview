@@ -141,8 +141,8 @@ typedef struct {
         lv_obj_t* _vfl_grid_parent = (PARENT); \
         if(!_vfl_grid_parent) { LOGW(TAG, "_layout_grid: NULL parent"); break; } \
         lv_obj_set_layout(_vfl_grid_parent, LV_LAYOUT_GRID); \
-        static const int32_t _vfl_grid_cols[] = COLS_DEF; \
-        static const int32_t _vfl_grid_rows[] = ROWS_DEF; \
+        static int32_t _vfl_grid_cols[] = COLS_DEF; \
+        static int32_t _vfl_grid_rows[] = ROWS_DEF; \
         lv_obj_set_grid_dsc_array(_vfl_grid_parent, _vfl_grid_cols, _vfl_grid_rows); \
         __expand_client_area(PARENT); \
         __scrollable(PARENT, false); \
