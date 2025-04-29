@@ -14,7 +14,7 @@ void lv_obj_center(lv_obj_t * obj) {
 }
 
 void lv_test_screen(lv_obj_t *screen) {
-    lv_obj_t * btn = lv_btn_create(screen);
+    lv_obj_t * btn = lv_button_create(screen);
     lv_obj_set_size(btn, 120, 50);
     lv_obj_align(btn, LV_ALIGN_CENTER, 0, -30); // Pass btn directly
     lv_obj_set_style_bg_color(btn, lv_color_hex(0x007AFF), LV_PART_MAIN | LV_STATE_DEFAULT);

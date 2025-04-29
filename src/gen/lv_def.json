@@ -351,7 +351,7 @@
             "quals": []
         },
         {
-            "name": null,
+            "name": "lv_opa_enum_t",
             "type": {
                 "name": "int",
                 "json_type": "primitive_type"
@@ -5865,7 +5865,7 @@
             "quals": []
         },
         {
-            "name": null,
+            "name": "lv_state_enum_t",
             "type": {
                 "name": "int",
                 "json_type": "primitive_type"
@@ -6001,7 +6001,7 @@
             ]
         },
         {
-            "name": null,
+            "name": "lv_style_parts_t",
             "type": {
                 "name": "int",
                 "json_type": "primitive_type"
