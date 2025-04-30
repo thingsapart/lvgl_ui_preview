@@ -7,7 +7,7 @@
 #include <assert.h>
 
 // --- Dependencies ---
-#include "cjson/cJSON.h"
+#include "cJSON.h"
 #include "uthash.h"
 
 // --- Global State ---
@@ -71,7 +71,7 @@ static char* generate_unique_id(const char *base_type_name) {
     }
     // Format the ID string
     // Use PRIu64 for platform-independent uint64_t printing
-    snprintf(buffer, buffer_len, "%s_%\" PRIu64 \"", base_type_name, count);
+    snprintf(buffer, buffer_len, "%s_%" PRIu64 , base_type_name, count);
     return buffer; // Ownership transferred to caller
 }
 
@@ -269,10 +269,11 @@ static cJSON* marshal_enum_lv_result_t(lv_result_t value) {
     switch (value) {
         case LV_RESULT_INVALID: return cJSON_CreateString("LV_RESULT_INVALID");
         case LV_RESULT_OK: return cJSON_CreateString("LV_RESULT_OK");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_result_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_result_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -281,10 +282,11 @@ static cJSON* marshal_enum_lv_rb_color_t(lv_rb_color_t value) {
     switch (value) {
         case LV_RB_COLOR_RED: return cJSON_CreateString("LV_RB_COLOR_RED");
         case LV_RB_COLOR_BLACK: return cJSON_CreateString("LV_RB_COLOR_BLACK");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_rb_color_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_rb_color_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -313,10 +315,11 @@ static cJSON* marshal_enum_lv_align_t(lv_align_t value) {
         case LV_ALIGN_OUT_RIGHT_TOP: return cJSON_CreateString("LV_ALIGN_OUT_RIGHT_TOP");
         case LV_ALIGN_OUT_RIGHT_MID: return cJSON_CreateString("LV_ALIGN_OUT_RIGHT_MID");
         case LV_ALIGN_OUT_RIGHT_BOTTOM: return cJSON_CreateString("LV_ALIGN_OUT_RIGHT_BOTTOM");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_align_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_align_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -331,10 +334,11 @@ static cJSON* marshal_enum_lv_dir_t(lv_dir_t value) {
         case LV_DIR_HOR: return cJSON_CreateString("LV_DIR_HOR");
         case LV_DIR_VER: return cJSON_CreateString("LV_DIR_VER");
         case LV_DIR_ALL: return cJSON_CreateString("LV_DIR_ALL");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_dir_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_dir_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -342,7 +346,6 @@ static cJSON* marshal_enum_lv_dir_t(lv_dir_t value) {
 static cJSON* marshal_enum_lv_opa_enum_t(lv_opa_enum_t value) {
     switch (value) {
         case LV_OPA_TRANSP: return cJSON_CreateString("LV_OPA_TRANSP");
-        case LV_OPA_0: return cJSON_CreateString("LV_OPA_0");
         case LV_OPA_10: return cJSON_CreateString("LV_OPA_10");
         case LV_OPA_20: return cJSON_CreateString("LV_OPA_20");
         case LV_OPA_30: return cJSON_CreateString("LV_OPA_30");
@@ -353,11 +356,11 @@ static cJSON* marshal_enum_lv_opa_enum_t(lv_opa_enum_t value) {
         case LV_OPA_80: return cJSON_CreateString("LV_OPA_80");
         case LV_OPA_90: return cJSON_CreateString("LV_OPA_90");
         case LV_OPA_100: return cJSON_CreateString("LV_OPA_100");
-        case LV_OPA_COVER: return cJSON_CreateString("LV_OPA_COVER");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_opa_enum_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_opa_enum_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -388,7 +391,6 @@ static cJSON* marshal_enum_lv_color_format_t(lv_color_format_t value) {
         case LV_COLOR_FORMAT_ARGB4444: return cJSON_CreateString("LV_COLOR_FORMAT_ARGB4444");
         case LV_COLOR_FORMAT_ARGB2222: return cJSON_CreateString("LV_COLOR_FORMAT_ARGB2222");
         case LV_COLOR_FORMAT_YUV_START: return cJSON_CreateString("LV_COLOR_FORMAT_YUV_START");
-        case LV_COLOR_FORMAT_I420: return cJSON_CreateString("LV_COLOR_FORMAT_I420");
         case LV_COLOR_FORMAT_I422: return cJSON_CreateString("LV_COLOR_FORMAT_I422");
         case LV_COLOR_FORMAT_I444: return cJSON_CreateString("LV_COLOR_FORMAT_I444");
         case LV_COLOR_FORMAT_I400: return cJSON_CreateString("LV_COLOR_FORMAT_I400");
@@ -396,22 +398,17 @@ static cJSON* marshal_enum_lv_color_format_t(lv_color_format_t value) {
         case LV_COLOR_FORMAT_NV12: return cJSON_CreateString("LV_COLOR_FORMAT_NV12");
         case LV_COLOR_FORMAT_YUY2: return cJSON_CreateString("LV_COLOR_FORMAT_YUY2");
         case LV_COLOR_FORMAT_UYVY: return cJSON_CreateString("LV_COLOR_FORMAT_UYVY");
-        case LV_COLOR_FORMAT_YUV_END: return cJSON_CreateString("LV_COLOR_FORMAT_YUV_END");
         case LV_COLOR_FORMAT_PROPRIETARY_START: return cJSON_CreateString("LV_COLOR_FORMAT_PROPRIETARY_START");
-        case LV_COLOR_FORMAT_NEMA_TSC_START: return cJSON_CreateString("LV_COLOR_FORMAT_NEMA_TSC_START");
-        case LV_COLOR_FORMAT_NEMA_TSC4: return cJSON_CreateString("LV_COLOR_FORMAT_NEMA_TSC4");
         case LV_COLOR_FORMAT_NEMA_TSC6: return cJSON_CreateString("LV_COLOR_FORMAT_NEMA_TSC6");
         case LV_COLOR_FORMAT_NEMA_TSC6A: return cJSON_CreateString("LV_COLOR_FORMAT_NEMA_TSC6A");
         case LV_COLOR_FORMAT_NEMA_TSC6AP: return cJSON_CreateString("LV_COLOR_FORMAT_NEMA_TSC6AP");
         case LV_COLOR_FORMAT_NEMA_TSC12: return cJSON_CreateString("LV_COLOR_FORMAT_NEMA_TSC12");
         case LV_COLOR_FORMAT_NEMA_TSC12A: return cJSON_CreateString("LV_COLOR_FORMAT_NEMA_TSC12A");
-        case LV_COLOR_FORMAT_NEMA_TSC_END: return cJSON_CreateString("LV_COLOR_FORMAT_NEMA_TSC_END");
-        case LV_COLOR_FORMAT_NATIVE: return cJSON_CreateString("LV_COLOR_FORMAT_NATIVE");
-        case LV_COLOR_FORMAT_NATIVE_WITH_ALPHA: return cJSON_CreateString("LV_COLOR_FORMAT_NATIVE_WITH_ALPHA");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_color_format_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_color_format_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -439,10 +436,11 @@ static cJSON* marshal_enum_lv_palette_t(lv_palette_t value) {
         case LV_PALETTE_GREY: return cJSON_CreateString("LV_PALETTE_GREY");
         case LV_PALETTE_LAST: return cJSON_CreateString("LV_PALETTE_LAST");
         case LV_PALETTE_NONE: return cJSON_CreateString("LV_PALETTE_NONE");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_palette_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_palette_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -452,10 +450,11 @@ static cJSON* marshal_enum_lv_image_compress_t(lv_image_compress_t value) {
         case LV_IMAGE_COMPRESS_NONE: return cJSON_CreateString("LV_IMAGE_COMPRESS_NONE");
         case LV_IMAGE_COMPRESS_RLE: return cJSON_CreateString("LV_IMAGE_COMPRESS_RLE");
         case LV_IMAGE_COMPRESS_LZ4: return cJSON_CreateString("LV_IMAGE_COMPRESS_LZ4");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_image_compress_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_image_compress_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -476,10 +475,11 @@ static cJSON* marshal_enum_lv_font_glyph_format_t(lv_font_glyph_format_t value) 
         case LV_FONT_GLYPH_FORMAT_VECTOR: return cJSON_CreateString("LV_FONT_GLYPH_FORMAT_VECTOR");
         case LV_FONT_GLYPH_FORMAT_SVG: return cJSON_CreateString("LV_FONT_GLYPH_FORMAT_SVG");
         case LV_FONT_GLYPH_FORMAT_CUSTOM: return cJSON_CreateString("LV_FONT_GLYPH_FORMAT_CUSTOM");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_font_glyph_format_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_font_glyph_format_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -490,10 +490,11 @@ static cJSON* marshal_enum_lv_font_subpx_t(lv_font_subpx_t value) {
         case LV_FONT_SUBPX_HOR: return cJSON_CreateString("LV_FONT_SUBPX_HOR");
         case LV_FONT_SUBPX_VER: return cJSON_CreateString("LV_FONT_SUBPX_VER");
         case LV_FONT_SUBPX_BOTH: return cJSON_CreateString("LV_FONT_SUBPX_BOTH");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_font_subpx_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_font_subpx_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -502,10 +503,11 @@ static cJSON* marshal_enum_lv_font_kerning_t(lv_font_kerning_t value) {
     switch (value) {
         case LV_FONT_KERNING_NORMAL: return cJSON_CreateString("LV_FONT_KERNING_NORMAL");
         case LV_FONT_KERNING_NONE: return cJSON_CreateString("LV_FONT_KERNING_NONE");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_font_kerning_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_font_kerning_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -517,10 +519,11 @@ static cJSON* marshal_enum_lv_text_flag_t(lv_text_flag_t value) {
         case LV_TEXT_FLAG_FIT: return cJSON_CreateString("LV_TEXT_FLAG_FIT");
         case LV_TEXT_FLAG_BREAK_ALL: return cJSON_CreateString("LV_TEXT_FLAG_BREAK_ALL");
         case LV_TEXT_FLAG_RECOLOR: return cJSON_CreateString("LV_TEXT_FLAG_RECOLOR");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_text_flag_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_text_flag_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -531,10 +534,11 @@ static cJSON* marshal_enum_lv_text_align_t(lv_text_align_t value) {
         case LV_TEXT_ALIGN_LEFT: return cJSON_CreateString("LV_TEXT_ALIGN_LEFT");
         case LV_TEXT_ALIGN_CENTER: return cJSON_CreateString("LV_TEXT_ALIGN_CENTER");
         case LV_TEXT_ALIGN_RIGHT: return cJSON_CreateString("LV_TEXT_ALIGN_RIGHT");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_text_align_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_text_align_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -544,10 +548,11 @@ static cJSON* marshal_enum_lv_text_cmd_state_t(lv_text_cmd_state_t value) {
         case LV_TEXT_CMD_STATE_WAIT: return cJSON_CreateString("LV_TEXT_CMD_STATE_WAIT");
         case LV_TEXT_CMD_STATE_PAR: return cJSON_CreateString("LV_TEXT_CMD_STATE_PAR");
         case LV_TEXT_CMD_STATE_IN: return cJSON_CreateString("LV_TEXT_CMD_STATE_IN");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_text_cmd_state_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_text_cmd_state_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -559,10 +564,11 @@ static cJSON* marshal_enum_lv_base_dir_t(lv_base_dir_t value) {
         case LV_BASE_DIR_AUTO: return cJSON_CreateString("LV_BASE_DIR_AUTO");
         case LV_BASE_DIR_NEUTRAL: return cJSON_CreateString("LV_BASE_DIR_NEUTRAL");
         case LV_BASE_DIR_WEAK: return cJSON_CreateString("LV_BASE_DIR_WEAK");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_base_dir_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_base_dir_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -575,10 +581,11 @@ static cJSON* marshal_enum_lv_grad_dir_t(lv_grad_dir_t value) {
         case LV_GRAD_DIR_LINEAR: return cJSON_CreateString("LV_GRAD_DIR_LINEAR");
         case LV_GRAD_DIR_RADIAL: return cJSON_CreateString("LV_GRAD_DIR_RADIAL");
         case LV_GRAD_DIR_CONICAL: return cJSON_CreateString("LV_GRAD_DIR_CONICAL");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_grad_dir_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_grad_dir_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -588,10 +595,11 @@ static cJSON* marshal_enum_lv_grad_extend_t(lv_grad_extend_t value) {
         case LV_GRAD_EXTEND_PAD: return cJSON_CreateString("LV_GRAD_EXTEND_PAD");
         case LV_GRAD_EXTEND_REPEAT: return cJSON_CreateString("LV_GRAD_EXTEND_REPEAT");
         case LV_GRAD_EXTEND_REFLECT: return cJSON_CreateString("LV_GRAD_EXTEND_REFLECT");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_grad_extend_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_grad_extend_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -602,10 +610,11 @@ static cJSON* marshal_enum_lv_layout_t(lv_layout_t value) {
         case LV_LAYOUT_FLEX: return cJSON_CreateString("LV_LAYOUT_FLEX");
         case LV_LAYOUT_GRID: return cJSON_CreateString("LV_LAYOUT_GRID");
         case LV_LAYOUT_LAST: return cJSON_CreateString("LV_LAYOUT_LAST");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_layout_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_layout_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -618,10 +627,11 @@ static cJSON* marshal_enum_lv_flex_align_t(lv_flex_align_t value) {
         case LV_FLEX_ALIGN_SPACE_EVENLY: return cJSON_CreateString("LV_FLEX_ALIGN_SPACE_EVENLY");
         case LV_FLEX_ALIGN_SPACE_AROUND: return cJSON_CreateString("LV_FLEX_ALIGN_SPACE_AROUND");
         case LV_FLEX_ALIGN_SPACE_BETWEEN: return cJSON_CreateString("LV_FLEX_ALIGN_SPACE_BETWEEN");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_flex_align_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_flex_align_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -636,10 +646,11 @@ static cJSON* marshal_enum_lv_flex_flow_t(lv_flex_flow_t value) {
         case LV_FLEX_FLOW_COLUMN_WRAP: return cJSON_CreateString("LV_FLEX_FLOW_COLUMN_WRAP");
         case LV_FLEX_FLOW_COLUMN_REVERSE: return cJSON_CreateString("LV_FLEX_FLOW_COLUMN_REVERSE");
         case LV_FLEX_FLOW_COLUMN_WRAP_REVERSE: return cJSON_CreateString("LV_FLEX_FLOW_COLUMN_WRAP_REVERSE");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_flex_flow_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_flex_flow_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -653,10 +664,11 @@ static cJSON* marshal_enum_lv_grid_align_t(lv_grid_align_t value) {
         case LV_GRID_ALIGN_SPACE_EVENLY: return cJSON_CreateString("LV_GRID_ALIGN_SPACE_EVENLY");
         case LV_GRID_ALIGN_SPACE_AROUND: return cJSON_CreateString("LV_GRID_ALIGN_SPACE_AROUND");
         case LV_GRID_ALIGN_SPACE_BETWEEN: return cJSON_CreateString("LV_GRID_ALIGN_SPACE_BETWEEN");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_grid_align_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_grid_align_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -668,10 +680,11 @@ static cJSON* marshal_enum_lv_blend_mode_t(lv_blend_mode_t value) {
         case LV_BLEND_MODE_SUBTRACTIVE: return cJSON_CreateString("LV_BLEND_MODE_SUBTRACTIVE");
         case LV_BLEND_MODE_MULTIPLY: return cJSON_CreateString("LV_BLEND_MODE_MULTIPLY");
         case LV_BLEND_MODE_DIFFERENCE: return cJSON_CreateString("LV_BLEND_MODE_DIFFERENCE");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_blend_mode_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_blend_mode_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -681,10 +694,11 @@ static cJSON* marshal_enum_lv_text_decor_t(lv_text_decor_t value) {
         case LV_TEXT_DECOR_NONE: return cJSON_CreateString("LV_TEXT_DECOR_NONE");
         case LV_TEXT_DECOR_UNDERLINE: return cJSON_CreateString("LV_TEXT_DECOR_UNDERLINE");
         case LV_TEXT_DECOR_STRIKETHROUGH: return cJSON_CreateString("LV_TEXT_DECOR_STRIKETHROUGH");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_text_decor_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_text_decor_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -698,10 +712,11 @@ static cJSON* marshal_enum_lv_border_side_t(lv_border_side_t value) {
         case LV_BORDER_SIDE_RIGHT: return cJSON_CreateString("LV_BORDER_SIDE_RIGHT");
         case LV_BORDER_SIDE_FULL: return cJSON_CreateString("LV_BORDER_SIDE_FULL");
         case LV_BORDER_SIDE_INTERNAL: return cJSON_CreateString("LV_BORDER_SIDE_INTERNAL");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_border_side_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_border_side_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -710,10 +725,11 @@ static cJSON* marshal_enum_lv_style_res_t(lv_style_res_t value) {
     switch (value) {
         case LV_STYLE_RES_NOT_FOUND: return cJSON_CreateString("LV_STYLE_RES_NOT_FOUND");
         case LV_STYLE_RES_FOUND: return cJSON_CreateString("LV_STYLE_RES_FOUND");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_style_res_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_style_res_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -790,10 +806,11 @@ static cJSON* marshal_enum_lv_event_code_t(lv_event_code_t value) {
         case LV_EVENT_LAST: return cJSON_CreateString("LV_EVENT_LAST");
         case LV_EVENT_PREPROCESS: return cJSON_CreateString("LV_EVENT_PREPROCESS");
         case LV_EVENT_MARKED_DELETING: return cJSON_CreateString("LV_EVENT_MARKED_DELETING");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_event_code_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_event_code_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -804,10 +821,11 @@ static cJSON* marshal_enum_lv_display_rotation_t(lv_display_rotation_t value) {
         case LV_DISPLAY_ROTATION_90: return cJSON_CreateString("LV_DISPLAY_ROTATION_90");
         case LV_DISPLAY_ROTATION_180: return cJSON_CreateString("LV_DISPLAY_ROTATION_180");
         case LV_DISPLAY_ROTATION_270: return cJSON_CreateString("LV_DISPLAY_ROTATION_270");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_display_rotation_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_display_rotation_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -817,10 +835,11 @@ static cJSON* marshal_enum_lv_display_render_mode_t(lv_display_render_mode_t val
         case LV_DISPLAY_RENDER_MODE_PARTIAL: return cJSON_CreateString("LV_DISPLAY_RENDER_MODE_PARTIAL");
         case LV_DISPLAY_RENDER_MODE_DIRECT: return cJSON_CreateString("LV_DISPLAY_RENDER_MODE_DIRECT");
         case LV_DISPLAY_RENDER_MODE_FULL: return cJSON_CreateString("LV_DISPLAY_RENDER_MODE_FULL");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_display_render_mode_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_display_render_mode_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -837,16 +856,16 @@ static cJSON* marshal_enum_lv_screen_load_anim_t(lv_screen_load_anim_t value) {
         case LV_SCR_LOAD_ANIM_MOVE_TOP: return cJSON_CreateString("LV_SCR_LOAD_ANIM_MOVE_TOP");
         case LV_SCR_LOAD_ANIM_MOVE_BOTTOM: return cJSON_CreateString("LV_SCR_LOAD_ANIM_MOVE_BOTTOM");
         case LV_SCR_LOAD_ANIM_FADE_IN: return cJSON_CreateString("LV_SCR_LOAD_ANIM_FADE_IN");
-        case LV_SCR_LOAD_ANIM_FADE_ON: return cJSON_CreateString("LV_SCR_LOAD_ANIM_FADE_ON");
         case LV_SCR_LOAD_ANIM_FADE_OUT: return cJSON_CreateString("LV_SCR_LOAD_ANIM_FADE_OUT");
         case LV_SCR_LOAD_ANIM_OUT_LEFT: return cJSON_CreateString("LV_SCR_LOAD_ANIM_OUT_LEFT");
         case LV_SCR_LOAD_ANIM_OUT_RIGHT: return cJSON_CreateString("LV_SCR_LOAD_ANIM_OUT_RIGHT");
         case LV_SCR_LOAD_ANIM_OUT_TOP: return cJSON_CreateString("LV_SCR_LOAD_ANIM_OUT_TOP");
         case LV_SCR_LOAD_ANIM_OUT_BOTTOM: return cJSON_CreateString("LV_SCR_LOAD_ANIM_OUT_BOTTOM");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_screen_load_anim_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_screen_load_anim_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -856,10 +875,11 @@ static cJSON* marshal_enum_lv_obj_tree_walk_res_t(lv_obj_tree_walk_res_t value) 
         case LV_OBJ_TREE_WALK_NEXT: return cJSON_CreateString("LV_OBJ_TREE_WALK_NEXT");
         case LV_OBJ_TREE_WALK_SKIP_CHILDREN: return cJSON_CreateString("LV_OBJ_TREE_WALK_SKIP_CHILDREN");
         case LV_OBJ_TREE_WALK_END: return cJSON_CreateString("LV_OBJ_TREE_WALK_END");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_obj_tree_walk_res_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_obj_tree_walk_res_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -870,10 +890,11 @@ static cJSON* marshal_enum_lv_obj_point_transform_flag_t(lv_obj_point_transform_
         case LV_OBJ_POINT_TRANSFORM_FLAG_RECURSIVE: return cJSON_CreateString("LV_OBJ_POINT_TRANSFORM_FLAG_RECURSIVE");
         case LV_OBJ_POINT_TRANSFORM_FLAG_INVERSE: return cJSON_CreateString("LV_OBJ_POINT_TRANSFORM_FLAG_INVERSE");
         case LV_OBJ_POINT_TRANSFORM_FLAG_INVERSE_RECURSIVE: return cJSON_CreateString("LV_OBJ_POINT_TRANSFORM_FLAG_INVERSE_RECURSIVE");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_obj_point_transform_flag_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_obj_point_transform_flag_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -884,10 +905,11 @@ static cJSON* marshal_enum_lv_scrollbar_mode_t(lv_scrollbar_mode_t value) {
         case LV_SCROLLBAR_MODE_ON: return cJSON_CreateString("LV_SCROLLBAR_MODE_ON");
         case LV_SCROLLBAR_MODE_ACTIVE: return cJSON_CreateString("LV_SCROLLBAR_MODE_ACTIVE");
         case LV_SCROLLBAR_MODE_AUTO: return cJSON_CreateString("LV_SCROLLBAR_MODE_AUTO");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_scrollbar_mode_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_scrollbar_mode_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -898,10 +920,11 @@ static cJSON* marshal_enum_lv_scroll_snap_t(lv_scroll_snap_t value) {
         case LV_SCROLL_SNAP_START: return cJSON_CreateString("LV_SCROLL_SNAP_START");
         case LV_SCROLL_SNAP_END: return cJSON_CreateString("LV_SCROLL_SNAP_END");
         case LV_SCROLL_SNAP_CENTER: return cJSON_CreateString("LV_SCROLL_SNAP_CENTER");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_scroll_snap_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_scroll_snap_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -912,10 +935,11 @@ static cJSON* marshal_enum_lv_style_state_cmp_t(lv_style_state_cmp_t value) {
         case LV_STYLE_STATE_CMP_DIFF_REDRAW: return cJSON_CreateString("LV_STYLE_STATE_CMP_DIFF_REDRAW");
         case LV_STYLE_STATE_CMP_DIFF_DRAW_PAD: return cJSON_CreateString("LV_STYLE_STATE_CMP_DIFF_DRAW_PAD");
         case LV_STYLE_STATE_CMP_DIFF_LAYOUT: return cJSON_CreateString("LV_STYLE_STATE_CMP_DIFF_LAYOUT");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_style_state_cmp_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_style_state_cmp_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -935,10 +959,11 @@ static cJSON* marshal_enum_lv_fs_res_t(lv_fs_res_t value) {
         case LV_FS_RES_OUT_OF_MEM: return cJSON_CreateString("LV_FS_RES_OUT_OF_MEM");
         case LV_FS_RES_INV_PARAM: return cJSON_CreateString("LV_FS_RES_INV_PARAM");
         case LV_FS_RES_UNKNOWN: return cJSON_CreateString("LV_FS_RES_UNKNOWN");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_fs_res_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_fs_res_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -947,10 +972,11 @@ static cJSON* marshal_enum_lv_fs_mode_t(lv_fs_mode_t value) {
     switch (value) {
         case LV_FS_MODE_WR: return cJSON_CreateString("LV_FS_MODE_WR");
         case LV_FS_MODE_RD: return cJSON_CreateString("LV_FS_MODE_RD");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_fs_mode_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_fs_mode_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -960,10 +986,11 @@ static cJSON* marshal_enum_lv_fs_whence_t(lv_fs_whence_t value) {
         case LV_FS_SEEK_SET: return cJSON_CreateString("LV_FS_SEEK_SET");
         case LV_FS_SEEK_CUR: return cJSON_CreateString("LV_FS_SEEK_CUR");
         case LV_FS_SEEK_END: return cJSON_CreateString("LV_FS_SEEK_END");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_fs_whence_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_fs_whence_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -974,10 +1001,11 @@ static cJSON* marshal_enum_lv_image_src_t(lv_image_src_t value) {
         case LV_IMAGE_SRC_FILE: return cJSON_CreateString("LV_IMAGE_SRC_FILE");
         case LV_IMAGE_SRC_SYMBOL: return cJSON_CreateString("LV_IMAGE_SRC_SYMBOL");
         case LV_IMAGE_SRC_UNKNOWN: return cJSON_CreateString("LV_IMAGE_SRC_UNKNOWN");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_image_src_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_image_src_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -997,10 +1025,11 @@ static cJSON* marshal_enum_lv_draw_task_type_t(lv_draw_task_type_t value) {
         case LV_DRAW_TASK_TYPE_TRIANGLE: return cJSON_CreateString("LV_DRAW_TASK_TYPE_TRIANGLE");
         case LV_DRAW_TASK_TYPE_MASK_RECTANGLE: return cJSON_CreateString("LV_DRAW_TASK_TYPE_MASK_RECTANGLE");
         case LV_DRAW_TASK_TYPE_MASK_BITMAP: return cJSON_CreateString("LV_DRAW_TASK_TYPE_MASK_BITMAP");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_draw_task_type_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_draw_task_type_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1011,10 +1040,11 @@ static cJSON* marshal_enum_lv_draw_task_state_t(lv_draw_task_state_t value) {
         case LV_DRAW_TASK_STATE_QUEUED: return cJSON_CreateString("LV_DRAW_TASK_STATE_QUEUED");
         case LV_DRAW_TASK_STATE_IN_PROGRESS: return cJSON_CreateString("LV_DRAW_TASK_STATE_IN_PROGRESS");
         case LV_DRAW_TASK_STATE_READY: return cJSON_CreateString("LV_DRAW_TASK_STATE_READY");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_draw_task_state_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_draw_task_state_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1024,10 +1054,11 @@ static cJSON* marshal_enum_lv_layer_type_t(lv_layer_type_t value) {
         case LV_LAYER_TYPE_NONE: return cJSON_CreateString("LV_LAYER_TYPE_NONE");
         case LV_LAYER_TYPE_SIMPLE: return cJSON_CreateString("LV_LAYER_TYPE_SIMPLE");
         case LV_LAYER_TYPE_TRANSFORM: return cJSON_CreateString("LV_LAYER_TYPE_TRANSFORM");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_layer_type_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_layer_type_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1037,10 +1068,11 @@ static cJSON* marshal_enum_lv_obj_class_editable_t(lv_obj_class_editable_t value
         case LV_OBJ_CLASS_EDITABLE_INHERIT: return cJSON_CreateString("LV_OBJ_CLASS_EDITABLE_INHERIT");
         case LV_OBJ_CLASS_EDITABLE_TRUE: return cJSON_CreateString("LV_OBJ_CLASS_EDITABLE_TRUE");
         case LV_OBJ_CLASS_EDITABLE_FALSE: return cJSON_CreateString("LV_OBJ_CLASS_EDITABLE_FALSE");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_obj_class_editable_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_obj_class_editable_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1050,10 +1082,11 @@ static cJSON* marshal_enum_lv_obj_class_group_def_t(lv_obj_class_group_def_t val
         case LV_OBJ_CLASS_GROUP_DEF_INHERIT: return cJSON_CreateString("LV_OBJ_CLASS_GROUP_DEF_INHERIT");
         case LV_OBJ_CLASS_GROUP_DEF_TRUE: return cJSON_CreateString("LV_OBJ_CLASS_GROUP_DEF_TRUE");
         case LV_OBJ_CLASS_GROUP_DEF_FALSE: return cJSON_CreateString("LV_OBJ_CLASS_GROUP_DEF_FALSE");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_obj_class_group_def_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_obj_class_group_def_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1062,10 +1095,11 @@ static cJSON* marshal_enum_lv_obj_class_theme_inheritable_t(lv_obj_class_theme_i
     switch (value) {
         case LV_OBJ_CLASS_THEME_INHERITABLE_FALSE: return cJSON_CreateString("LV_OBJ_CLASS_THEME_INHERITABLE_FALSE");
         case LV_OBJ_CLASS_THEME_INHERITABLE_TRUE: return cJSON_CreateString("LV_OBJ_CLASS_THEME_INHERITABLE_TRUE");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_obj_class_theme_inheritable_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_obj_class_theme_inheritable_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1084,10 +1118,11 @@ static cJSON* marshal_enum_lv_key_t(lv_key_t value) {
         case LV_KEY_PREV: return cJSON_CreateString("LV_KEY_PREV");
         case LV_KEY_HOME: return cJSON_CreateString("LV_KEY_HOME");
         case LV_KEY_END: return cJSON_CreateString("LV_KEY_END");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_key_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_key_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1096,10 +1131,11 @@ static cJSON* marshal_enum_lv_group_refocus_policy_t(lv_group_refocus_policy_t v
     switch (value) {
         case LV_GROUP_REFOCUS_POLICY_NEXT: return cJSON_CreateString("LV_GROUP_REFOCUS_POLICY_NEXT");
         case LV_GROUP_REFOCUS_POLICY_PREV: return cJSON_CreateString("LV_GROUP_REFOCUS_POLICY_PREV");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_group_refocus_policy_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_group_refocus_policy_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1111,10 +1147,11 @@ static cJSON* marshal_enum_lv_indev_type_t(lv_indev_type_t value) {
         case LV_INDEV_TYPE_KEYPAD: return cJSON_CreateString("LV_INDEV_TYPE_KEYPAD");
         case LV_INDEV_TYPE_BUTTON: return cJSON_CreateString("LV_INDEV_TYPE_BUTTON");
         case LV_INDEV_TYPE_ENCODER: return cJSON_CreateString("LV_INDEV_TYPE_ENCODER");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_indev_type_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_indev_type_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1123,10 +1160,11 @@ static cJSON* marshal_enum_lv_indev_state_t(lv_indev_state_t value) {
     switch (value) {
         case LV_INDEV_STATE_RELEASED: return cJSON_CreateString("LV_INDEV_STATE_RELEASED");
         case LV_INDEV_STATE_PRESSED: return cJSON_CreateString("LV_INDEV_STATE_PRESSED");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_indev_state_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_indev_state_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1136,10 +1174,11 @@ static cJSON* marshal_enum_lv_indev_mode_t(lv_indev_mode_t value) {
         case LV_INDEV_MODE_NONE: return cJSON_CreateString("LV_INDEV_MODE_NONE");
         case LV_INDEV_MODE_TIMER: return cJSON_CreateString("LV_INDEV_MODE_TIMER");
         case LV_INDEV_MODE_EVENT: return cJSON_CreateString("LV_INDEV_MODE_EVENT");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_indev_mode_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_indev_mode_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1153,10 +1192,11 @@ static cJSON* marshal_enum_lv_indev_gesture_type_t(lv_indev_gesture_type_t value
         case LV_INDEV_GESTURE_TWO_FINGERS_SWIPE: return cJSON_CreateString("LV_INDEV_GESTURE_TWO_FINGERS_SWIPE");
         case LV_INDEV_GESTURE_SCROLL: return cJSON_CreateString("LV_INDEV_GESTURE_SCROLL");
         case LV_INDEV_GESTURE_CNT: return cJSON_CreateString("LV_INDEV_GESTURE_CNT");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_indev_gesture_type_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_indev_gesture_type_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1166,10 +1206,11 @@ static cJSON* marshal_enum_lv_cover_res_t(lv_cover_res_t value) {
         case LV_COVER_RES_COVER: return cJSON_CreateString("LV_COVER_RES_COVER");
         case LV_COVER_RES_NOT_COVER: return cJSON_CreateString("LV_COVER_RES_NOT_COVER");
         case LV_COVER_RES_MASKED: return cJSON_CreateString("LV_COVER_RES_MASKED");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_cover_res_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_cover_res_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1190,10 +1231,11 @@ static cJSON* marshal_enum_lv_state_enum_t(lv_state_enum_t value) {
         case LV_STATE_USER_3: return cJSON_CreateString("LV_STATE_USER_3");
         case LV_STATE_USER_4: return cJSON_CreateString("LV_STATE_USER_4");
         case LV_STATE_ANY: return cJSON_CreateString("LV_STATE_ANY");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_state_enum_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_state_enum_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1209,10 +1251,11 @@ static cJSON* marshal_enum_lv_style_parts_t(lv_style_parts_t value) {
         case LV_PART_CURSOR: return cJSON_CreateString("LV_PART_CURSOR");
         case LV_PART_CUSTOM_FIRST: return cJSON_CreateString("LV_PART_CUSTOM_FIRST");
         case LV_PART_ANY: return cJSON_CreateString("LV_PART_ANY");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_style_parts_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_style_parts_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1250,10 +1293,11 @@ static cJSON* marshal_enum_lv_obj_flag_t(lv_obj_flag_t value) {
         case LV_OBJ_FLAG_USER_2: return cJSON_CreateString("LV_OBJ_FLAG_USER_2");
         case LV_OBJ_FLAG_USER_3: return cJSON_CreateString("LV_OBJ_FLAG_USER_3");
         case LV_OBJ_FLAG_USER_4: return cJSON_CreateString("LV_OBJ_FLAG_USER_4");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_obj_flag_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_obj_flag_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1264,10 +1308,11 @@ static cJSON* marshal_enum_lv_font_fmt_txt_cmap_type_t(lv_font_fmt_txt_cmap_type
         case LV_FONT_FMT_TXT_CMAP_SPARSE_FULL: return cJSON_CreateString("LV_FONT_FMT_TXT_CMAP_SPARSE_FULL");
         case LV_FONT_FMT_TXT_CMAP_FORMAT0_TINY: return cJSON_CreateString("LV_FONT_FMT_TXT_CMAP_FORMAT0_TINY");
         case LV_FONT_FMT_TXT_CMAP_SPARSE_TINY: return cJSON_CreateString("LV_FONT_FMT_TXT_CMAP_SPARSE_TINY");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_font_fmt_txt_cmap_type_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_font_fmt_txt_cmap_type_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1278,10 +1323,11 @@ static cJSON* marshal_enum_lv_font_fmt_txt_bitmap_format_t(lv_font_fmt_txt_bitma
         case LV_FONT_FMT_TXT_COMPRESSED: return cJSON_CreateString("LV_FONT_FMT_TXT_COMPRESSED");
         case LV_FONT_FMT_TXT_COMPRESSED_NO_PREFILTER: return cJSON_CreateString("LV_FONT_FMT_TXT_COMPRESSED_NO_PREFILTER");
         case LV_FONT_FMT_PLAIN_ALIGNED: return cJSON_CreateString("LV_FONT_FMT_PLAIN_ALIGNED");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_font_fmt_txt_bitmap_format_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_font_fmt_txt_bitmap_format_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1303,10 +1349,11 @@ static cJSON* marshal_enum_lv_image_align_t(lv_image_align_t value) {
         case LV_IMAGE_ALIGN_TILE: return cJSON_CreateString("LV_IMAGE_ALIGN_TILE");
         case LV_IMAGE_ALIGN_CONTAIN: return cJSON_CreateString("LV_IMAGE_ALIGN_CONTAIN");
         case LV_IMAGE_ALIGN_COVER: return cJSON_CreateString("LV_IMAGE_ALIGN_COVER");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_image_align_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_image_align_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1314,10 +1361,11 @@ static cJSON* marshal_enum_lv_image_align_t(lv_image_align_t value) {
 static cJSON* marshal_enum_lv_animimg_part_t(lv_animimg_part_t value) {
     switch (value) {
         case LV_ANIM_IMAGE_PART_MAIN: return cJSON_CreateString("LV_ANIM_IMAGE_PART_MAIN");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_animimg_part_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_animimg_part_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1327,10 +1375,11 @@ static cJSON* marshal_enum_lv_arc_mode_t(lv_arc_mode_t value) {
         case LV_ARC_MODE_NORMAL: return cJSON_CreateString("LV_ARC_MODE_NORMAL");
         case LV_ARC_MODE_SYMMETRICAL: return cJSON_CreateString("LV_ARC_MODE_SYMMETRICAL");
         case LV_ARC_MODE_REVERSE: return cJSON_CreateString("LV_ARC_MODE_REVERSE");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_arc_mode_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_arc_mode_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1342,10 +1391,11 @@ static cJSON* marshal_enum_lv_label_long_mode_t(lv_label_long_mode_t value) {
         case LV_LABEL_LONG_MODE_SCROLL: return cJSON_CreateString("LV_LABEL_LONG_MODE_SCROLL");
         case LV_LABEL_LONG_MODE_SCROLL_CIRCULAR: return cJSON_CreateString("LV_LABEL_LONG_MODE_SCROLL_CIRCULAR");
         case LV_LABEL_LONG_MODE_CLIP: return cJSON_CreateString("LV_LABEL_LONG_MODE_CLIP");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_label_long_mode_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_label_long_mode_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1355,10 +1405,11 @@ static cJSON* marshal_enum_lv_bar_mode_t(lv_bar_mode_t value) {
         case LV_BAR_MODE_NORMAL: return cJSON_CreateString("LV_BAR_MODE_NORMAL");
         case LV_BAR_MODE_SYMMETRICAL: return cJSON_CreateString("LV_BAR_MODE_SYMMETRICAL");
         case LV_BAR_MODE_RANGE: return cJSON_CreateString("LV_BAR_MODE_RANGE");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_bar_mode_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_bar_mode_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1368,10 +1419,11 @@ static cJSON* marshal_enum_lv_bar_orientation_t(lv_bar_orientation_t value) {
         case LV_BAR_ORIENTATION_AUTO: return cJSON_CreateString("LV_BAR_ORIENTATION_AUTO");
         case LV_BAR_ORIENTATION_HORIZONTAL: return cJSON_CreateString("LV_BAR_ORIENTATION_HORIZONTAL");
         case LV_BAR_ORIENTATION_VERTICAL: return cJSON_CreateString("LV_BAR_ORIENTATION_VERTICAL");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_bar_orientation_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_bar_orientation_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1406,10 +1458,11 @@ static cJSON* marshal_enum_lv_buttonmatrix_ctrl_t(lv_buttonmatrix_ctrl_t value) 
         case LV_BUTTONMATRIX_CTRL_RESERVED_2: return cJSON_CreateString("LV_BUTTONMATRIX_CTRL_RESERVED_2");
         case LV_BUTTONMATRIX_CTRL_CUSTOM_1: return cJSON_CreateString("LV_BUTTONMATRIX_CTRL_CUSTOM_1");
         case LV_BUTTONMATRIX_CTRL_CUSTOM_2: return cJSON_CreateString("LV_BUTTONMATRIX_CTRL_CUSTOM_2");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_buttonmatrix_ctrl_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_buttonmatrix_ctrl_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1420,10 +1473,11 @@ static cJSON* marshal_enum_lv_chart_type_t(lv_chart_type_t value) {
         case LV_CHART_TYPE_LINE: return cJSON_CreateString("LV_CHART_TYPE_LINE");
         case LV_CHART_TYPE_BAR: return cJSON_CreateString("LV_CHART_TYPE_BAR");
         case LV_CHART_TYPE_SCATTER: return cJSON_CreateString("LV_CHART_TYPE_SCATTER");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_chart_type_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_chart_type_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1432,10 +1486,11 @@ static cJSON* marshal_enum_lv_chart_update_mode_t(lv_chart_update_mode_t value) 
     switch (value) {
         case LV_CHART_UPDATE_MODE_SHIFT: return cJSON_CreateString("LV_CHART_UPDATE_MODE_SHIFT");
         case LV_CHART_UPDATE_MODE_CIRCULAR: return cJSON_CreateString("LV_CHART_UPDATE_MODE_CIRCULAR");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_chart_update_mode_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_chart_update_mode_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1447,10 +1502,11 @@ static cJSON* marshal_enum_lv_chart_axis_t(lv_chart_axis_t value) {
         case LV_CHART_AXIS_PRIMARY_X: return cJSON_CreateString("LV_CHART_AXIS_PRIMARY_X");
         case LV_CHART_AXIS_SECONDARY_X: return cJSON_CreateString("LV_CHART_AXIS_SECONDARY_X");
         case LV_CHART_AXIS_LAST: return cJSON_CreateString("LV_CHART_AXIS_LAST");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_chart_axis_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_chart_axis_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1464,10 +1520,11 @@ static cJSON* marshal_enum_lv_imagebutton_state_t(lv_imagebutton_state_t value) 
         case LV_IMAGEBUTTON_STATE_CHECKED_PRESSED: return cJSON_CreateString("LV_IMAGEBUTTON_STATE_CHECKED_PRESSED");
         case LV_IMAGEBUTTON_STATE_CHECKED_DISABLED: return cJSON_CreateString("LV_IMAGEBUTTON_STATE_CHECKED_DISABLED");
         case LV_IMAGEBUTTON_STATE_NUM: return cJSON_CreateString("LV_IMAGEBUTTON_STATE_NUM");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_imagebutton_state_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_imagebutton_state_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1482,10 +1539,11 @@ static cJSON* marshal_enum_lv_keyboard_mode_t(lv_keyboard_mode_t value) {
         case LV_KEYBOARD_MODE_USER_2: return cJSON_CreateString("LV_KEYBOARD_MODE_USER_2");
         case LV_KEYBOARD_MODE_USER_3: return cJSON_CreateString("LV_KEYBOARD_MODE_USER_3");
         case LV_KEYBOARD_MODE_USER_4: return cJSON_CreateString("LV_KEYBOARD_MODE_USER_4");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_keyboard_mode_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_keyboard_mode_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1495,10 +1553,11 @@ static cJSON* marshal_enum_lv_menu_mode_header_t(lv_menu_mode_header_t value) {
         case LV_MENU_HEADER_TOP_FIXED: return cJSON_CreateString("LV_MENU_HEADER_TOP_FIXED");
         case LV_MENU_HEADER_TOP_UNFIXED: return cJSON_CreateString("LV_MENU_HEADER_TOP_UNFIXED");
         case LV_MENU_HEADER_BOTTOM_FIXED: return cJSON_CreateString("LV_MENU_HEADER_BOTTOM_FIXED");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_menu_mode_header_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_menu_mode_header_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1507,10 +1566,11 @@ static cJSON* marshal_enum_lv_menu_mode_root_back_button_t(lv_menu_mode_root_bac
     switch (value) {
         case LV_MENU_ROOT_BACK_BUTTON_DISABLED: return cJSON_CreateString("LV_MENU_ROOT_BACK_BUTTON_DISABLED");
         case LV_MENU_ROOT_BACK_BUTTON_ENABLED: return cJSON_CreateString("LV_MENU_ROOT_BACK_BUTTON_ENABLED");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_menu_mode_root_back_button_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_menu_mode_root_back_button_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1519,10 +1579,11 @@ static cJSON* marshal_enum_lv_roller_mode_t(lv_roller_mode_t value) {
     switch (value) {
         case LV_ROLLER_MODE_NORMAL: return cJSON_CreateString("LV_ROLLER_MODE_NORMAL");
         case LV_ROLLER_MODE_INFINITE: return cJSON_CreateString("LV_ROLLER_MODE_INFINITE");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_roller_mode_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_roller_mode_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1536,10 +1597,11 @@ static cJSON* marshal_enum_lv_scale_mode_t(lv_scale_mode_t value) {
         case LV_SCALE_MODE_ROUND_INNER: return cJSON_CreateString("LV_SCALE_MODE_ROUND_INNER");
         case LV_SCALE_MODE_ROUND_OUTER: return cJSON_CreateString("LV_SCALE_MODE_ROUND_OUTER");
         case LV_SCALE_MODE_LAST: return cJSON_CreateString("LV_SCALE_MODE_LAST");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_scale_mode_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_scale_mode_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1549,10 +1611,11 @@ static cJSON* marshal_enum_lv_slider_mode_t(lv_slider_mode_t value) {
         case LV_SLIDER_MODE_NORMAL: return cJSON_CreateString("LV_SLIDER_MODE_NORMAL");
         case LV_SLIDER_MODE_SYMMETRICAL: return cJSON_CreateString("LV_SLIDER_MODE_SYMMETRICAL");
         case LV_SLIDER_MODE_RANGE: return cJSON_CreateString("LV_SLIDER_MODE_RANGE");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_slider_mode_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_slider_mode_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1562,10 +1625,11 @@ static cJSON* marshal_enum_lv_slider_orientation_t(lv_slider_orientation_t value
         case LV_SLIDER_ORIENTATION_AUTO: return cJSON_CreateString("LV_SLIDER_ORIENTATION_AUTO");
         case LV_SLIDER_ORIENTATION_HORIZONTAL: return cJSON_CreateString("LV_SLIDER_ORIENTATION_HORIZONTAL");
         case LV_SLIDER_ORIENTATION_VERTICAL: return cJSON_CreateString("LV_SLIDER_ORIENTATION_VERTICAL");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_slider_orientation_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_slider_orientation_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1575,10 +1639,11 @@ static cJSON* marshal_enum_lv_span_overflow_t(lv_span_overflow_t value) {
         case LV_SPAN_OVERFLOW_CLIP: return cJSON_CreateString("LV_SPAN_OVERFLOW_CLIP");
         case LV_SPAN_OVERFLOW_ELLIPSIS: return cJSON_CreateString("LV_SPAN_OVERFLOW_ELLIPSIS");
         case LV_SPAN_OVERFLOW_LAST: return cJSON_CreateString("LV_SPAN_OVERFLOW_LAST");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_span_overflow_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_span_overflow_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1589,10 +1654,11 @@ static cJSON* marshal_enum_lv_span_mode_t(lv_span_mode_t value) {
         case LV_SPAN_MODE_EXPAND: return cJSON_CreateString("LV_SPAN_MODE_EXPAND");
         case LV_SPAN_MODE_BREAK: return cJSON_CreateString("LV_SPAN_MODE_BREAK");
         case LV_SPAN_MODE_LAST: return cJSON_CreateString("LV_SPAN_MODE_LAST");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_span_mode_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_span_mode_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1602,10 +1668,11 @@ static cJSON* marshal_enum_lv_switch_orientation_t(lv_switch_orientation_t value
         case LV_SWITCH_ORIENTATION_AUTO: return cJSON_CreateString("LV_SWITCH_ORIENTATION_AUTO");
         case LV_SWITCH_ORIENTATION_HORIZONTAL: return cJSON_CreateString("LV_SWITCH_ORIENTATION_HORIZONTAL");
         case LV_SWITCH_ORIENTATION_VERTICAL: return cJSON_CreateString("LV_SWITCH_ORIENTATION_VERTICAL");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_switch_orientation_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_switch_orientation_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1619,10 +1686,11 @@ static cJSON* marshal_enum_lv_table_cell_ctrl_t(lv_table_cell_ctrl_t value) {
         case LV_TABLE_CELL_CTRL_CUSTOM_2: return cJSON_CreateString("LV_TABLE_CELL_CTRL_CUSTOM_2");
         case LV_TABLE_CELL_CTRL_CUSTOM_3: return cJSON_CreateString("LV_TABLE_CELL_CTRL_CUSTOM_3");
         case LV_TABLE_CELL_CTRL_CUSTOM_4: return cJSON_CreateString("LV_TABLE_CELL_CTRL_CUSTOM_4");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_table_cell_ctrl_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_table_cell_ctrl_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1636,10 +1704,11 @@ static cJSON* marshal_enum_lv_subject_type_t(lv_subject_type_t value) {
         case LV_SUBJECT_TYPE_COLOR: return cJSON_CreateString("LV_SUBJECT_TYPE_COLOR");
         case LV_SUBJECT_TYPE_GROUP: return cJSON_CreateString("LV_SUBJECT_TYPE_GROUP");
         case LV_SUBJECT_TYPE_STRING: return cJSON_CreateString("LV_SUBJECT_TYPE_STRING");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_subject_type_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_subject_type_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1651,10 +1720,11 @@ static cJSON* marshal_enum_lv_gridnav_ctrl_t(lv_gridnav_ctrl_t value) {
         case LV_GRIDNAV_CTRL_SCROLL_FIRST: return cJSON_CreateString("LV_GRIDNAV_CTRL_SCROLL_FIRST");
         case LV_GRIDNAV_CTRL_HORIZONTAL_MOVE_ONLY: return cJSON_CreateString("LV_GRIDNAV_CTRL_HORIZONTAL_MOVE_ONLY");
         case LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY: return cJSON_CreateString("LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_gridnav_ctrl_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_gridnav_ctrl_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1664,10 +1734,11 @@ static cJSON* marshal_enum_lv_freetype_font_style_t(lv_freetype_font_style_t val
         case LV_FREETYPE_FONT_STYLE_NORMAL: return cJSON_CreateString("LV_FREETYPE_FONT_STYLE_NORMAL");
         case LV_FREETYPE_FONT_STYLE_ITALIC: return cJSON_CreateString("LV_FREETYPE_FONT_STYLE_ITALIC");
         case LV_FREETYPE_FONT_STYLE_BOLD: return cJSON_CreateString("LV_FREETYPE_FONT_STYLE_BOLD");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_freetype_font_style_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_freetype_font_style_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1676,10 +1747,11 @@ static cJSON* marshal_enum_lv_freetype_font_render_mode_t(lv_freetype_font_rende
     switch (value) {
         case LV_FREETYPE_FONT_RENDER_MODE_BITMAP: return cJSON_CreateString("LV_FREETYPE_FONT_RENDER_MODE_BITMAP");
         case LV_FREETYPE_FONT_RENDER_MODE_OUTLINE: return cJSON_CreateString("LV_FREETYPE_FONT_RENDER_MODE_OUTLINE");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_freetype_font_render_mode_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_freetype_font_render_mode_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1692,10 +1764,11 @@ static cJSON* marshal_enum_lv_freetype_outline_type_t(lv_freetype_outline_type_t
         case LV_FREETYPE_OUTLINE_CUBIC_TO: return cJSON_CreateString("LV_FREETYPE_OUTLINE_CUBIC_TO");
         case LV_FREETYPE_OUTLINE_CONIC_TO: return cJSON_CreateString("LV_FREETYPE_OUTLINE_CONIC_TO");
         case LV_FREETYPE_OUTLINE_BORDER_START: return cJSON_CreateString("LV_FREETYPE_OUTLINE_BORDER_START");
-        default:
+        default: {
             char buf[40]; // Increased size for name + value
-            snprintf(buf, sizeof(buf), "lv_freetype_outline_type_t_VALUE(%%d)", (int)value);
+            snprintf(buf, sizeof(buf), "lv_freetype_outline_type_t_VALUE(%d)", (int)value);
             return cJSON_CreateString(buf);
+        }
     }
 }
 
@@ -1705,62 +1778,78 @@ static cJSON* marshal_struct_lv_mem_monitor_t(const struct lv_mem_monitor_t* val
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_mem_monitor_t");
-    cJSON *field_json = marshal_value(&value->total_size, "size_t", "size_t", false, false, false, false, false, "total_size");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "total_size", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'total_size' in struct lv_mem_monitor_t\n");
-        cJSON_AddNullToObject(obj, "total_size");
-    }
-    cJSON *field_json = marshal_value(&value->free_cnt, "size_t", "size_t", false, false, false, false, false, "free_cnt");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "free_cnt", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'free_cnt' in struct lv_mem_monitor_t\n");
-        cJSON_AddNullToObject(obj, "free_cnt");
-    }
-    cJSON *field_json = marshal_value(&value->free_size, "size_t", "size_t", false, false, false, false, false, "free_size");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "free_size", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'free_size' in struct lv_mem_monitor_t\n");
-        cJSON_AddNullToObject(obj, "free_size");
-    }
-    cJSON *field_json = marshal_value(&value->free_biggest_size, "size_t", "size_t", false, false, false, false, false, "free_biggest_size");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "free_biggest_size", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'free_biggest_size' in struct lv_mem_monitor_t\n");
-        cJSON_AddNullToObject(obj, "free_biggest_size");
-    }
-    cJSON *field_json = marshal_value(&value->used_cnt, "size_t", "size_t", false, false, false, false, false, "used_cnt");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "used_cnt", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'used_cnt' in struct lv_mem_monitor_t\n");
-        cJSON_AddNullToObject(obj, "used_cnt");
-    }
-    cJSON *field_json = marshal_value(&value->max_used, "size_t", "size_t", false, false, false, false, false, "max_used");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "max_used", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'max_used' in struct lv_mem_monitor_t\n");
-        cJSON_AddNullToObject(obj, "max_used");
-    }
-    cJSON *field_json = marshal_value(&value->used_pct, "uint8_t", "uint8_t", false, false, false, false, false, "used_pct");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "used_pct", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'used_pct' in struct lv_mem_monitor_t\n");
-        cJSON_AddNullToObject(obj, "used_pct");
-    }
-    cJSON *field_json = marshal_value(&value->frag_pct, "uint8_t", "uint8_t", false, false, false, false, false, "frag_pct");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "frag_pct", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'frag_pct' in struct lv_mem_monitor_t\n");
-        cJSON_AddNullToObject(obj, "frag_pct");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->total_size, "size_t", "size_t", false, false, false, false, false, "total_size");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "total_size", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'total_size' in struct lv_mem_monitor_t\n");
+            cJSON_AddNullToObject(obj, "total_size");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->free_cnt, "size_t", "size_t", false, false, false, false, false, "free_cnt");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "free_cnt", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'free_cnt' in struct lv_mem_monitor_t\n");
+            cJSON_AddNullToObject(obj, "free_cnt");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->free_size, "size_t", "size_t", false, false, false, false, false, "free_size");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "free_size", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'free_size' in struct lv_mem_monitor_t\n");
+            cJSON_AddNullToObject(obj, "free_size");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->free_biggest_size, "size_t", "size_t", false, false, false, false, false, "free_biggest_size");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "free_biggest_size", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'free_biggest_size' in struct lv_mem_monitor_t\n");
+            cJSON_AddNullToObject(obj, "free_biggest_size");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->used_cnt, "size_t", "size_t", false, false, false, false, false, "used_cnt");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "used_cnt", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'used_cnt' in struct lv_mem_monitor_t\n");
+            cJSON_AddNullToObject(obj, "used_cnt");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->max_used, "size_t", "size_t", false, false, false, false, false, "max_used");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "max_used", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'max_used' in struct lv_mem_monitor_t\n");
+            cJSON_AddNullToObject(obj, "max_used");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->used_pct, "uint8_t", "uint8_t", false, false, false, false, false, "used_pct");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "used_pct", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'used_pct' in struct lv_mem_monitor_t\n");
+            cJSON_AddNullToObject(obj, "used_pct");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->frag_pct, "uint8_t", "uint8_t", false, false, false, false, false, "frag_pct");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "frag_pct", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'frag_pct' in struct lv_mem_monitor_t\n");
+            cJSON_AddNullToObject(obj, "frag_pct");
+        }
+    } while (0);
     return obj;
 }
 
@@ -1770,20 +1859,24 @@ static cJSON* marshal_struct_lv_sqrt_res_t(const struct lv_sqrt_res_t* value) {
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_sqrt_res_t");
-    cJSON *field_json = marshal_value(&value->i, "uint16_t", "uint16_t", false, false, false, false, false, "i");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "i", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'i' in struct lv_sqrt_res_t\n");
-        cJSON_AddNullToObject(obj, "i");
-    }
-    cJSON *field_json = marshal_value(&value->f, "uint16_t", "uint16_t", false, false, false, false, false, "f");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "f", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'f' in struct lv_sqrt_res_t\n");
-        cJSON_AddNullToObject(obj, "f");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->i, "uint16_t", "uint16_t", false, false, false, false, false, "i");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "i", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'i' in struct lv_sqrt_res_t\n");
+            cJSON_AddNullToObject(obj, "i");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->f, "uint16_t", "uint16_t", false, false, false, false, false, "f");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "f", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'f' in struct lv_sqrt_res_t\n");
+            cJSON_AddNullToObject(obj, "f");
+        }
+    } while (0);
     return obj;
 }
 
@@ -1793,34 +1886,42 @@ static cJSON* marshal_struct_lv_anim_bezier3_para_t(const struct lv_anim_bezier3
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_anim_bezier3_para_t");
-    cJSON *field_json = marshal_value(&value->x1, "int16_t", "int16_t", false, false, false, false, false, "x1");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "x1", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'x1' in struct lv_anim_bezier3_para_t\n");
-        cJSON_AddNullToObject(obj, "x1");
-    }
-    cJSON *field_json = marshal_value(&value->y1, "int16_t", "int16_t", false, false, false, false, false, "y1");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "y1", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'y1' in struct lv_anim_bezier3_para_t\n");
-        cJSON_AddNullToObject(obj, "y1");
-    }
-    cJSON *field_json = marshal_value(&value->x2, "int16_t", "int16_t", false, false, false, false, false, "x2");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "x2", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'x2' in struct lv_anim_bezier3_para_t\n");
-        cJSON_AddNullToObject(obj, "x2");
-    }
-    cJSON *field_json = marshal_value(&value->y2, "int16_t", "int16_t", false, false, false, false, false, "y2");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "y2", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'y2' in struct lv_anim_bezier3_para_t\n");
-        cJSON_AddNullToObject(obj, "y2");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->x1, "int16_t", "int16_t", false, false, false, false, false, "x1");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "x1", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'x1' in struct lv_anim_bezier3_para_t\n");
+            cJSON_AddNullToObject(obj, "x1");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->y1, "int16_t", "int16_t", false, false, false, false, false, "y1");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "y1", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'y1' in struct lv_anim_bezier3_para_t\n");
+            cJSON_AddNullToObject(obj, "y1");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->x2, "int16_t", "int16_t", false, false, false, false, false, "x2");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "x2", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'x2' in struct lv_anim_bezier3_para_t\n");
+            cJSON_AddNullToObject(obj, "x2");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->y2, "int16_t", "int16_t", false, false, false, false, false, "y2");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "y2", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'y2' in struct lv_anim_bezier3_para_t\n");
+            cJSON_AddNullToObject(obj, "y2");
+        }
+    } while (0);
     return obj;
 }
 
@@ -1830,20 +1931,24 @@ static cJSON* marshal_struct_lv_point_t(const struct lv_point_t* value) {
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_point_t");
-    cJSON *field_json = marshal_value(&value->x, "int32_t", "int32_t", false, false, false, false, false, "x");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "x", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'x' in struct lv_point_t\n");
-        cJSON_AddNullToObject(obj, "x");
-    }
-    cJSON *field_json = marshal_value(&value->y, "int32_t", "int32_t", false, false, false, false, false, "y");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "y", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'y' in struct lv_point_t\n");
-        cJSON_AddNullToObject(obj, "y");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->x, "int32_t", "int32_t", false, false, false, false, false, "x");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "x", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'x' in struct lv_point_t\n");
+            cJSON_AddNullToObject(obj, "x");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->y, "int32_t", "int32_t", false, false, false, false, false, "y");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "y", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'y' in struct lv_point_t\n");
+            cJSON_AddNullToObject(obj, "y");
+        }
+    } while (0);
     return obj;
 }
 
@@ -1853,34 +1958,42 @@ static cJSON* marshal_struct_lv_area_t(const struct lv_area_t* value) {
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_area_t");
-    cJSON *field_json = marshal_value(&value->x1, "int32_t", "int32_t", false, false, false, false, false, "x1");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "x1", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'x1' in struct lv_area_t\n");
-        cJSON_AddNullToObject(obj, "x1");
-    }
-    cJSON *field_json = marshal_value(&value->y1, "int32_t", "int32_t", false, false, false, false, false, "y1");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "y1", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'y1' in struct lv_area_t\n");
-        cJSON_AddNullToObject(obj, "y1");
-    }
-    cJSON *field_json = marshal_value(&value->x2, "int32_t", "int32_t", false, false, false, false, false, "x2");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "x2", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'x2' in struct lv_area_t\n");
-        cJSON_AddNullToObject(obj, "x2");
-    }
-    cJSON *field_json = marshal_value(&value->y2, "int32_t", "int32_t", false, false, false, false, false, "y2");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "y2", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'y2' in struct lv_area_t\n");
-        cJSON_AddNullToObject(obj, "y2");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->x1, "int32_t", "int32_t", false, false, false, false, false, "x1");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "x1", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'x1' in struct lv_area_t\n");
+            cJSON_AddNullToObject(obj, "x1");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->y1, "int32_t", "int32_t", false, false, false, false, false, "y1");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "y1", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'y1' in struct lv_area_t\n");
+            cJSON_AddNullToObject(obj, "y1");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->x2, "int32_t", "int32_t", false, false, false, false, false, "x2");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "x2", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'x2' in struct lv_area_t\n");
+            cJSON_AddNullToObject(obj, "x2");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->y2, "int32_t", "int32_t", false, false, false, false, false, "y2");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "y2", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'y2' in struct lv_area_t\n");
+            cJSON_AddNullToObject(obj, "y2");
+        }
+    } while (0);
     return obj;
 }
 
@@ -1890,27 +2003,33 @@ static cJSON* marshal_struct_lv_color_t(const struct lv_color_t* value) {
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_color_t");
-    cJSON *field_json = marshal_value(&value->blue, "uint8_t", "uint8_t", false, false, false, false, false, "blue");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "blue", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'blue' in struct lv_color_t\n");
-        cJSON_AddNullToObject(obj, "blue");
-    }
-    cJSON *field_json = marshal_value(&value->green, "uint8_t", "uint8_t", false, false, false, false, false, "green");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "green", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'green' in struct lv_color_t\n");
-        cJSON_AddNullToObject(obj, "green");
-    }
-    cJSON *field_json = marshal_value(&value->red, "uint8_t", "uint8_t", false, false, false, false, false, "red");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "red", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'red' in struct lv_color_t\n");
-        cJSON_AddNullToObject(obj, "red");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->blue, "uint8_t", "uint8_t", false, false, false, false, false, "blue");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "blue", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'blue' in struct lv_color_t\n");
+            cJSON_AddNullToObject(obj, "blue");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->green, "uint8_t", "uint8_t", false, false, false, false, false, "green");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "green", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'green' in struct lv_color_t\n");
+            cJSON_AddNullToObject(obj, "green");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->red, "uint8_t", "uint8_t", false, false, false, false, false, "red");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "red", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'red' in struct lv_color_t\n");
+            cJSON_AddNullToObject(obj, "red");
+        }
+    } while (0);
     return obj;
 }
 
@@ -1920,27 +2039,33 @@ static cJSON* marshal_struct_lv_color16_t(const struct lv_color16_t* value) {
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_color16_t");
-    cJSON *field_json = marshal_value(&value->blue, "uint16_t", "uint16_t", false, false, false, false, false, "blue");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "blue", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'blue' in struct lv_color16_t\n");
-        cJSON_AddNullToObject(obj, "blue");
-    }
-    cJSON *field_json = marshal_value(&value->green, "uint16_t", "uint16_t", false, false, false, false, false, "green");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "green", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'green' in struct lv_color16_t\n");
-        cJSON_AddNullToObject(obj, "green");
-    }
-    cJSON *field_json = marshal_value(&value->red, "uint16_t", "uint16_t", false, false, false, false, false, "red");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "red", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'red' in struct lv_color16_t\n");
-        cJSON_AddNullToObject(obj, "red");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->blue, "uint16_t", "uint16_t", false, false, false, false, false, "blue");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "blue", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'blue' in struct lv_color16_t\n");
+            cJSON_AddNullToObject(obj, "blue");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->green, "uint16_t", "uint16_t", false, false, false, false, false, "green");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "green", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'green' in struct lv_color16_t\n");
+            cJSON_AddNullToObject(obj, "green");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->red, "uint16_t", "uint16_t", false, false, false, false, false, "red");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "red", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'red' in struct lv_color16_t\n");
+            cJSON_AddNullToObject(obj, "red");
+        }
+    } while (0);
     return obj;
 }
 
@@ -1950,34 +2075,42 @@ static cJSON* marshal_struct_lv_color32_t(const struct lv_color32_t* value) {
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_color32_t");
-    cJSON *field_json = marshal_value(&value->blue, "uint8_t", "uint8_t", false, false, false, false, false, "blue");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "blue", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'blue' in struct lv_color32_t\n");
-        cJSON_AddNullToObject(obj, "blue");
-    }
-    cJSON *field_json = marshal_value(&value->green, "uint8_t", "uint8_t", false, false, false, false, false, "green");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "green", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'green' in struct lv_color32_t\n");
-        cJSON_AddNullToObject(obj, "green");
-    }
-    cJSON *field_json = marshal_value(&value->red, "uint8_t", "uint8_t", false, false, false, false, false, "red");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "red", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'red' in struct lv_color32_t\n");
-        cJSON_AddNullToObject(obj, "red");
-    }
-    cJSON *field_json = marshal_value(&value->alpha, "uint8_t", "uint8_t", false, false, false, false, false, "alpha");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "alpha", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'alpha' in struct lv_color32_t\n");
-        cJSON_AddNullToObject(obj, "alpha");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->blue, "uint8_t", "uint8_t", false, false, false, false, false, "blue");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "blue", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'blue' in struct lv_color32_t\n");
+            cJSON_AddNullToObject(obj, "blue");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->green, "uint8_t", "uint8_t", false, false, false, false, false, "green");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "green", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'green' in struct lv_color32_t\n");
+            cJSON_AddNullToObject(obj, "green");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->red, "uint8_t", "uint8_t", false, false, false, false, false, "red");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "red", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'red' in struct lv_color32_t\n");
+            cJSON_AddNullToObject(obj, "red");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->alpha, "uint8_t", "uint8_t", false, false, false, false, false, "alpha");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "alpha", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'alpha' in struct lv_color32_t\n");
+            cJSON_AddNullToObject(obj, "alpha");
+        }
+    } while (0);
     return obj;
 }
 
@@ -1987,27 +2120,33 @@ static cJSON* marshal_struct_lv_color_hsv_t(const struct lv_color_hsv_t* value) 
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_color_hsv_t");
-    cJSON *field_json = marshal_value(&value->h, "uint16_t", "uint16_t", false, false, false, false, false, "h");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "h", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'h' in struct lv_color_hsv_t\n");
-        cJSON_AddNullToObject(obj, "h");
-    }
-    cJSON *field_json = marshal_value(&value->s, "uint8_t", "uint8_t", false, false, false, false, false, "s");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "s", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 's' in struct lv_color_hsv_t\n");
-        cJSON_AddNullToObject(obj, "s");
-    }
-    cJSON *field_json = marshal_value(&value->v, "uint8_t", "uint8_t", false, false, false, false, false, "v");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "v", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'v' in struct lv_color_hsv_t\n");
-        cJSON_AddNullToObject(obj, "v");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->h, "uint16_t", "uint16_t", false, false, false, false, false, "h");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "h", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'h' in struct lv_color_hsv_t\n");
+            cJSON_AddNullToObject(obj, "h");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->s, "uint8_t", "uint8_t", false, false, false, false, false, "s");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "s", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 's' in struct lv_color_hsv_t\n");
+            cJSON_AddNullToObject(obj, "s");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->v, "uint8_t", "uint8_t", false, false, false, false, false, "v");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "v", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'v' in struct lv_color_hsv_t\n");
+            cJSON_AddNullToObject(obj, "v");
+        }
+    } while (0);
     return obj;
 }
 
@@ -2017,20 +2156,24 @@ static cJSON* marshal_struct_lv_color16a_t(const struct lv_color16a_t* value) {
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_color16a_t");
-    cJSON *field_json = marshal_value(&value->lumi, "uint8_t", "uint8_t", false, false, false, false, false, "lumi");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "lumi", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'lumi' in struct lv_color16a_t\n");
-        cJSON_AddNullToObject(obj, "lumi");
-    }
-    cJSON *field_json = marshal_value(&value->alpha, "uint8_t", "uint8_t", false, false, false, false, false, "alpha");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "alpha", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'alpha' in struct lv_color16a_t\n");
-        cJSON_AddNullToObject(obj, "alpha");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->lumi, "uint8_t", "uint8_t", false, false, false, false, false, "lumi");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "lumi", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'lumi' in struct lv_color16a_t\n");
+            cJSON_AddNullToObject(obj, "lumi");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->alpha, "uint8_t", "uint8_t", false, false, false, false, false, "alpha");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "alpha", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'alpha' in struct lv_color16a_t\n");
+            cJSON_AddNullToObject(obj, "alpha");
+        }
+    } while (0);
     return obj;
 }
 
@@ -2040,55 +2183,69 @@ static cJSON* marshal_struct_lv_image_header_t(const struct lv_image_header_t* v
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_image_header_t");
-    cJSON *field_json = marshal_value(&value->magic, "uint32_t", "uint32_t", false, false, false, false, false, "magic");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "magic", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'magic' in struct lv_image_header_t\n");
-        cJSON_AddNullToObject(obj, "magic");
-    }
-    cJSON *field_json = marshal_value(&value->cf, "uint32_t", "uint32_t", false, false, false, false, false, "cf");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "cf", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'cf' in struct lv_image_header_t\n");
-        cJSON_AddNullToObject(obj, "cf");
-    }
-    cJSON *field_json = marshal_value(&value->flags, "uint32_t", "uint32_t", false, false, false, false, false, "flags");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "flags", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'flags' in struct lv_image_header_t\n");
-        cJSON_AddNullToObject(obj, "flags");
-    }
-    cJSON *field_json = marshal_value(&value->w, "uint32_t", "uint32_t", false, false, false, false, false, "w");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "w", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'w' in struct lv_image_header_t\n");
-        cJSON_AddNullToObject(obj, "w");
-    }
-    cJSON *field_json = marshal_value(&value->h, "uint32_t", "uint32_t", false, false, false, false, false, "h");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "h", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'h' in struct lv_image_header_t\n");
-        cJSON_AddNullToObject(obj, "h");
-    }
-    cJSON *field_json = marshal_value(&value->stride, "uint32_t", "uint32_t", false, false, false, false, false, "stride");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "stride", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'stride' in struct lv_image_header_t\n");
-        cJSON_AddNullToObject(obj, "stride");
-    }
-    cJSON *field_json = marshal_value(&value->reserved_2, "uint32_t", "uint32_t", false, false, false, false, false, "reserved_2");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "reserved_2", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'reserved_2' in struct lv_image_header_t\n");
-        cJSON_AddNullToObject(obj, "reserved_2");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->magic, "uint32_t", "uint32_t", false, false, false, false, false, "magic");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "magic", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'magic' in struct lv_image_header_t\n");
+            cJSON_AddNullToObject(obj, "magic");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->cf, "uint32_t", "uint32_t", false, false, false, false, false, "cf");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "cf", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'cf' in struct lv_image_header_t\n");
+            cJSON_AddNullToObject(obj, "cf");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->flags, "uint32_t", "uint32_t", false, false, false, false, false, "flags");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "flags", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'flags' in struct lv_image_header_t\n");
+            cJSON_AddNullToObject(obj, "flags");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->w, "uint32_t", "uint32_t", false, false, false, false, false, "w");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "w", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'w' in struct lv_image_header_t\n");
+            cJSON_AddNullToObject(obj, "w");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->h, "uint32_t", "uint32_t", false, false, false, false, false, "h");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "h", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'h' in struct lv_image_header_t\n");
+            cJSON_AddNullToObject(obj, "h");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->stride, "uint32_t", "uint32_t", false, false, false, false, false, "stride");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "stride", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'stride' in struct lv_image_header_t\n");
+            cJSON_AddNullToObject(obj, "stride");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->reserved_2, "uint32_t", "uint32_t", false, false, false, false, false, "reserved_2");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "reserved_2", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'reserved_2' in struct lv_image_header_t\n");
+            cJSON_AddNullToObject(obj, "reserved_2");
+        }
+    } while (0);
     return obj;
 }
 
@@ -2098,41 +2255,51 @@ static cJSON* marshal_struct_lv_img_dsc_t(const struct lv_img_dsc_t* value) {
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_img_dsc_t");
-    cJSON *field_json = marshal_value(&value->header, "struct lv_image_header_t", "lv_image_header_t", false, false, true, false, false, "header");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "header", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'header' in struct lv_img_dsc_t\n");
-        cJSON_AddNullToObject(obj, "header");
-    }
-    cJSON *field_json = marshal_value(&value->data_size, "uint32_t", "uint32_t", false, false, false, false, false, "data_size");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "data_size", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'data_size' in struct lv_img_dsc_t\n");
-        cJSON_AddNullToObject(obj, "data_size");
-    }
-    cJSON *field_json = marshal_value(&value->data, "uint8_t*", "uint8_t", true, false, false, false, false, "data");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "data", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'data' in struct lv_img_dsc_t\n");
-        cJSON_AddNullToObject(obj, "data");
-    }
-    cJSON *field_json = marshal_value(&value->reserved, "void*", "void", true, false, false, false, false, "reserved");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "reserved", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'reserved' in struct lv_img_dsc_t\n");
-        cJSON_AddNullToObject(obj, "reserved");
-    }
-    cJSON *field_json = marshal_value(&value->reserved_2, "void*", "void", true, false, false, false, false, "reserved_2");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "reserved_2", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'reserved_2' in struct lv_img_dsc_t\n");
-        cJSON_AddNullToObject(obj, "reserved_2");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->header, "struct lv_image_header_t", "lv_image_header_t", false, false, true, false, false, "header");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "header", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'header' in struct lv_img_dsc_t\n");
+            cJSON_AddNullToObject(obj, "header");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->data_size, "uint32_t", "uint32_t", false, false, false, false, false, "data_size");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "data_size", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'data_size' in struct lv_img_dsc_t\n");
+            cJSON_AddNullToObject(obj, "data_size");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->data, "uint8_t*", "uint8_t", true, false, false, false, false, "data");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "data", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'data' in struct lv_img_dsc_t\n");
+            cJSON_AddNullToObject(obj, "data");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->reserved, "void*", "void", true, false, false, false, false, "reserved");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "reserved", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'reserved' in struct lv_img_dsc_t\n");
+            cJSON_AddNullToObject(obj, "reserved");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->reserved_2, "void*", "void", true, false, false, false, false, "reserved_2");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "reserved_2", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'reserved_2' in struct lv_img_dsc_t\n");
+            cJSON_AddNullToObject(obj, "reserved_2");
+        }
+    } while (0);
     return obj;
 }
 
@@ -2142,27 +2309,33 @@ static cJSON* marshal_struct_lv_grad_stop_t(const struct lv_grad_stop_t* value) 
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_grad_stop_t");
-    cJSON *field_json = marshal_value(&value->color, "struct lv_color_t", "lv_color_t", false, false, true, false, false, "color");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "color", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'color' in struct lv_grad_stop_t\n");
-        cJSON_AddNullToObject(obj, "color");
-    }
-    cJSON *field_json = marshal_value(&value->opa, "lv_opa_t", "lv_opa_t", false, false, false, false, false, "opa");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "opa", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'opa' in struct lv_grad_stop_t\n");
-        cJSON_AddNullToObject(obj, "opa");
-    }
-    cJSON *field_json = marshal_value(&value->frac, "uint8_t", "uint8_t", false, false, false, false, false, "frac");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "frac", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'frac' in struct lv_grad_stop_t\n");
-        cJSON_AddNullToObject(obj, "frac");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->color, "struct lv_color_t", "lv_color_t", false, false, true, false, false, "color");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "color", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'color' in struct lv_grad_stop_t\n");
+            cJSON_AddNullToObject(obj, "color");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->opa, "lv_opa_t", "lv_opa_t", false, false, false, false, false, "opa");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "opa", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'opa' in struct lv_grad_stop_t\n");
+            cJSON_AddNullToObject(obj, "opa");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->frac, "uint8_t", "uint8_t", false, false, false, false, false, "frac");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "frac", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'frac' in struct lv_grad_stop_t\n");
+            cJSON_AddNullToObject(obj, "frac");
+        }
+    } while (0);
     return obj;
 }
 
@@ -2172,34 +2345,42 @@ static cJSON* marshal_struct_lv_grad_dsc_t(const struct lv_grad_dsc_t* value) {
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_grad_dsc_t");
-    cJSON *field_json = marshal_value(&value->stops, "lv_grad_stop_t[2]", "", false, false, true, false, false, "stops");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "stops", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'stops' in struct lv_grad_dsc_t\n");
-        cJSON_AddNullToObject(obj, "stops");
-    }
-    cJSON *field_json = marshal_value(&value->stops_count, "uint8_t", "uint8_t", false, false, false, false, false, "stops_count");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "stops_count", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'stops_count' in struct lv_grad_dsc_t\n");
-        cJSON_AddNullToObject(obj, "stops_count");
-    }
-    cJSON *field_json = marshal_value(&value->dir, "lv_grad_dir_t", "lv_grad_dir_t", false, true, false, false, false, "dir");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "dir", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'dir' in struct lv_grad_dsc_t\n");
-        cJSON_AddNullToObject(obj, "dir");
-    }
-    cJSON *field_json = marshal_value(&value->extend, "lv_grad_extend_t", "lv_grad_extend_t", false, true, false, false, false, "extend");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "extend", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'extend' in struct lv_grad_dsc_t\n");
-        cJSON_AddNullToObject(obj, "extend");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->stops, "lv_grad_stop_t[2]", "", false, false, true, false, false, "stops");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "stops", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'stops' in struct lv_grad_dsc_t\n");
+            cJSON_AddNullToObject(obj, "stops");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->stops_count, "uint8_t", "uint8_t", false, false, false, false, false, "stops_count");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "stops_count", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'stops_count' in struct lv_grad_dsc_t\n");
+            cJSON_AddNullToObject(obj, "stops_count");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->dir, "lv_grad_dir_t", "lv_grad_dir_t", false, true, false, false, false, "dir");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "dir", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'dir' in struct lv_grad_dsc_t\n");
+            cJSON_AddNullToObject(obj, "dir");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->extend, "lv_grad_extend_t", "lv_grad_extend_t", false, true, false, false, false, "extend");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "extend", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'extend' in struct lv_grad_dsc_t\n");
+            cJSON_AddNullToObject(obj, "extend");
+        }
+    } while (0);
     return obj;
 }
 
@@ -2209,20 +2390,24 @@ static cJSON* marshal_struct_lv_style_const_prop_t(const struct lv_style_const_p
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_style_const_prop_t");
-    cJSON *field_json = marshal_value(&value->prop, "lv_style_prop_t", "lv_style_prop_t", false, false, false, false, false, "prop");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "prop", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'prop' in struct lv_style_const_prop_t\n");
-        cJSON_AddNullToObject(obj, "prop");
-    }
-    cJSON *field_json = marshal_value(&value->value, "union lv_style_value_t", "lv_style_value_t", false, false, false, true, false, "value");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "value", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'value' in struct lv_style_const_prop_t\n");
-        cJSON_AddNullToObject(obj, "value");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->prop, "lv_style_prop_t", "lv_style_prop_t", false, false, false, false, false, "prop");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "prop", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'prop' in struct lv_style_const_prop_t\n");
+            cJSON_AddNullToObject(obj, "prop");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->value, "union lv_style_value_t", "lv_style_value_t", false, false, false, true, false, "value");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "value", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'value' in struct lv_style_const_prop_t\n");
+            cJSON_AddNullToObject(obj, "value");
+        }
+    } while (0);
     return obj;
 }
 
@@ -2232,27 +2417,33 @@ static cJSON* marshal_struct_lv_event_list_t(const struct lv_event_list_t* value
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_event_list_t");
-    cJSON *field_json = marshal_value(&value->array, "lv_array_t", "lv_array_t", false, false, false, false, true, "array");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "array", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'array' in struct lv_event_list_t\n");
-        cJSON_AddNullToObject(obj, "array");
-    }
-    cJSON *field_json = marshal_value(&value->is_traversing, "uint8_t", "uint8_t", false, false, false, false, false, "is_traversing");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "is_traversing", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'is_traversing' in struct lv_event_list_t\n");
-        cJSON_AddNullToObject(obj, "is_traversing");
-    }
-    cJSON *field_json = marshal_value(&value->has_marked_deleting, "uint8_t", "uint8_t", false, false, false, false, false, "has_marked_deleting");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "has_marked_deleting", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'has_marked_deleting' in struct lv_event_list_t\n");
-        cJSON_AddNullToObject(obj, "has_marked_deleting");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->array, "lv_array_t", "lv_array_t", false, false, false, false, true, "array");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "array", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'array' in struct lv_event_list_t\n");
+            cJSON_AddNullToObject(obj, "array");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->is_traversing, "uint8_t", "uint8_t", false, false, false, false, false, "is_traversing");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "is_traversing", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'is_traversing' in struct lv_event_list_t\n");
+            cJSON_AddNullToObject(obj, "is_traversing");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->has_marked_deleting, "uint8_t", "uint8_t", false, false, false, false, false, "has_marked_deleting");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "has_marked_deleting", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'has_marked_deleting' in struct lv_event_list_t\n");
+            cJSON_AddNullToObject(obj, "has_marked_deleting");
+        }
+    } while (0);
     return obj;
 }
 
@@ -2262,62 +2453,78 @@ static cJSON* marshal_struct_lv_indev_data_t(const struct lv_indev_data_t* value
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_indev_data_t");
-    cJSON *field_json = marshal_value(&value->point, "struct lv_point_t", "lv_point_t", false, false, true, false, false, "point");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "point", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'point' in struct lv_indev_data_t\n");
-        cJSON_AddNullToObject(obj, "point");
-    }
-    cJSON *field_json = marshal_value(&value->key, "uint32_t", "uint32_t", false, false, false, false, false, "key");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "key", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'key' in struct lv_indev_data_t\n");
-        cJSON_AddNullToObject(obj, "key");
-    }
-    cJSON *field_json = marshal_value(&value->btn_id, "uint32_t", "uint32_t", false, false, false, false, false, "btn_id");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "btn_id", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'btn_id' in struct lv_indev_data_t\n");
-        cJSON_AddNullToObject(obj, "btn_id");
-    }
-    cJSON *field_json = marshal_value(&value->enc_diff, "int16_t", "int16_t", false, false, false, false, false, "enc_diff");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "enc_diff", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'enc_diff' in struct lv_indev_data_t\n");
-        cJSON_AddNullToObject(obj, "enc_diff");
-    }
-    cJSON *field_json = marshal_value(&value->state, "lv_indev_state_t", "lv_indev_state_t", false, true, false, false, false, "state");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "state", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'state' in struct lv_indev_data_t\n");
-        cJSON_AddNullToObject(obj, "state");
-    }
-    cJSON *field_json = marshal_value(&value->continue_reading, "bool", "bool", false, false, false, false, false, "continue_reading");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "continue_reading", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'continue_reading' in struct lv_indev_data_t\n");
-        cJSON_AddNullToObject(obj, "continue_reading");
-    }
-    cJSON *field_json = marshal_value(&value->gesture_type, "lv_indev_gesture_type_t[LV_INDEV_GESTURE_CNT]", "", false, true, false, false, false, "gesture_type");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "gesture_type", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'gesture_type' in struct lv_indev_data_t\n");
-        cJSON_AddNullToObject(obj, "gesture_type");
-    }
-    cJSON *field_json = marshal_value(&value->gesture_data, "void*[LV_INDEV_GESTURE_CNT]", "void", false, false, false, false, false, "gesture_data");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "gesture_data", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'gesture_data' in struct lv_indev_data_t\n");
-        cJSON_AddNullToObject(obj, "gesture_data");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->point, "struct lv_point_t", "lv_point_t", false, false, true, false, false, "point");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "point", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'point' in struct lv_indev_data_t\n");
+            cJSON_AddNullToObject(obj, "point");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->key, "uint32_t", "uint32_t", false, false, false, false, false, "key");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "key", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'key' in struct lv_indev_data_t\n");
+            cJSON_AddNullToObject(obj, "key");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->btn_id, "uint32_t", "uint32_t", false, false, false, false, false, "btn_id");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "btn_id", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'btn_id' in struct lv_indev_data_t\n");
+            cJSON_AddNullToObject(obj, "btn_id");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->enc_diff, "int16_t", "int16_t", false, false, false, false, false, "enc_diff");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "enc_diff", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'enc_diff' in struct lv_indev_data_t\n");
+            cJSON_AddNullToObject(obj, "enc_diff");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->state, "lv_indev_state_t", "lv_indev_state_t", false, true, false, false, false, "state");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "state", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'state' in struct lv_indev_data_t\n");
+            cJSON_AddNullToObject(obj, "state");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->continue_reading, "bool", "bool", false, false, false, false, false, "continue_reading");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "continue_reading", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'continue_reading' in struct lv_indev_data_t\n");
+            cJSON_AddNullToObject(obj, "continue_reading");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->gesture_type, "lv_indev_gesture_type_t[LV_INDEV_GESTURE_CNT]", "", false, true, false, false, false, "gesture_type");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "gesture_type", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'gesture_type' in struct lv_indev_data_t\n");
+            cJSON_AddNullToObject(obj, "gesture_type");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->gesture_data, "void*[LV_INDEV_GESTURE_CNT]", "void", false, false, false, false, false, "gesture_data");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "gesture_data", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'gesture_data' in struct lv_indev_data_t\n");
+            cJSON_AddNullToObject(obj, "gesture_data");
+        }
+    } while (0);
     return obj;
 }
 
@@ -2327,34 +2534,42 @@ static cJSON* marshal_struct_lv_binfont_font_src_t(const struct lv_binfont_font_
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_binfont_font_src_t");
-    cJSON *field_json = marshal_value(&value->font_size, "uint32_t", "uint32_t", false, false, false, false, false, "font_size");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "font_size", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'font_size' in struct lv_binfont_font_src_t\n");
-        cJSON_AddNullToObject(obj, "font_size");
-    }
-    cJSON *field_json = marshal_value(&value->path, "char*", "char", true, false, false, false, false, "path");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "path", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'path' in struct lv_binfont_font_src_t\n");
-        cJSON_AddNullToObject(obj, "path");
-    }
-    cJSON *field_json = marshal_value(&value->buffer, "void*", "void", true, false, false, false, false, "buffer");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "buffer", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'buffer' in struct lv_binfont_font_src_t\n");
-        cJSON_AddNullToObject(obj, "buffer");
-    }
-    cJSON *field_json = marshal_value(&value->buffer_size, "uint32_t", "uint32_t", false, false, false, false, false, "buffer_size");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "buffer_size", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'buffer_size' in struct lv_binfont_font_src_t\n");
-        cJSON_AddNullToObject(obj, "buffer_size");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->font_size, "uint32_t", "uint32_t", false, false, false, false, false, "font_size");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "font_size", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'font_size' in struct lv_binfont_font_src_t\n");
+            cJSON_AddNullToObject(obj, "font_size");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->path, "char*", "char", true, false, false, false, false, "path");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "path", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'path' in struct lv_binfont_font_src_t\n");
+            cJSON_AddNullToObject(obj, "path");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->buffer, "void*", "void", true, false, false, false, false, "buffer");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "buffer", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'buffer' in struct lv_binfont_font_src_t\n");
+            cJSON_AddNullToObject(obj, "buffer");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->buffer_size, "uint32_t", "uint32_t", false, false, false, false, false, "buffer_size");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "buffer_size", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'buffer_size' in struct lv_binfont_font_src_t\n");
+            cJSON_AddNullToObject(obj, "buffer_size");
+        }
+    } while (0);
     return obj;
 }
 
@@ -2364,20 +2579,24 @@ static cJSON* marshal_struct_lv_builtin_font_src_t(const struct lv_builtin_font_
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_builtin_font_src_t");
-    cJSON *field_json = marshal_value(&value->font_p, "lv_font_t*", "lv_font_t", true, false, false, false, true, "font_p");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "font_p", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'font_p' in struct lv_builtin_font_src_t\n");
-        cJSON_AddNullToObject(obj, "font_p");
-    }
-    cJSON *field_json = marshal_value(&value->size, "uint32_t", "uint32_t", false, false, false, false, false, "size");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "size", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'size' in struct lv_builtin_font_src_t\n");
-        cJSON_AddNullToObject(obj, "size");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->font_p, "lv_font_t*", "lv_font_t", true, false, false, false, true, "font_p");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "font_p", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'font_p' in struct lv_builtin_font_src_t\n");
+            cJSON_AddNullToObject(obj, "font_p");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->size, "uint32_t", "uint32_t", false, false, false, false, false, "size");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "size", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'size' in struct lv_builtin_font_src_t\n");
+            cJSON_AddNullToObject(obj, "size");
+        }
+    } while (0);
     return obj;
 }
 
@@ -2387,27 +2606,33 @@ static cJSON* marshal_struct_lv_calendar_date_t(const struct lv_calendar_date_t*
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_calendar_date_t");
-    cJSON *field_json = marshal_value(&value->year, "uint16_t", "uint16_t", false, false, false, false, false, "year");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "year", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'year' in struct lv_calendar_date_t\n");
-        cJSON_AddNullToObject(obj, "year");
-    }
-    cJSON *field_json = marshal_value(&value->month, "int8_t", "int8_t", false, false, false, false, false, "month");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "month", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'month' in struct lv_calendar_date_t\n");
-        cJSON_AddNullToObject(obj, "month");
-    }
-    cJSON *field_json = marshal_value(&value->day, "int8_t", "int8_t", false, false, false, false, false, "day");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "day", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'day' in struct lv_calendar_date_t\n");
-        cJSON_AddNullToObject(obj, "day");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->year, "uint16_t", "uint16_t", false, false, false, false, false, "year");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "year", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'year' in struct lv_calendar_date_t\n");
+            cJSON_AddNullToObject(obj, "year");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->month, "int8_t", "int8_t", false, false, false, false, false, "month");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "month", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'month' in struct lv_calendar_date_t\n");
+            cJSON_AddNullToObject(obj, "month");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->day, "int8_t", "int8_t", false, false, false, false, false, "day");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "day", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'day' in struct lv_calendar_date_t\n");
+            cJSON_AddNullToObject(obj, "day");
+        }
+    } while (0);
     return obj;
 }
 
@@ -2417,27 +2642,33 @@ static cJSON* marshal_struct_lv_span_coords_t(const struct lv_span_coords_t* val
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_span_coords_t");
-    cJSON *field_json = marshal_value(&value->heading, "struct lv_area_t", "lv_area_t", false, false, true, false, false, "heading");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "heading", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'heading' in struct lv_span_coords_t\n");
-        cJSON_AddNullToObject(obj, "heading");
-    }
-    cJSON *field_json = marshal_value(&value->middle, "struct lv_area_t", "lv_area_t", false, false, true, false, false, "middle");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "middle", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'middle' in struct lv_span_coords_t\n");
-        cJSON_AddNullToObject(obj, "middle");
-    }
-    cJSON *field_json = marshal_value(&value->trailing, "struct lv_area_t", "lv_area_t", false, false, true, false, false, "trailing");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "trailing", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'trailing' in struct lv_span_coords_t\n");
-        cJSON_AddNullToObject(obj, "trailing");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->heading, "struct lv_area_t", "lv_area_t", false, false, true, false, false, "heading");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "heading", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'heading' in struct lv_span_coords_t\n");
+            cJSON_AddNullToObject(obj, "heading");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->middle, "struct lv_area_t", "lv_area_t", false, false, true, false, false, "middle");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "middle", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'middle' in struct lv_span_coords_t\n");
+            cJSON_AddNullToObject(obj, "middle");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->trailing, "struct lv_area_t", "lv_area_t", false, false, true, false, false, "trailing");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "trailing", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'trailing' in struct lv_span_coords_t\n");
+            cJSON_AddNullToObject(obj, "trailing");
+        }
+    } while (0);
     return obj;
 }
 
@@ -2447,34 +2678,42 @@ static cJSON* marshal_struct_lv_tiny_ttf_font_src_t(const struct lv_tiny_ttf_fon
     cJSON *obj = cJSON_CreateObject();
     if (!obj) return NULL; // Allocation check
     cJSON_AddStringToObject(obj, "_struct_type", "lv_tiny_ttf_font_src_t");
-    cJSON *field_json = marshal_value(&value->path, "char*", "char", true, false, false, false, false, "path");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "path", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'path' in struct lv_tiny_ttf_font_src_t\n");
-        cJSON_AddNullToObject(obj, "path");
-    }
-    cJSON *field_json = marshal_value(&value->data, "void*", "void", true, false, false, false, false, "data");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "data", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'data' in struct lv_tiny_ttf_font_src_t\n");
-        cJSON_AddNullToObject(obj, "data");
-    }
-    cJSON *field_json = marshal_value(&value->data_size, "size_t", "size_t", false, false, false, false, false, "data_size");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "data_size", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'data_size' in struct lv_tiny_ttf_font_src_t\n");
-        cJSON_AddNullToObject(obj, "data_size");
-    }
-    cJSON *field_json = marshal_value(&value->cache_size, "size_t", "size_t", false, false, false, false, false, "cache_size");
-    if (field_json) {
-        cJSON_AddItemToObject(obj, "cache_size", field_json);
-    } else {
-        fprintf(stderr, "Warning: Failed to marshal field 'cache_size' in struct lv_tiny_ttf_font_src_t\n");
-        cJSON_AddNullToObject(obj, "cache_size");
-    }
+    do {
+        cJSON *field_json = marshal_value(&value->path, "char*", "char", true, false, false, false, false, "path");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "path", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'path' in struct lv_tiny_ttf_font_src_t\n");
+            cJSON_AddNullToObject(obj, "path");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->data, "void*", "void", true, false, false, false, false, "data");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "data", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'data' in struct lv_tiny_ttf_font_src_t\n");
+            cJSON_AddNullToObject(obj, "data");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->data_size, "size_t", "size_t", false, false, false, false, false, "data_size");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "data_size", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'data_size' in struct lv_tiny_ttf_font_src_t\n");
+            cJSON_AddNullToObject(obj, "data_size");
+        }
+    } while (0);
+    do {
+        cJSON *field_json = marshal_value(&value->cache_size, "size_t", "size_t", false, false, false, false, false, "cache_size");
+        if (field_json) {
+            cJSON_AddItemToObject(obj, "cache_size", field_json);
+        } else {
+            fprintf(stderr, "Warning: Failed to marshal field 'cache_size' in struct lv_tiny_ttf_font_src_t\n");
+            cJSON_AddNullToObject(obj, "cache_size");
+        }
+    } while (0);
     return obj;
 }
 
@@ -3093,6 +3332,51 @@ void emul_lvgl_destroy(void) {
 }
 
 // Exports the current UI state to a JSON file.
+
+char *emul_lvgl_to_str(const char *filename, bool pretty) {
+    if (!g_root_json_array) {
+        fprintf(stderr, "Error: emul_lvgl_init() not called or no objects created before export.
+");
+        return false;
+    }
+
+    // Create the final output structure { "lvgl_simulation": [...] }
+    cJSON *output_root = cJSON_CreateObject();
+    if (!output_root) {
+        fprintf(stderr, "Error: Failed to create output root cJSON object.
+");
+        return false;
+    }
+
+    // Add the array of objects to the root object.
+    // We add the actual array; its ownership is temporarily transferred.
+    cJSON_AddItemToObject(output_root, "lvgl_simulation", g_root_json_array);
+
+    // Print the JSON object to a string
+    char *json_string = NULL;
+    if (pretty) {
+        json_string = cJSON_Print(output_root); // Use pretty print
+    } else {
+        json_string = cJSON_PrintUnformatted(output_root); // Use compact print
+    }
+
+    // Detach the array from the output root *before* checking json_string
+    // so that g_root_json_array is not deleted if cJSON_Delete(output_root) is called on error.
+    cJSON_DetachItemViaPointer(output_root, g_root_json_array);
+
+    if (!json_string) {
+        fprintf(stderr, "Error: Failed to print JSON to string (memory allocation failed?).
+");
+        cJSON_Delete(output_root); // Delete the container object
+        return false;
+    }
+
+    cJSON_Delete(output_root); // Delete the container object
+
+    return json_string;
+}
+
+
 bool emul_lvgl_export(const char *filename, bool pretty) {
     if (!g_root_json_array) {
         fprintf(stderr, "Error: emul_lvgl_init() not called or no objects created before export.\n");
@@ -3235,6 +3519,35 @@ void emul_lvgl_register_external_ptr(const void *ptr, const char *id, const char
 }
 
 // --- Wrapped LVGL Function Implementations ---
+void lv_label_set_text_fmt(lv_obj_t* obj, const char *fmt, ...) {
+    va_list args;
+    va_start(args, format);
+    size_t len = vsnprintf(NULL, 0, fmt, args);
+    char buf[len + 1]
+    vsnprintf(buf, len + 1, fmt, args);
+    va_end(args);
+
+    if (!g_root_json) emul_lvgl_init();
+    cJSON *target_obj_json = find_json_object(obj);
+    if (!target_obj_json) {
+        fprintf(stderr, "Error: Failed to find JSON object for pointer %p in function lv_label_set_text
+", (void*)obj);
+        // Handle return value if needed
+        return;
+    }
+    cJSON *props_array = cJSON_GetObjectItem(target_obj_json, "props");
+    if (!props_array || !cJSON_IsArray(props_array)) {
+       fprintf(stderr, "Error: 'props' array missing or invalid for object in lv_label_set_text
+");
+        // Handle return value if needed
+        return;
+    }
+    cJSON *prop_entry = cJSON_CreateObject();
+    cJSON_AddStringToObject(prop_entry, "name", "text");
+    cJSON_AddItemToObject(prop_entry, "value", marshal_arg("text", &buf, "char*", "char", true, false, false, false));
+    cJSON_AddItemToArray(props_array, prop_entry);
+}
+
 
 // Wrapper for: lv_anim_count_running
 uint16_t lv_anim_count_running(void) {
@@ -10645,22 +10958,6 @@ void lv_group_swap_obj(lv_obj_t* obj1, lv_obj_t* obj2) {
     /* Wrapper Type: other */
     if (!g_root_json_array) emul_lvgl_init();
     /* Function 'lv_group_swap_obj' classified as 'other'. No JSON generated. */
-    return;
-}
-
-// Wrapper for: lv_image_buf_free
-void lv_image_buf_free(lv_image_dsc_t* dsc) {
-    /* Wrapper Type: other */
-    if (!g_root_json_array) emul_lvgl_init();
-    /* Function 'lv_image_buf_free' classified as 'other'. No JSON generated. */
-    return;
-}
-
-// Wrapper for: lv_image_buf_set_palette
-void lv_image_buf_set_palette(lv_image_dsc_t* dsc, uint8_t id, struct lv_color32_t c) {
-    /* Wrapper Type: other */
-    if (!g_root_json_array) emul_lvgl_init();
-    /* Function 'lv_image_buf_set_palette' classified as 'other'. No JSON generated. */
     return;
 }
 
@@ -30265,15 +30562,6 @@ int32_t lv_trigo_sin(int16_t angle) {
     /* Function 'lv_trigo_sin' classified as 'other'. No JSON generated. */
     /* Returning 0 for integer-like type int32_t */
     return 0;
-}
-
-// Wrapper for: lv_utils_bsearch
-void* lv_utils_bsearch(void* key, void* base, size_t n, size_t size, cmp cmp) {
-    /* Wrapper Type: other */
-    if (!g_root_json_array) emul_lvgl_init();
-    /* Function 'lv_utils_bsearch' classified as 'other'. No JSON generated. */
-    /* Returning NULL for pointer type void* */
-    return NULL;
 }
 
 // Wrapper for: lv_version_info

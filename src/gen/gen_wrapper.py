@@ -1,4 +1,4 @@
-# generate_lvgl_json_wrapper.py
+# gen_wrapper.py
 
 import json
 import argparse
@@ -65,6 +65,114 @@ ALWAYS_CONCRETE_TYPES = [
 
 
 # --- Helper Functions ---
+
+_debug = print
+
+def get_struct_dependencies(struct_info, all_filtered_struct_names, api_data, config):
+    """
+    Finds the names of other concrete structs that struct_info depends on.
+
+    Args:
+        struct_info: The dictionary for the struct to analyze.
+        all_filtered_struct_names: A set of names of all structs in config['filtered_structures'].
+        api_data: The full API JSON data.
+        config: The configuration dictionary.
+
+    Returns:
+        A set of struct names that struct_info depends on and are also in all_filtered_struct_names.
+    """
+    dependencies = set()
+    # _debug("DEP", struct_info)
+    if not struct_info or 'fields' not in struct_info:
+        return dependencies
+
+    for field in struct_info.get('fields', []):
+        field_type_info = field.get("type")
+        if not field_type_info:
+            continue
+
+        # Find the base type name of the field
+        #field_base_name = get_base_type_name(field_type_info) or field_type_info.get('name')
+        field_base_name = field_type_info.get('name')
+        # _debug("   FIELD", field_type_info, field_base_name)
+        if not field_base_name:
+            # _debug("     >> NO BASENAME", field_type_info, field_base_name)
+            continue
+
+        # Check if this base type is another struct in our filtered list
+        if field_base_name in all_filtered_struct_names and field_base_name != struct_info['name']:
+            # _debug("     >> in all_filtered_struct_names", field_type_info, field_base_name)
+            # Check if the dependency is actually a struct and concrete
+            dep_details = get_type_details({"name": field_base_name}, api_data)
+            if dep_details and (dep_details.get("json_type") == "struct" or dep_details.get("json_type") == "union"):
+                # Ensure the dependency itself is not opaque
+                if not is_opaque(dep_details, api_data, config):
+                     dependencies.add(field_base_name)
+
+    # _debug("<< DEP", struct_info.get('name'), dependencies)
+    return dependencies
+
+def sort_structs_by_dependency(struct_list, api_data, config):
+    """
+    Sorts a list of struct dictionaries based on dependencies using a bubble-sort-like approach.
+    Structs will be ordered so that dependencies appear before the structs that use them.
+
+    Args:
+        struct_list: The list of struct dictionaries (e.g., config['filtered_structures']).
+        api_data: The full API JSON data.
+        config: The configuration dictionary.
+
+    Returns:
+        The sorted list of struct dictionaries.
+    """
+    if not struct_list or len(struct_list) < 2:
+        return struct_list # No sorting needed for 0 or 1 elements
+
+    n = len(struct_list)
+    # Create a set of names for quick lookups
+    all_struct_names = {s['name'] for s in struct_list if 'name' in s}
+    # Pre-calculate dependencies to avoid redundant lookups inside the loop
+    struct_deps = {s['name']: get_struct_dependencies(s, all_struct_names, api_data, config)
+                   for s in struct_list if 'name' in s}
+    # _debug("STRUCT DEPS", struct_deps)
+
+    # _debug(f"  Attempting to sort {n} structs by dependency...")
+    swapped = True
+    passes = 0
+    max_passes = n * n # Failsafe against infinite loops (though shouldn't happen without cycles)
+
+    while swapped and passes < max_passes:
+        swapped = False
+        passes += 1
+        for i in range(n - 1):
+            struct1 = struct_list[i]
+            name1 = struct1.get('name')
+            for j in range(i + 1, n - 1):
+                struct2 = struct_list[j]
+                name2 = struct2.get('name')
+
+                if not name1 or not name2: continue # Skip if names are missing
+
+                # Check if struct1 depends on struct2
+                # Use the pre-calculated dependencies
+                deps1 = struct_deps.get(name1, set())
+                # _debug("DEPS:", name1, name2, "deps 1 => ", deps1,name2 in deps1)
+
+                if name2 in deps1:
+                    # _debug("SWAPPED:", name1, name2, "deps 1 => ", deps1,name2 in deps1)
+                    # struct1 depends on struct2, but struct1 is currently *before* struct2.
+                    # This is the WRONG order. Swap them.
+                    struct_list[i], struct_list[i+1] = struct_list[i+1], struct_list[i]
+                    swapped = True
+                    # _debug(f"    Pass {passes}, Swapped: '{name1}' depended on '{name2}'") # Debug print
+
+        if not swapped:
+            print(f"  Struct sorting finished after {passes} passes.")
+
+    if passes >= max_passes:
+         print(f"  Warning: Struct sorting reached max passes ({max_passes}). Possible cyclic dependency?")
+
+    return struct_list
 
 def sanitize_name(name):
     """Removes leading underscores and potentially other invalid chars for C identifiers."""
@@ -341,7 +449,6 @@ def get_c_type_name(type_info, api_data, config, use_opaque_typedef=True,
 
         array_suffix = f"[{dim}]" if dim else "[]" # Use [] for unknown size C arrays
         sep = ":**:" if split_separator else ''
-        print(f"{const_prefix}{base_type_str}{sep}{array_suffix}", type_info)
         return f"{const_prefix}{base_type_str}{sep}{array_suffix}" # Const applies to the array elements
 
 
@@ -490,6 +597,8 @@ def generate_header(api_data, config):
     h_content.append("#include <stdint.h>")
     h_content.append("#include <stdbool.h>")
     h_content.append("#include <stddef.h>")
+    h_content.append("#include <stdarg.h>")
+    h_content.append("")
     h_content.append("typedef struct cJSON cJSON;")
     h_content.append("")
 
@@ -537,7 +646,21 @@ def generate_header(api_data, config):
 
     # 3. Struct/Union Forward Declarations (Concrete only needed for non-typedef'd)
     h_content.append("// --- Struct/Union Forward Declarations ---")
-    all_structs_unions = sorted(config['filtered_structures'] + config['filtered_unions'], key=lambda x: x['name'])
+    #all_structs_unions = sorted(config['filtered_structures'] + config['filtered_unions'], key=lambda x: x['name'])
+    all_structs_unions = config['filtered_structures'] + config['filtered_unions']
+
+    print("Sorting structures by dependency...")
+    # _debug("Before\n", list(map(lambda x: x.get('name'), all_structs_unions)))
+    all_structs_unions = sort_structs_by_dependency(
+        all_structs_unions,
+        api_data,
+        config
+    )
+    # _debug("After\n", list(map(lambda x: x.get('name'), all_structs_unions)))
+
+    # Also sort unions if needed (though dependencies are less common)
+    # config['filtered_unions'] = sort_structs_by_dependency(config['filtered_unions'], api_data, config) # Uncomment if union deps needed
+
     for item in all_structs_unions:
         internal_name = item['name'] # e.g., _lv_point_t or lv_area_t
         item_type = item['type']['name'] # "struct" or "union"
@@ -625,7 +748,6 @@ def generate_header(api_data, config):
     h_content.append("")
 
 
-
     # 5. Concrete Struct/Union Definitions
     h_content.append("// --- Concrete Struct/Union Definitions ---")
     for item in all_structs_unions: # Iterate again through original list
@@ -690,6 +812,9 @@ def generate_header(api_data, config):
 
     # 8. Function Prototypes
     h_content.append("// --- Function Prototypes ---")
+    h_content.append("")
+    # Need to hard-code lv_label_set_text_fmt due to va_args.
+    h_content.append("void lv_label_set_text_fmt(lv_obj_t* obj, const char *fmt, ...);")
     func_list = sorted(config['filtered_functions'], key=lambda x: x['name'])
     for func in func_list:
         func_name = func["name"]
@@ -719,6 +844,7 @@ def generate_header(api_data, config):
     h_content.append("void emul_lvgl_init(void);")
     h_content.append("void emul_lvgl_destroy(void);")
     h_content.append("bool emul_lvgl_export(const char *filename, bool pretty);")
+    h_content.append("char *emul_lvgl_to_str(const char *filename, bool pretty);")
     h_content.append("void emul_lvgl_register_external_ptr(const void *ptr, const char *id, const char* type_hint);")
 
 
@@ -741,7 +867,7 @@ def generate_c_source(api_data, config):
     c_content.append("#include <assert.h>")
     c_content.append("\n// --- Dependencies ---")
     # Assume cJSON.c is compiled separately and linked.
-    c_content.append("#include \"cjson/cJSON.h\"")
+    c_content.append("#include \"cJSON.h\"")
     # Assume uthash.h is in the include path.
     c_content.append("#include \"uthash.h\"")
 
@@ -808,7 +934,7 @@ def generate_c_source(api_data, config):
     c_content.append("    }")
     c_content.append("    // Format the ID string")
     c_content.append("    // Use PRIu64 for platform-independent uint64_t printing")
-    c_content.append("    snprintf(buffer, buffer_len, \"%s_%\\\" PRIu64 \\\"\", base_type_name, count);")
+    c_content.append("    snprintf(buffer, buffer_len, \"%s_%\" PRIu64 , base_type_name, count);")
     c_content.append("    return buffer; // Ownership transferred to caller")
     c_content.append("}")
 
@@ -940,14 +1066,18 @@ def generate_c_source(api_data, config):
         if not members:
              c_content.append(f"        // No members defined for {c_enum_name} in JSON")
         else:
+            cases = set()
             for member in members:
                 # Handle potential C incompatibility in names if necessary, but unlikely for enums
-                c_content.append(f"        case {member['name']}: return cJSON_CreateString(\"{member['name']}\");")
-        c_content.append(f"        default:")
+                if not member.get('value', None) in cases:
+                    c_content.append(f"        case {member['name']}: return cJSON_CreateString(\"{member['name']}\");")
+                    cases.add(member.get('value'))
+        c_content.append(f"        default: {{")
         # Provide numeric fallback if name not found (e.g., for combined flags)
         c_content.append(f"            char buf[40]; // Increased size for name + value")
-        c_content.append(f"            snprintf(buf, sizeof(buf), \"{c_enum_name}_VALUE(%%d)\", (int)value);")
+        c_content.append(f"            snprintf(buf, sizeof(buf), \"{c_enum_name}_VALUE(%d)\", (int)value);")
         c_content.append(f"            return cJSON_CreateString(buf);")
+        c_content.append(f"        }}")
         c_content.append(f"    }}")
         c_content.append(f"}}")
         c_content.append("")
@@ -991,13 +1121,15 @@ def generate_c_source(api_data, config):
                     field_is_opaque = is_opaque({"name": field_base_name} if field_base_name else field_type_info, api_data, config)
 
                     # Use the generic marshal_value for the field's value
-                    c_content.append(f"    cJSON *field_json = marshal_value(&value->{field_name_c}, \"{field_c_type_str}\", \"{field_base_name if field_base_name else ''}\", {str(field_is_pointer).lower()}, {str(field_is_enum).lower()}, {str(field_is_struct).lower()}, {str(field_is_union).lower()}, {str(field_is_opaque).lower()}, \"{field_name_orig}\");")
-                    c_content.append(f"    if (field_json) {{") # Check if marshaling succeeded
-                    c_content.append(f"        cJSON_AddItemToObject(obj, \"{field_name_orig}\", field_json);") # Use original name as JSON key
-                    c_content.append(f"    }} else {{")
-                    c_content.append(f"        fprintf(stderr, \"Warning: Failed to marshal field '{field_name_orig}' in struct {struct_name}\\n\");")
-                    c_content.append(f"        cJSON_AddNullToObject(obj, \"{field_name_orig}\");") # Add null placeholder
-                    c_content.append(f"    }}")
+                    c_content.append("    do {")
+                    c_content.append(f"        cJSON *field_json = marshal_value(&value->{field_name_c}, \"{field_c_type_str}\", \"{field_base_name if field_base_name else ''}\", {str(field_is_pointer).lower()}, {str(field_is_enum).lower()}, {str(field_is_struct).lower()}, {str(field_is_union).lower()}, {str(field_is_opaque).lower()}, \"{field_name_orig}\");")
+                    c_content.append(f"        if (field_json) {{") # Check if marshaling succeeded
+                    c_content.append(f"            cJSON_AddItemToObject(obj, \"{field_name_orig}\", field_json);") # Use original name as JSON key
+                    c_content.append(f"        }} else {{")
+                    c_content.append(f"            fprintf(stderr, \"Warning: Failed to marshal field '{field_name_orig}' in struct {struct_name}\\n\");")
+                    c_content.append(f"            cJSON_AddNullToObject(obj, \"{field_name_orig}\");") # Add null placeholder
+                    c_content.append(f"        }}")
+                    c_content.append("    } while (0);")
             else:
                 c_content.append(f"     // Struct {struct_name} has no fields in JSON definition")
             c_content.append("    return obj;")
@@ -1336,6 +1468,48 @@ def generate_c_source(api_data, config):
 
     # --- Export ---
     c_content.append("\n// Exports the current UI state to a JSON file.")
+    c_content.append("")
+    c_content.append("""char *emul_lvgl_to_str(const char *filename, bool pretty) {
+    if (!g_root_json_array) {
+        fprintf(stderr, "Error: emul_lvgl_init() not called or no objects created before export.\n");
+        return false;
+    }
+
+    // Create the final output structure { "lvgl_simulation": [...] }
+    cJSON *output_root = cJSON_CreateObject();
+    if (!output_root) {
+        fprintf(stderr, "Error: Failed to create output root cJSON object.\n");
+        return false;
+    }
+
+    // Add the array of objects to the root object.
+    // We add the actual array; its ownership is temporarily transferred.
+    cJSON_AddItemToObject(output_root, "lvgl_simulation", g_root_json_array);
+
+    // Print the JSON object to a string
+    char *json_string = NULL;
+    if (pretty) {
+        json_string = cJSON_Print(output_root); // Use pretty print
+    } else {
+        json_string = cJSON_PrintUnformatted(output_root); // Use compact print
+    }
+
+    // Detach the array from the output root *before* checking json_string
+    // so that g_root_json_array is not deleted if cJSON_Delete(output_root) is called on error.
+    cJSON_DetachItemViaPointer(output_root, g_root_json_array);
+
+    if (!json_string) {
+        fprintf(stderr, "Error: Failed to print JSON to string (memory allocation failed?).\n");
+        cJSON_Delete(output_root); // Delete the container object
+        return false;
+    }
+
+    cJSON_Delete(output_root); // Delete the container object
+
+    return json_string;
+}
+""")
+    c_content.append("")
     c_content.append("bool emul_lvgl_export(const char *filename, bool pretty) {")
     c_content.append("    if (!g_root_json_array) {")
     c_content.append("        fprintf(stderr, \"Error: emul_lvgl_init() not called or no objects created before export.\\n\");")
@@ -1463,6 +1637,35 @@ def generate_c_source(api_data, config):
 
     # --- Wrapped Function Implementations ---
     c_content.append("\n// --- Wrapped LVGL Function Implementations ---")
+
+    # --- "lv_label_set_text_fmt" hardcoded due to va_args ---
+    c_content.append("""void lv_label_set_text_fmt(lv_obj_t* obj, const char *fmt, ...) {
+    va_list args;
+    va_start(args, format);
+    size_t len = vsnprintf(NULL, 0, fmt, args);
+    char buf[len + 1]
+    vsnprintf(buf, len + 1, fmt, args);
+    va_end(args);
+
+    if (!g_root_json) emul_lvgl_init();
+    cJSON *target_obj_json = find_json_object(obj);
+    if (!target_obj_json) {
+        fprintf(stderr, "Error: Failed to find JSON object for pointer %p in function lv_label_set_text\n", (void*)obj);
+        // Handle return value if needed
+        return;
+    }
+    cJSON *props_array = cJSON_GetObjectItem(target_obj_json, "props");
+    if (!props_array || !cJSON_IsArray(props_array)) {
+       fprintf(stderr, "Error: 'props' array missing or invalid for object in lv_label_set_text\n");
+        // Handle return value if needed
+        return;
+    }
+    cJSON *prop_entry = cJSON_CreateObject();
+    cJSON_AddStringToObject(prop_entry, "name", "text");
+    cJSON_AddItemToObject(prop_entry, "value", marshal_arg("text", &buf, "char*", "char", true, false, false, false));
+    cJSON_AddItemToArray(props_array, prop_entry);
+}
+""")
     func_list = sorted(config['filtered_functions'], key=lambda x: x['name']) # Sort for consistent order
     for func in func_list:
         func_name = func["name"]
@@ -1850,7 +2053,7 @@ def main():
         # Other
         "lv_line_", "lv_canvas_get_image", "lv_group_get_edge_cb",
         "lv_group_get_focus_cb"
-        "lv_image_buf_", "lv_image_get_bitmap_map_src",
+        "lv_image_buf_", "lv_image_get_bitmap_map_src", "lv_image_buf_free", "lv_image_buf_set_palette",
         "lv_image_set_bitmap_map_src", "lv_indev_get_read_cb",
         "lv_indev_", "lv_refr_now", "lv_ll_clear_custom",
         "lv_font_glyph_release_draw_data", "lv_group_get_focus_cb",
@@ -1859,7 +2062,7 @@ def main():
         "lv_obj_init_draw_line_dsc", "lv_obj_init_draw_rect_dsc",
         "lv_obj_init_draw_rect_dsc", "lv_obj_init_draw_arc_dsc",
         "lv_point_precise_", "lv_point_from_precise", "lv_tree_node_",
-        "lv_utils_bsearch"
+        "lv_utils_bsearch",
         # Deprecated
         "lv_obj_set_style_local_", "lv_obj_get_style_",
         ], help="Prefixes for functions to exclude.")
@@ -1880,8 +2083,8 @@ def main():
     parser.add_argument("--exclude-unions", nargs='*', default=["_lv_",
     "lv_yuv_buf_t"], help="Prefixes for unions to exclude.")
     parser.add_argument("--include-typedefs", nargs='+', default=["lv_"], help="Prefixes for typedefs to include.")
-    parser.add_argument("--exclude-typedefs", nargs='*', default=[], help="Prefixes for typedefs to exclude.")
-    parser.add_argument("--include-macros", nargs='+', default=["LV_"], help="Prefixes for macros to include.")
+    parser.add_argument("--exclude-typedefs", nargs='*', default=['_lvimage_flags_t', 'lv_image_flags_t'], help="Prefixes for typedefs to exclude.")
+    parser.add_argument("--include-macros", nargs='+', default=["LV_", "lv_obj_clear_flag", "lv_obj_add_flag"], help="Prefixes for macros to include.")
     parser.add_argument("--exclude-macros", nargs='*', default=[
         "LV_UNUSED", "LV_ASSERT", "LV_LOG_", "LV_TRACE_", "LV_ATTRIBUTE_", "LV_DEPRECATED",
         "LV_EXPORT_CONST_INT", "LV_USE_", "LV_CONF_", "LV_ENABLE_", "_LV_", "LV_INDEV_DEF_",
@@ -1944,7 +2147,7 @@ def main():
         original_count = len(api_data.get(category, []))
         for item in api_data.get(category, []):
             item_name = item.get(key)
-            if item_name and matches_prefix(item_name, inc_list) and not matches_prefix(item_name, exc_list):
+            if item_name and (item_name in inc_list or (matches_prefix(item_name, inc_list) and not matches_prefix(item_name, exc_list))):
                 # --- Additional Filtering Logic ---
                 skip_item = False
                 if category == "functions":
@@ -1967,6 +2170,8 @@ def main():
 
                 if not skip_item:
                     filtered_items.append(item)
+            else:
+                print(f"  Excluding: {item_name} ({category}) => {'in include list ' if matches_prefix(item_name, inc_list) else 'not in incldue list'}{'but in exclude list ' if matches_prefix(item_name, exc_list) else ', not in exclude list'}")
 
         config[f"filtered_{category}"] = filtered_items
         print(f"  {category.capitalize()}: Kept {len(filtered_items)} out of {original_count}")
@@ -2051,6 +2256,41 @@ def main():
 
     print("Generating C source file...")
     source_code = generate_c_source(api_data, config)
+
+    # --- Save Configuration ---
+    print("Saving build configuration...")
+    config_to_save = {
+        "generator": "gen_wrapper.py",
+        "output_prefix": args.output_prefix,
+        "include_funcs": args.include_funcs,
+        "exclude_funcs": args.exclude_funcs,
+        "include_enums": args.include_enums,
+        "exclude_enums": args.exclude_enums,
+        "include_structs": args.include_structs,
+        "exclude_structs": args.exclude_structs,
+        "include_unions": args.include_unions,
+        "exclude_unions": args.exclude_unions,
+        "include_typedefs": args.include_typedefs,
+        "exclude_typedefs": args.exclude_typedefs,
+        "include_macros": args.include_macros,
+        "exclude_macros": args.exclude_macros,
+        "opaque_type_prefixes": args.opaque_types,
+        # Optionally add the filtered lists if needed by builder,
+        # but usually syncing the include/exclude rules is enough.
+        # "filtered_functions_names": [f['name'] for f in config['filtered_functions']],
+        # "filtered_enum_names": [e['name'] for e in config['filtered_enums']],
+        # ... etc.
+    }
+    config_filename = os.path.join(args.output_dir, f"{args.output_prefix}_config.json")
+    try:
+        with open(config_filename, 'w', encoding='utf-8') as f_cfg:
+            json.dump(config_to_save, f_cfg, indent=4)
+        print(f"Successfully wrote configuration file: {config_filename}")
+    except IOError as e:
+        print(f"Error writing configuration file {config_filename}: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred writing the configuration file: {e}")
+    # --- End Save Configuration ---
 
     # --- Write Output Files ---
     os.makedirs(args.output_dir, exist_ok=True)

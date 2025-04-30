@@ -9,6 +9,8 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdarg.h>
+
 typedef struct cJSON cJSON;
 
 // --- Base Typedefs ---
@@ -870,30 +872,30 @@ typedef enum { // Internal name: lv_text_flag_t
 
 
 // --- Struct/Union Forward Declarations ---
+struct lv_mem_monitor_t;
+struct lv_sqrt_res_t;
 struct lv_anim_bezier3_para_t;
+struct lv_point_t;
 struct lv_area_t;
+struct lv_color_t;
+struct lv_color16_t;
+struct lv_color32_t;
+struct lv_color_hsv_t;
+struct lv_color16a_t;
+struct lv_image_header_t;
+struct lv_img_dsc_t;
+struct lv_grad_stop_t;
+struct lv_grad_dsc_t;
+struct lv_event_list_t;
+struct lv_indev_data_t;
 struct lv_binfont_font_src_t;
 struct lv_builtin_font_src_t;
 struct lv_calendar_date_t;
-struct lv_color16_t;
-struct lv_color16a_t;
-struct lv_color32_t;
-struct lv_color_hsv_t;
-struct lv_color_t;
-struct lv_event_list_t;
-struct lv_grad_dsc_t;
-struct lv_grad_stop_t;
-struct lv_image_header_t;
-struct lv_img_dsc_t;
-struct lv_indev_data_t;
-struct lv_mem_monitor_t;
-struct lv_point_t;
 struct lv_span_coords_t;
-struct lv_sqrt_res_t;
-struct lv_style_const_prop_t;
-union lv_style_value_t;
-union lv_subject_value_t;
 struct lv_tiny_ttf_font_src_t;
+union lv_style_value_t;
+struct lv_style_const_prop_t;
+union lv_subject_value_t;
 
 // --- Opaque Type Definitions (as cJSON*) ---
 typedef cJSON* lv_anim_t;
@@ -948,7 +950,6 @@ typedef lv_display_render_mode_t lv_disp_render_t; // Other typedef
 typedef lv_display_rotation_t lv_disp_rotation_t; // Other typedef
 typedef char lv_freetype_font_src_t; // Other typedef
 typedef void* lv_freetype_outline_t; // Other typedef
-typedef _lvimage_flags_t lv_image_flags_t; // Other typedef
 typedef intptr_t lv_intptr_t; // Other typedef
 typedef uint8_t lv_ll_node_t; // Other typedef
 typedef int8_t lv_log_level_t; // Other typedef
@@ -967,12 +968,33 @@ typedef uintptr_t lv_uintptr_t; // Other typedef
 typedef float lv_value_precise_t; // Other typedef
 
 // --- Concrete Struct/Union Definitions ---
+typedef struct lv_mem_monitor_t {
+    size_t total_size;
+    size_t free_cnt;
+    size_t free_size;
+    size_t free_biggest_size;
+    size_t used_cnt;
+    size_t max_used;
+    uint8_t used_pct;
+    uint8_t frag_pct;
+} lv_mem_monitor_t;
+
+typedef struct lv_sqrt_res_t {
+    uint16_t i;
+    uint16_t f;
+} lv_sqrt_res_t;
+
 typedef struct lv_anim_bezier3_para_t {
     int16_t x1;
     int16_t y1;
     int16_t x2;
     int16_t y2;
 } lv_anim_bezier3_para_t;
+
+typedef struct lv_point_t {
+    int32_t x;
+    int32_t y;
+} lv_point_t;
 
 typedef struct lv_area_t {
     int32_t x1;
@@ -981,34 +1003,17 @@ typedef struct lv_area_t {
     int32_t y2;
 } lv_area_t;
 
-typedef struct lv_binfont_font_src_t {
-    uint32_t font_size;
-    char* path;
-    void* buffer;
-    uint32_t buffer_size;
-} lv_binfont_font_src_t;
-
-typedef struct lv_builtin_font_src_t {
-    lv_font_t* font_p;
-    uint32_t size;
-} lv_builtin_font_src_t;
-
-typedef struct lv_calendar_date_t {
-    uint16_t year;
-    int8_t month;
-    int8_t day;
-} lv_calendar_date_t;
+typedef struct lv_color_t {
+    uint8_t blue;
+    uint8_t green;
+    uint8_t red;
+} lv_color_t;
 
 typedef struct lv_color16_t {
     uint16_t blue : 5;
     uint16_t green : 6;
     uint16_t red : 5;
 } lv_color16_t;
-
-typedef struct lv_color16a_t {
-    uint8_t lumi;
-    uint8_t alpha;
-} lv_color16a_t;
 
 typedef struct lv_color32_t {
     uint8_t blue;
@@ -1023,30 +1028,10 @@ typedef struct lv_color_hsv_t {
     uint8_t v;
 } lv_color_hsv_t;
 
-typedef struct lv_color_t {
-    uint8_t blue;
-    uint8_t green;
-    uint8_t red;
-} lv_color_t;
-
-typedef struct lv_event_list_t {
-    lv_array_t array;
-    uint8_t is_traversing : 1;
-    uint8_t has_marked_deleting : 1;
-} lv_event_list_t;
-
-typedef struct lv_grad_dsc_t {
-    lv_grad_stop_t stops[2];
-    uint8_t stops_count;
-    lv_grad_dir_t dir : 4;
-    lv_grad_extend_t extend : 3;
-} lv_grad_dsc_t;
-
-typedef struct lv_grad_stop_t {
-    struct lv_color_t color;
-    lv_opa_t opa;
-    uint8_t frac;
-} lv_grad_stop_t;
+typedef struct lv_color16a_t {
+    uint8_t lumi;
+    uint8_t alpha;
+} lv_color16a_t;
 
 typedef struct lv_image_header_t {
     uint32_t magic : 8;
@@ -1066,6 +1051,25 @@ typedef struct lv_img_dsc_t {
     void* reserved_2;
 } lv_img_dsc_t;
 
+typedef struct lv_grad_stop_t {
+    struct lv_color_t color;
+    lv_opa_t opa;
+    uint8_t frac;
+} lv_grad_stop_t;
+
+typedef struct lv_grad_dsc_t {
+    lv_grad_stop_t stops[2];
+    uint8_t stops_count;
+    lv_grad_dir_t dir : 4;
+    lv_grad_extend_t extend : 3;
+} lv_grad_dsc_t;
+
+typedef struct lv_event_list_t {
+    lv_array_t array;
+    uint8_t is_traversing : 1;
+    uint8_t has_marked_deleting : 1;
+} lv_event_list_t;
+
 typedef struct lv_indev_data_t {
     struct lv_point_t point;
     uint32_t key;
@@ -1077,21 +1081,23 @@ typedef struct lv_indev_data_t {
     void* gesture_data[LV_INDEV_GESTURE_CNT];
 } lv_indev_data_t;
 
-typedef struct lv_mem_monitor_t {
-    size_t total_size;
-    size_t free_cnt;
-    size_t free_size;
-    size_t free_biggest_size;
-    size_t used_cnt;
-    size_t max_used;
-    uint8_t used_pct;
-    uint8_t frag_pct;
-} lv_mem_monitor_t;
+typedef struct lv_binfont_font_src_t {
+    uint32_t font_size;
+    char* path;
+    void* buffer;
+    uint32_t buffer_size;
+} lv_binfont_font_src_t;
 
-typedef struct lv_point_t {
-    int32_t x;
-    int32_t y;
-} lv_point_t;
+typedef struct lv_builtin_font_src_t {
+    lv_font_t* font_p;
+    uint32_t size;
+} lv_builtin_font_src_t;
+
+typedef struct lv_calendar_date_t {
+    uint16_t year;
+    int8_t month;
+    int8_t day;
+} lv_calendar_date_t;
 
 typedef struct lv_span_coords_t {
     struct lv_area_t heading;
@@ -1099,15 +1105,12 @@ typedef struct lv_span_coords_t {
     struct lv_area_t trailing;
 } lv_span_coords_t;
 
-typedef struct lv_sqrt_res_t {
-    uint16_t i;
-    uint16_t f;
-} lv_sqrt_res_t;
-
-typedef struct lv_style_const_prop_t {
-    lv_style_prop_t prop;
-    union lv_style_value_t value;
-} lv_style_const_prop_t;
+typedef struct lv_tiny_ttf_font_src_t {
+    char* path;
+    void* data;
+    size_t data_size;
+    size_t cache_size;
+} lv_tiny_ttf_font_src_t;
 
 typedef union lv_style_value_t {
     int32_t num;
@@ -1115,18 +1118,16 @@ typedef union lv_style_value_t {
     struct lv_color_t color;
 } lv_style_value_t;
 
+typedef struct lv_style_const_prop_t {
+    lv_style_prop_t prop;
+    union lv_style_value_t value;
+} lv_style_const_prop_t;
+
 typedef union lv_subject_value_t {
     int32_t num;
     void* pointer;
     struct lv_color_t color;
 } lv_subject_value_t;
-
-typedef struct lv_tiny_ttf_font_src_t {
-    char* path;
-    void* data;
-    size_t data_size;
-    size_t cache_size;
-} lv_tiny_ttf_font_src_t;
 
 
 // --- Macro Definitions ---
@@ -1831,8 +1832,11 @@ typedef struct lv_tiny_ttf_font_src_t {
 #define LV_UMAX_OF(t) (((0x1ULL << ((sizeof(t) * 8ULL) - 1ULL)) - 1ULL) | (0xFULL << ((sizeof(t) * 8ULL) - 4ULL)))
 #define LV_VER_RES lv_display_get_vertical_resolution ( lv_display_get_default ())
 #define LV_ZOOM_NONE LV_SCALE_NONE
+#define lv_obj_clear_flag lv_obj_remove_flag
 
 // --- Function Prototypes ---
+
+void lv_label_set_text_fmt(lv_obj_t* obj, const char *fmt, ...);
 uint16_t lv_anim_count_running(void);
 void lv_anim_delete_all(void);
 uint32_t lv_anim_get_delay(lv_anim_t* a);
@@ -2270,8 +2274,6 @@ void lv_group_set_editing(lv_group_t* group, bool edit);
 void lv_group_set_refocus_policy(lv_group_t* group, lv_group_refocus_policy_t policy);
 void lv_group_set_wrap(lv_group_t* group, bool en);
 void lv_group_swap_obj(lv_obj_t* obj1, lv_obj_t* obj2);
-void lv_image_buf_free(lv_image_dsc_t* dsc);
-void lv_image_buf_set_palette(lv_image_dsc_t* dsc, uint8_t id, struct lv_color32_t c);
 lv_obj_t* lv_image_create(lv_obj_t* parent);
 lv_cache_entry_t* lv_image_decoder_add_to_cache(lv_image_decoder_t* decoder, lv_image_cache_data_t* search_key, lv_draw_buf_t* decoded, void* user_data);
 void lv_image_decoder_close(lv_image_decoder_dsc_t* dsc);
@@ -3145,7 +3147,6 @@ void lv_tjpgd_deinit(void);
 void lv_tjpgd_init(void);
 int32_t lv_trigo_cos(int16_t angle);
 int32_t lv_trigo_sin(int16_t angle);
-void* lv_utils_bsearch(void* key, void* base, size_t n, size_t size, cmp cmp);
 char* lv_version_info(void);
 int lv_version_major(void);
 int lv_version_minor(void);
@@ -3162,6 +3163,7 @@ void* lv_zalloc(size_t size);
 void emul_lvgl_init(void);
 void emul_lvgl_destroy(void);
 bool emul_lvgl_export(const char *filename, bool pretty);
+char *emul_lvgl_to_str(const char *filename, bool pretty);
 void emul_lvgl_register_external_ptr(const void *ptr, const char *id, const char* type_hint);
 
 #ifdef __cplusplus

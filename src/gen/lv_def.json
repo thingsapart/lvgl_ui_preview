@@ -81393,7 +81393,7 @@
                         "name": "lv_grad_stop_t",
                         "json_type": "array",
                         "quals": [],
-                        "dim": "2"
+                    "dim": "2"
                     },
                     "json_type": "field",
                     "bitsize": null
