@@ -1,0 +1,19 @@
+[
+  {
+    "type": "button",
+    "width": [
+      {
+        "call": "lv_pct",
+        "args": [
+          100
+        ]
+      }
+    ],
+    "children": [
+      {
+        "type": "label",
+        "text": "Testing 1-2-1-2"
+      }
+    ]
+  }
+]

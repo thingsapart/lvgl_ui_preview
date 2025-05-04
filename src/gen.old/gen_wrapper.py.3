@@ -1,0 +1,2138 @@
+# gen_wrapper.py
+
+import json
+import argparse
+import os
+import re
+from collections import defaultdict
+import textwrap # For C code formatting
+
+# --- Configuration ---
+
+# Heuristics: Types that are almost always pointers managed by LVGL
+DEFAULT_OPAQUE_TYPE_PREFIXES = [
+    "lv_obj_t", "lv_style_t", "lv_font_t", "lv_theme_t",
+    "lv_timer_t", "lv_group_t", "lv_display_t", "lv_indev_t",
+    "lv_anim_t", "lv_anim_timeline_t",
+    "lv_scale_section_t", # Example of a sub-object
+    "lv_fragment_t", "lv_fragment_manager_t",
+    "lv_subject_t", "lv_observer_t",
+    "lv_draw_buf_t", # Often managed pointers
+    "lv_image_decoder_t",
+    "lv_image_decoder_dsc_t",
+    "lv_fs_file_t", # File handles usually opaque
+    "lv_fs_dir_t",
+    # Add other known opaque types/prefixes if needed
+]
+
+# Functions typically returning new opaque objects (in addition to 'create')
+CONSTRUCTOR_NAME_PATTERNS = [
+    r'^lv_([a-z0-9_]+)_create$',  # Standard create pattern
+    r'^lv_([a-z0-9_]+)_add_.*',  # Functions adding sub-elements like scale sections
+    r'^lv_theme_.*_init', # Theme initializers often return the theme
+    # Add specific function names if they act as constructors but don't fit patterns
+    "lv_group_create",
+    "lv_timer_create", # Although has callback, treat return as constructor if included
+    "lv_anim_timeline_create",
+    "lv_fragment_create",
+    "lv_subject_create_with_value", # If applicable
+    "lv_image_decoder_create",
+    "lv_fs_open",
+    "lv_anim_timeline_create",
+]
+
+# Functions initializing an object via pointer arg (usually first arg)
+INIT_FUNC_NAME_PATTERNS = [
+    r'^lv_([a-z0-9_]+)_init$',
+    r'^lv_style_init$', # Specific case
+    r'^lv_anim_init$',  # Specific case
+    r'^lv_subject_init_.*',
+]
+
+# Types that should *never* be treated as opaque pointers, even if heuristics match
+ALWAYS_CONCRETE_TYPES = [
+    "lv_color_t", "lv_opa_t", "lv_area_t", "lv_point_t", "lv_coord_t",
+    "lv_style_value_t", "lv_color_hsv_t", "lv_point_precise_t",
+    "lv_color16_t", "lv_color32_t", "lv_grad_dsc_t", "lv_base_dsc_t",
+    "lv_text_dsc_t", "lv_image_dsc_t", "lv_image_header_t",
+    "lv_draw_rect_dsc_t", "lv_draw_label_dsc_t", "lv_draw_image_dsc_t",
+    "lv_draw_line_dsc_t", "lv_draw_arc_dsc_t", "lv_draw_triangle_dsc_t",
+    "lv_draw_mask_rect_dsc_t", # Add other descriptor structs, simple value structs
+    "lv_result_t", # The enum typedef
+    "lv_mem_monitor_t",
+    "lv_sqrt_res_t",
+    "lv_event_code_t", # Enum typedef
+    "va_list", # Standard C type
+]
+
+
+# --- Helper Functions ---
+# Stores identifiers like "primitive:int", "enum:lv_align_t", "struct_ptr:lv_point_t"
+needed_marshalers = set()
+_debug = print
+
+def get_struct_dependencies(struct_info, all_filtered_struct_names, api_data, config):
+    """
+    Finds the names of other concrete structs that struct_info depends on.
+
+    Args:
+        struct_info: The dictionary for the struct to analyze.
+        all_filtered_struct_names: A set of names of all structs in config['filtered_structures'].
+        api_data: The full API JSON data.
+        config: The configuration dictionary.
+
+    Returns:
+        A set of struct names that struct_info depends on and are also in all_filtered_struct_names.
+    """
+    dependencies = set()
+    # _debug("DEP", struct_info)
+    if not struct_info or 'fields' not in struct_info:
+        return dependencies
+
+    for field in struct_info.get('fields', []):
+        field_type_info = field.get("type")
+        if not field_type_info:
+            continue
+
+        # Find the base type name of the field
+        #field_base_name = get_base_type_name(field_type_info) or field_type_info.get('name')
+        field_base_name = field_type_info.get('name')
+        # _debug("   FIELD", field_type_info, field_base_name)
+        if not field_base_name:
+            # _debug("     >> NO BASENAME", field_type_info, field_base_name)
+            continue
+
+        # Check if this base type is another struct in our filtered list
+        if field_base_name in all_filtered_struct_names and field_base_name != struct_info['name']:
+            # _debug("     >> in all_filtered_struct_names", field_type_info, field_base_name)
+            # Check if the dependency is actually a struct and concrete
+            dep_details = get_type_details({"name": field_base_name}, api_data)
+            if dep_details and (dep_details.get("json_type") == "struct" or dep_details.get("json_type") == "union"):
+                # Ensure the dependency itself is not opaque
+                if not is_opaque(dep_details, api_data, config):
+                     dependencies.add(field_base_name)
+
+    # _debug("<< DEP", struct_info.get('name'), dependencies)
+    return dependencies
+
+def sort_structs_by_dependency(struct_list, api_data, config):
+    """
+    Sorts a list of struct dictionaries based on dependencies using a bubble-sort-like approach.
+    Structs will be ordered so that dependencies appear before the structs that use them.
+
+    Args:
+        struct_list: The list of struct dictionaries (e.g., config['filtered_structures']).
+        api_data: The full API JSON data.
+        config: The configuration dictionary.
+
+    Returns:
+        The sorted list of struct dictionaries.
+    """
+    if not struct_list or len(struct_list) < 2:
+        return struct_list # No sorting needed for 0 or 1 elements
+
+    n = len(struct_list)
+    # Create a set of names for quick lookups
+    all_struct_names = {s['name'] for s in struct_list if 'name' in s}
+    # Pre-calculate dependencies to avoid redundant lookups inside the loop
+    struct_deps = {s['name']: get_struct_dependencies(s, all_struct_names, api_data, config)
+                   for s in struct_list if 'name' in s}
+    # _debug("STRUCT DEPS", struct_deps)
+
+    # _debug(f"  Attempting to sort {n} structs by dependency...")
+    swapped = True
+    passes = 0
+    max_passes = n * n # Failsafe against infinite loops (though shouldn't happen without cycles)
+
+    while swapped and passes < max_passes:
+        swapped = False
+        passes += 1
+        for i in range(n - 1):
+            struct1 = struct_list[i]
+            name1 = struct1.get('name')
+            for j in range(i + 1, n - 1):
+                struct2 = struct_list[j]
+                name2 = struct2.get('name')
+
+                if not name1 or not name2: continue # Skip if names are missing
+
+                # Check if struct1 depends on struct2
+                # Use the pre-calculated dependencies
+                deps1 = struct_deps.get(name1, set())
+                # _debug("DEPS:", name1, name2, "deps 1 => ", deps1,name2 in deps1)
+
+                if name2 in deps1:
+                    # _debug("SWAPPED:", name1, name2, "deps 1 => ", deps1,name2 in deps1)
+                    # struct1 depends on struct2, but struct1 is currently *before* struct2.
+                    # This is the WRONG order. Swap them.
+                    struct_list[i], struct_list[i+1] = struct_list[i+1], struct_list[i]
+                    swapped = True
+                    # _debug(f"    Pass {passes}, Swapped: '{name1}' depended on '{name2}'") # Debug print
+
+        if not swapped:
+            print(f"  Struct sorting finished after {passes} passes.")
+
+    if passes >= max_passes:
+         print(f"  Warning: Struct sorting reached max passes ({max_passes}). Possible cyclic dependency?")
+
+    return struct_list
+
+def sanitize_name(name):
+    """Removes leading underscores and potentially other invalid chars for C identifiers."""
+    if name is None:
+        return "unnamed_arg"
+    name = name.lstrip('_')
+    name = re.sub(r'[^a-zA-Z0-9_]', '', name)
+    if not name or name[0].isdigit():
+        name = "arg_" + name
+    # Avoid C keywords (add more if needed)
+    keywords = {
+        "auto", "break", "case", "char", "const", "continue", "default", "do",
+        "double", "else", "enum", "extern", "float", "for", "goto", "if",
+        "inline", "int", "long", "register", "restrict", "return", "short",
+        "signed", "sizeof", "static", "struct", "switch", "typedef", "union",
+        "unsigned", "void", "volatile", "while", "_Alignas", "_Alignof",
+        "_Atomic", "_Bool", "_Complex", "_Generic", "_Imaginary", "_Noreturn",
+        "_Static_assert", "_Thread_local"
+    }
+    if name in keywords:
+        name = name + "_"
+    return name
+
+def matches_prefix(name, prefixes):
+    """Checks if a name starts with any of the given prefixes."""
+    if not name:
+        return False
+    for prefix in prefixes:
+        if name.startswith(prefix):
+            return True
+    return False
+
+def get_base_type_name(type_info):
+    """Recursively finds the base name of a type (handling pointers, arrays)."""
+    if not type_info or not isinstance(type_info, dict):
+        return None
+    current_type = type_info
+    while current_type:
+        json_type = current_type.get("json_type")
+        if json_type in ("pointer", "array", "ret_type"):
+            current_type = current_type.get("type")
+        elif json_type == "typedef":
+            # Return the typedef name itself, not the underlying type's name here
+            # unless it's a pointer/array typedef
+            if 'type' in current_type and current_type['type'].get('json_type') in ('pointer', 'array'):
+                 current_type = current_type.get("type") # Look through pointer/array typedefs
+            else:
+                return current_type.get("name") # Return the typedef name like lv_coord_t
+        else:
+            # Found base type (struct, enum, primitive, etc.)
+            return current_type.get("name")
+    return None # Should not happen if type_info is valid
+
+def get_type_details(type_info, api_data):
+    """Gets full definition (like struct fields or enum members) by name lookup."""
+    # Find the ultimate base name first (e.g., from lv_obj_t** get lv_obj_t)
+    q = [type_info]
+    visited_names = set() # Prevent infinite loops with recursive typedefs
+    base_name = None
+    while q:
+        curr = q.pop(0)
+        if not curr or not isinstance(curr, dict): continue
+        name = curr.get("name")
+        json_type = curr.get("json_type")
+
+        if name and name not in visited_names:
+             visited_names.add(name)
+             if json_type not in ("pointer", "array", "ret_type"):
+                 base_name = name # Found a potential base name
+                 break # Stop searching deeper for name
+
+        if "type" in curr:
+            q.append(curr["type"])
+
+    if not base_name:
+        # Try the original name if the loop didn't find a non-pointer base
+        base_name = type_info.get("name") if isinstance(type_info, dict) else None
+        if not base_name:
+            return None
+
+    # Search in all relevant categories for this base name
+    for category in ["enums", "structures", "unions", "typedefs", "function_pointers", "forward_decls", "primitive_types", "stdlib_types", "special_types"]:
+        for item in api_data.get(category, []):
+            # Use the name from the item, which might be the internal name (_lv_...)
+            item_name = item.get("name")
+            if item_name == base_name:
+                # Don't resolve typedefs further here, return the typedef def itself
+                # The caller (e.g., is_opaque, get_c_type_name) will handle resolution if needed
+                return item # Return the definition (struct, enum, typedef, etc.)
+    return None # Not found (might be primitive/stdlib type)
+
+def find_typedef_for_base(base_name, api_data, config):
+    """Finds if a typedef exists in the filtered list for a given base struct/enum/union name."""
+    for typedef in config['filtered_typedefs']:
+        underlying_type = typedef.get("type")
+        if underlying_type:
+            # Check if the typedef's direct underlying type name matches
+            current_type = underlying_type
+            resolved_base_name = None
+            # Simple check first for direct mapping (e.g., typedef struct _lv_foo_t lv_foo_t)
+            if current_type.get("name") == base_name and current_type.get("json_type") in ("struct", "union", "enum"):
+                 resolved_base_name = base_name
+            # Need to handle deeper nesting? Probably not needed if get_type_details is robust.
+            # Let's keep it simple for now.
+
+            # If the underlying base matches, return the typedef's name
+            if resolved_base_name == base_name:
+                # Ensure the typedef itself isn't designated opaque separately
+                if not is_opaque(typedef, api_data, config):
+                    return typedef["name"]
+    return None
+
+def is_opaque(type_info, api_data, config):
+    """Determines if a type should be treated as opaque."""
+    base_name = get_base_type_name(type_info)
+    if not base_name:
+        return False
+
+    # 0. Check if explicitly designated non-opaque
+    if base_name in ALWAYS_CONCRETE_TYPES:
+        return False
+
+    # Get the actual definition of the base type
+    details = get_type_details({"name": base_name}, api_data) # Use stub to find details by name
+
+    # --- Early Exits for Non-Opaque Categories ---
+    if details:
+        json_type = details.get("json_type")
+        # Enums and Function Pointers are NEVER opaque in this model
+        if json_type in ("enum", "function_pointer"):
+            return False
+
+    # --- Standard Checks ---
+    # 1. Explicitly configured prefixes (strongest indicator)
+    if matches_prefix(base_name, config['opaque_type_prefixes']):
+        # Double check it's not in the ALWAYS_CONCRETE list
+        if base_name not in ALWAYS_CONCRETE_TYPES:
+             return True
+
+    # 2. Check typedefs: Some typedefs might point to opaque structs
+    if details and details.get("json_type") == "typedef":
+         underlying_type = details.get("type")
+         if underlying_type:
+             # If typedef points directly to void* AND is in default opaque list (like lv_font_t)
+             if underlying_type.get("json_type") == "pointer":
+                 pointee = underlying_type.get("type")
+                 if pointee and pointee.get("name") == "void" and pointee.get("json_type") == "primitive_type":
+                     # Only treat typedef void* as opaque if in the explicit list
+                     if matches_prefix(base_name, DEFAULT_OPAQUE_TYPE_PREFIXES):
+                         # Double check it's not in the ALWAYS_CONCRETE list
+                         if base_name not in ALWAYS_CONCRETE_TYPES:
+                             return True
+
+             # Recurse on the underlying type of the typedef *unless* it's primitive/stdlib/enum/funcptr or always concrete
+             underlying_base_name = get_base_type_name(underlying_type)
+             if underlying_base_name not in ALWAYS_CONCRETE_TYPES:
+                 underlying_details = get_type_details(underlying_type, api_data)
+                 if underlying_details and underlying_details.get("json_type") not in ("stdlib_type", "primitive_type", "enum", "function_pointer"):
+                      # Check opacity of the underlying type definition
+                      return is_opaque(underlying_type, api_data, config)
+
+    # 3. Forward declaration implies opacity if it's not later defined as a struct/union we include
+    if details and details.get("json_type") == "forward_decl":
+         # Check if a full struct/union definition exists *and is included*
+         defined_struct = next((s for s in config['filtered_structures'] if s.get("name") == base_name), None)
+         defined_union = next((u for u in config['filtered_unions'] if u.get("name") == base_name), None)
+         # If it's not defined (or defined but excluded), treat as opaque
+         if not defined_struct and not defined_union:
+              # Double check it's not in the ALWAYS_CONCRETE list
+              if base_name not in ALWAYS_CONCRETE_TYPES:
+                  return True
+
+    # 4. Structs/Unions returned *by pointer* from constructors
+    # Check only if 'details' corresponds to a struct or union definition
+    if details and details.get("json_type") in ("struct", "union"):
+         for func in config['filtered_functions']:
+             ret_type_wrapper = func.get("type", {}) # This is the "ret_type" wrapper
+             ret_type_actual = ret_type_wrapper.get("type", {}) # This is the actual return type (e.g., pointer)
+
+             # *** Check if function returns a POINTER to this type ***
+             if ret_type_actual and ret_type_actual.get("json_type") == "pointer":
+                 pointee_type = ret_type_actual.get("type")
+                 pointee_name = get_base_type_name(pointee_type)
+                 if pointee_name == base_name:
+                     # Check if the function matches constructor patterns
+                     for pattern in CONSTRUCTOR_NAME_PATTERNS:
+                         if re.match(pattern, func["name"]):
+                              # Double check it's not in the ALWAYS_CONCRETE list
+                              if base_name not in ALWAYS_CONCRETE_TYPES:
+                                 return True # Constructor returning pointer to this type -> Opaque
+                     # Break inner loop once match is found for this function
+                     break
+
+    # 5. Structs/Unions passed *by pointer* to init functions (usually first arg)
+    # Check only if 'details' corresponds to a struct or union definition
+    if details and details.get("json_type") in ("struct", "union"):
+         for func in config['filtered_functions']:
+             args = func.get("args")
+             if args and len(args) > 0:
+                 first_arg = args[0]
+                 arg_type = first_arg.get("type", {})
+                 # *** Check if first arg is a POINTER to this type ***
+                 if arg_type.get("json_type") == "pointer":
+                     pointee_type = arg_type.get("type")
+                     pointee_name = get_base_type_name(pointee_type)
+                     if pointee_name == base_name:
+                         # Check if the function matches init patterns
+                         for pattern in INIT_FUNC_NAME_PATTERNS:
+                              if re.match(pattern, func["name"]):
+                                   # Double check it's not in the ALWAYS_CONCRETE list
+                                   if base_name not in ALWAYS_CONCRETE_TYPES:
+                                       return True # Init function taking pointer to this type -> Opaque
+                         # Break inner loop once match is found for this function
+                         break
+
+    # Default to non-opaque
+    return False
+
+def get_type_info_flags(type_info, api_data, config):
+    """ Gets flags (is_pointer, is_enum, etc.) for a type_info object """
+    flags = {
+        "is_pointer": False,
+        "is_array": False, # Array handled as pointer often, but flag might be useful
+        "is_enum": False,
+        "is_struct": False,
+        "is_union": False,
+        "is_opaque": False,
+        "is_function_pointer": False,
+        "is_primitive": False,
+        "is_stdlib": False,
+        "is_void": False,
+        "is_string": False, # Special case for const char* / char*
+        "is_va_list": False, # Special case for va_list
+        "is_ellipsis": False,
+    }
+
+    if not type_info or not isinstance(type_info, dict):
+        return flags
+
+    json_type = type_info.get("json_type")
+    base_name = get_base_type_name(type_info)
+    details = get_type_details(type_info, api_data) # Get details of the ultimate base type
+
+    # Handle pointer/array first
+    if json_type == "pointer":
+        flags["is_pointer"] = True
+        pointee_type_info = type_info.get("type")
+        pointee_base_name = get_base_type_name(pointee_type_info)
+        pointee_details = get_type_details(pointee_type_info, api_data)
+
+        if pointee_base_name == "char":
+            flags["is_string"] = True
+        if pointee_base_name == "void":
+            flags["is_void"] = True # Pointer to void
+        if pointee_details and pointee_details.get("json_type") == "function_pointer":
+            flags["is_function_pointer"] = True # Pointer to function
+
+    elif json_type == "array":
+        flags["is_array"] = True
+        # Treat arrays like pointers for marshaling purposes generally
+        flags["is_pointer"] = True
+        # Could check element type here if needed
+
+    elif json_type == "special_type" and type_info.get("name") == "ellipsis":
+        flags["is_ellipsis"] = True
+        return flags # Ellipsis is its own category
+
+    # Now check the base type
+    flags["is_opaque"] = is_opaque(type_info, api_data, config)
+    if flags["is_opaque"]:
+        # Opaque types are generally handled as pointers, ensure flag is set
+        flags["is_pointer"] = True
+        return flags # Opaque overrides other flags for marshaling
+
+    if base_name == "va_list":
+        flags["is_va_list"] = True
+        return flags # va_list treated specially
+
+    if details:
+        detail_json_type = details.get("json_type")
+        if detail_json_type == "enum":
+            flags["is_enum"] = True
+        elif detail_json_type == "struct":
+            flags["is_struct"] = True
+        elif detail_json_type == "union":
+            flags["is_union"] = True
+        elif detail_json_type == "function_pointer":
+            # Non-pointer function type doesn't make sense, but check anyway
+            flags["is_function_pointer"] = True
+        elif detail_json_type == "primitive_type":
+            flags["is_primitive"] = True
+            if base_name == "void":
+                flags["is_void"] = True # Base type is void
+            if base_name == "char" and not flags["is_pointer"]: # Single char, not char*
+                 pass # Don't set is_string for single char
+        elif detail_json_type == "stdlib_type":
+            flags["is_stdlib"] = True
+    elif base_name in ["int", "float", "double", "bool", "char", "short", "long", "unsigned", "signed",
+                      "int8_t", "uint8_t", "int16_t", "uint16_t", "int32_t", "uint32_t", "int64_t", "uint64_t",
+                      "size_t", "intptr_t", "uintptr_t"]:
+        # Handle built-in primitives not explicitly in api_data's primitive_types
+        flags["is_primitive"] = True
+
+    return flags
+
+def get_type_info_flags(type_info, api_data, config):
+    """ Gets flags (is_pointer, is_enum, etc.) for a type_info object """
+    flags = {
+        "is_pointer": False,
+        "is_array": False, # Array handled as pointer often, but flag might be useful
+        "is_enum": False,
+        "is_struct": False,
+        "is_union": False,
+        "is_opaque": False,
+        "is_function_pointer": False,
+        "is_primitive": False,
+        "is_stdlib": False, # Often treated like primitive
+        "is_void": False,
+        "is_string": False, # Special case for const char* / char*
+        "is_va_list": False, # Special case for va_list
+        "is_ellipsis": False,
+        "base_type_name": None, # Store the original base type name from get_base_type_name
+        "element_type_info": None, # Store element type for arrays/pointers
+        "c_type_resolved": None, # Store the fully resolved C type string (no const/dims/typedefs)
+    }
+
+    if not type_info or not isinstance(type_info, dict):
+        return flags
+
+    json_type = type_info.get("json_type")
+    base_name = get_base_type_name(type_info)
+    flags["base_type_name"] = base_name # Store original base name
+
+    # Resolve typedefs fully to get the underlying primitive/struct/etc. name
+    current_type = type_info
+    resolved_base_name = base_name
+    resolved_details = get_type_details(type_info, api_data)
+
+    # Limit typedef resolution depth to prevent infinite loops on tricky definitions
+    max_depth = 10
+    depth = 0
+    while resolved_details and resolved_details.get("json_type") == "typedef" and depth < max_depth:
+        underlying_type = resolved_details.get("type")
+        if not underlying_type: break # Typedef to nothing? Stop.
+        resolved_base_name_next = get_base_type_name(underlying_type) # Get name of underlying type
+        resolved_details_next = get_type_details(underlying_type, api_data) # Get details of underlying type
+        # Check if resolution is stuck (e.g., typedef A B; typedef B A;)
+        if resolved_base_name_next == resolved_base_name and resolved_details_next == resolved_details:
+            # print(f"Warning: Typedef resolution stuck for '{base_name}'. Using last resolved: '{resolved_base_name}'")
+            break
+        resolved_base_name = resolved_base_name_next
+        resolved_details = resolved_details_next
+        current_type = underlying_type # Continue resolution with the underlying type
+        depth += 1
+    if depth >= max_depth:
+        print(f"Warning: Typedef resolution exceeded max depth for '{base_name}'. Using last resolved: '{resolved_base_name}'")
+
+
+    flags["c_type_resolved"] = resolved_base_name or base_name # Store the final non-typedef name
+
+    # Handle pointer/array first
+    if json_type == "pointer":
+        flags["is_pointer"] = True
+        pointee_type_info = type_info.get("type")
+        flags["element_type_info"] = pointee_type_info # Store pointee info
+        pointee_base_name = get_base_type_name(pointee_type_info)
+        pointee_details = get_type_details(pointee_type_info, api_data)
+
+        # Check pointee type
+        if pointee_base_name == "char": flags["is_string"] = True
+        if pointee_base_name == "void": flags["is_void"] = True # Pointer to void
+        if pointee_details and pointee_details.get("json_type") == "function_pointer": flags["is_function_pointer"] = True
+
+    elif json_type == "array":
+        flags["is_array"] = True
+        # Treat arrays like pointers for marshaling purposes generally
+        flags["is_pointer"] = True # Array decays to pointer in function args
+        element_type_info = type_info.get("type")
+        flags["element_type_info"] = element_type_info # Store element info
+
+    elif json_type == "special_type" and type_info.get("name") == "ellipsis":
+        flags["is_ellipsis"] = True
+        return flags # Ellipsis is its own category
+
+    # Check the original base type for specific cases before checking resolved type
+    if base_name == "va_list": # Check original name for va_list
+        flags["is_va_list"] = True
+        return flags
+
+    # Check opacity based on the original name first
+    # Opaque flag overrides other classifications for marshaling
+    flags["is_opaque"] = is_opaque(type_info, api_data, config)
+    if flags["is_opaque"]:
+        flags["is_pointer"] = True # Opaque types are handled as pointers
+        # Use original base name for opaque type identification
+        flags["c_type_resolved"] = base_name # Override resolved name if opaque
+        return flags
+
+    # Use the fully resolved details for further classification
+    if resolved_details:
+        resolved_json_type = resolved_details.get("json_type")
+        if resolved_json_type == "enum": flags["is_enum"] = True
+        elif resolved_json_type == "struct": flags["is_struct"] = True
+        elif resolved_json_type == "union": flags["is_union"] = True
+        elif resolved_json_type == "function_pointer": flags["is_function_pointer"] = True # Base type is FP typedef
+        elif resolved_json_type in ("primitive_type", "stdlib_type"):
+            flags["is_primitive"] = True # Treat stdlib like primitive
+            if flags["c_type_resolved"] == "void" and not flags["is_pointer"]: flags["is_void"] = True # Base type is void
+
+    # Fallback check for known primitive names if details weren't found/classified
+    elif not flags["is_enum"] and not flags["is_struct"] and not flags["is_union"] and \
+         flags["c_type_resolved"] in ["int", "float", "double", "bool", "char", "short", "long", "unsigned", "signed",
+                                      "int8_t", "uint8_t", "int16_t", "uint16_t", "int32_t", "uint32_t", "int64_t", "uint64_t",
+                                      "size_t", "intptr_t", "uintptr_t"]:
+        flags["is_primitive"] = True
+
+    return flags
+
+def split_c_type_name(ty):
+    """Splits type like 'int[10]' into ('int', '[10]'). Handles pointers."""
+    if not ty: return ('', '')
+    match = re.match(r'^(.*\S)(\s*\[.*?\])$', ty) # Match array dims
+    if match:
+        return match.group(1).rstrip(), match.group(2).strip()
+    else:
+        # Handle potential pointer suffixes (though get_c_type_name should handle it)
+        base = ty.replace('*', '').replace('const', '').strip()
+        suffix = '*' * ty.count('*')
+        return base, suffix # Return pointers as suffix for consistency
+
+
+def get_c_type_name(type_info, api_data, config, use_opaque_typedef=True,
+                    remove_const=False, strip_array_dim=False):
+    """Gets the C type string for a type_info object, handling const, pointers, opaque types.
+       If strip_array_dim is True, returns only the base type for arrays (e.g., "int" for "int[10]").
+    """
+    if not type_info or not isinstance(type_info, dict):
+        #return "void /* unknown */"
+        return None
+
+    json_type = type_info.get("json_type")
+    quals = type_info.get("quals", [])
+    const_prefix = "const " if "const" in quals and not remove_const else ""
+
+    # Handle ellipsis early
+    if json_type == "special_type" and type_info.get("name") == "ellipsis":
+        return "..."
+
+    # Handle pointers recursively
+    if json_type == "pointer":
+        pointee_type = type_info.get("type")
+        # Special case: const char * -> const char * (treat as string)
+        pointee_base_name = get_base_type_name(pointee_type)
+        pointee_details = get_type_details(pointee_type, api_data)
+        pointee_json_type = pointee_details.get("json_type") if pointee_details else (pointee_type.get("json_type") if pointee_type else '')
+
+
+        if const_prefix and pointee_base_name == 'char' and pointee_json_type == "primitive_type":
+             # Pass remove_const=False to keep "const char" if originally present
+             pointee_str = get_c_type_name(pointee_type, api_data, config, use_opaque_typedef, remove_const=False, strip_array_dim=strip_array_dim)
+             return f"{pointee_str}*" # Const is handled by pointee_str
+        else:
+             # Remove const from the pointee type string since it applies to the pointer itself
+             pointee_str = get_c_type_name(pointee_type, api_data, config, use_opaque_typedef, remove_const=True, strip_array_dim=strip_array_dim)
+             return f"{const_prefix}{pointee_str}*" # Add const for the pointer if present
+
+    # Handle arrays
+    elif json_type == "array":
+        base_type_info = type_info.get("type")
+        base_type_str = get_c_type_name(base_type_info, api_data, config, use_opaque_typedef, remove_const=True, strip_array_dim=strip_array_dim) # Const applies to elements
+        if not base_type_str: base_type_str = type_info.get("name") # Fallback
+
+        if strip_array_dim:
+             return f"{const_prefix}{base_type_str}" # Return only element type
+
+        dim = type_info.get("dim")
+        # Heuristic: If dim is null (unknown) and it's a basic type, treat as pointer
+        if dim is None:
+            base_name = get_base_type_name(base_type_info)
+            details = get_type_details(base_type_info, api_data)
+            json_type_detail = details.get("json_type") if details else (base_type_info.get("json_type") if base_type_info else '')
+
+            if json_type_detail in ("primitive_type", "stdlib_type"):
+                 return f"{const_prefix}{base_type_str}*" # Treat as pointer
+
+        array_suffix = f"[{dim}]" if dim else "[]" # Use [] for unknown size C arrays
+        return f"{const_prefix}{base_type_str}{array_suffix}" # Const applies to the array elements
+
+
+    # --- Base Types (non-pointer, non-array) ---
+    base_name = type_info.get("name")
+    if not base_name:
+         if type_info.get("name") == "void" and type_info.get("json_type") == "primitive_type":
+             return "void"
+         else:
+             return "/* unknown_base */"
+
+
+    # Check for enum/func_ptr *before* checking opaque
+    details = get_type_details(type_info, api_data)
+    if details:
+         json_type_detail = details.get("json_type")
+         if json_type_detail == "enum":
+             # Find the best name: use typedef if available and included, else the enum's own name
+             typedef_name = find_typedef_for_base(details['name'], api_data, config)
+             enum_name_to_use = typedef_name if typedef_name else details['name']
+             return f"{const_prefix}{enum_name_to_use}"
+         elif json_type_detail == "function_pointer":
+              # Use the function pointer type name directly
+              fp_name = details.get("name")
+              if fp_name:
+                   return f"{const_prefix}{fp_name}"
+
+
+    # Check if opaque *after* ruling out enum/func_ptr
+    if use_opaque_typedef and is_opaque(type_info, api_data, config):
+        opaque_name = f"{sanitize_name(base_name)}" # Use original name (sanitized)
+        # Opaque types in C are typedef'd to cJSON*, so use the typedef name
+        return f"{const_prefix}{opaque_name}"
+
+    # Resolve typedefs if not opaque
+    if details and details.get("json_type") == "typedef":
+        # We already checked if the typedef *itself* should be opaque or is enum/func_ptr.
+        # Now, resolve to the underlying type if it's not a simple primitive/stdlib mapping.
+        underlying_type_info = details.get("type")
+        if underlying_type_info:
+             underlying_details = get_type_details(underlying_type_info, api_data)
+             underlying_json_type = underlying_details.get("json_type") if underlying_details else (underlying_type_info.get("json_type") if underlying_type_info else '')
+
+
+             # If typedef maps to a primitive/stdlib type, use the typedef name (e.g., lv_coord_t)
+             if underlying_json_type in ("stdlib_type", "primitive_type"):
+                 return f"{const_prefix}{base_name}"
+             # If it maps to a non-opaque struct/union that we are generating, use typedef name
+             elif underlying_json_type in ("struct", "union"):
+                  if not is_opaque(underlying_type_info, api_data, config):
+                      return f"{const_prefix}{base_name}" # Use typedef name like lv_point_t
+             # Otherwise, resolve the underlying type's name string
+             else:
+                  # Pass 'remove_const' and 'strip_array_dim' from the original call
+                  return get_c_type_name(underlying_type_info, api_data, config, use_opaque_typedef, remove_const=remove_const, strip_array_dim=strip_array_dim)
+
+
+    # Handle concrete structs/unions explicitly if not handled by typedef
+    if details and details.get("json_type") == "struct":
+        # Prefer typedef name if available and this struct isn't opaque
+        typedef_name = find_typedef_for_base(details['name'], api_data, config)
+        if typedef_name:
+            return f"{const_prefix}{typedef_name}"
+        else:
+            # Fallback to "struct <name>"
+            return f"{const_prefix}struct {details['name']}"
+
+    if details and details.get("json_type") == "union":
+        typedef_name = find_typedef_for_base(details['name'], api_data, config)
+        if typedef_name:
+            return f"{const_prefix}{typedef_name}"
+        else:
+            return f"{const_prefix}union {details['name']}"
+
+
+    # Standard types: primitives, stdlib types, or lvgl_type that weren't opaque/typedef'd/struct/union/enum
+    if base_name:
+        return f"{const_prefix}{base_name}"
+
+    # Fallback for anything unhandled
+    return f"/* unhandled_type: {json.dumps(type_info)} */"
+
+def get_clean_c_type_name(type_info, api_data, config):
+    """Gets the C type string without const qualifiers or array dimensions, suitable for function names."""
+    c_name = get_c_type_name(type_info, api_data, config, use_opaque_typedef=True, remove_const=True, strip_array_dim=True)
+    if c_name:
+        # Remove potential remaining pointer symbols or prefixes like 'struct'/'union' for the marshaler name
+        c_name = c_name.replace('*', '').replace('struct ', '').replace('union ', '').strip()
+    return c_name
+
+
+def get_function_type(func_info, api_data, config):
+    """Classifies function as constructor, init, setter, or other."""
+    name = func_info["name"]
+    ret_type_wrapper = func_info.get("type", {})
+    ret_type_actual = ret_type_wrapper.get("type", {}) # Actual return type info
+    is_ret_ptr = ret_type_actual.get("json_type") == "pointer"
+    ret_pointee_type = ret_type_actual.get("type") if is_ret_ptr else None
+
+    # Check for init functions first
+    for pattern in INIT_FUNC_NAME_PATTERNS:
+        if re.match(pattern, name):
+            # Verify first arg is a pointer to a type we determined is opaque
+            if func_info.get("args") and len(func_info["args"]) > 0:
+                first_arg = func_info["args"][0]
+                first_arg_type = first_arg.get("type")
+                if first_arg_type and first_arg_type.get("json_type") == "pointer":
+                     pointee_type = first_arg_type.get("type")
+                     if is_opaque(pointee_type, api_data, config):
+                         return "init"
+
+    # Check for constructors
+    for pattern in CONSTRUCTOR_NAME_PATTERNS:
+        if re.match(pattern, name):
+             # Check if return type is a pointer to an opaque type
+             if is_ret_ptr and ret_pointee_type and is_opaque(ret_pointee_type, api_data, config):
+                 return "constructor"
+
+    # Check for setters
+    # Heuristic 1: Name contains "set", "add", "remove", "enable/disable", etc. AND First arg is opaque ptr
+    setter_keywords = ["_set_", "_add_", "_remove_", "_enable", "_disable", "_update"]
+    is_potential_setter_name = any(kw in name for kw in setter_keywords) or name.startswith("lv_style_set_") or name.startswith("lv_obj_set_style_")
+
+    if is_potential_setter_name:
+        if func_info.get("args") and len(func_info["args"]) > 0:
+             first_arg = func_info["args"][0]
+             first_arg_type = first_arg.get("type")
+             # Check if first arg is a pointer to an opaque type
+             if first_arg_type and first_arg_type.get("json_type") == "pointer":
+                  pointee_type = first_arg_type.get("type")
+                  if is_opaque(pointee_type, api_data, config):
+                      # Typically void return, but allow others for now
+                      return "setter"
+
+    # Heuristic 2: Function takes an opaque pointer as first arg and modifies state (might catch more)
+    # This is harder to detect reliably without more semantics. Stick to name/arg pattern.
+
+    return "other" # Could be getters, utilities, etc.
+
+
+def get_marshal_function_call(type_info, api_data, config, value_c_expr, needed_marshalers, arg_name_hint="?"):
+    """
+    Determines the specific C marshaler function call string for a given type and C value expression.
+    Adds the required marshaler identifier to the `needed_marshalers` set.
+
+    Args:
+        type_info: The type information dictionary from the JSON.
+        api_data: Full API data.
+        config: Configuration dictionary.
+        value_c_expr: The C expression representing the value to marshal (e.g., "x", "obj", "&color").
+        needed_marshalers: The set to add required marshaler identifiers to.
+        arg_name_hint: Original argument name for error messages.
+
+    Returns:
+        A string containing the C function call (e.g., "marshal_int32_t(x)")
+        or the fallback marshaler call if unsupported.
+    """
+    flags = get_type_info_flags(type_info, api_data, config)
+    # Use the original typedef name if available and not opaque for user-friendliness in C,
+    c_type_str_orig = get_c_type_name(type_info, api_data, config, use_opaque_typedef=True) or "unknown"
+    # Use resolved name for internal marshaler naming.
+    c_type_resolved = flags['c_type_resolved'] or "unknown" # Use the fully resolved base name
+    sanitized_c_type_resolved = sanitize_name(c_type_resolved)
+
+    # --- Dispatch Logic ---
+
+    # 1. Ellipsis / Varargs
+    if flags["is_ellipsis"]:
+        needed_marshalers.add("ellipsis")
+        return f"marshal_ellipsis(/* {value_c_expr} */)"
+
+    # 2. va_list
+    if flags["is_va_list"]:
+        needed_marshalers.add("va_list")
+        return f"marshal_va_list(/* {value_c_expr} */)"
+
+    # 3. Opaque Pointers
+    if flags["is_opaque"]:
+        needed_marshalers.add("opaque_pointer")
+        # Use the original type name (likely the public typedef) for the hint
+        opaque_type_name = flags["base_type_name"] or c_type_resolved
+        return f"marshal_opaque_pointer((const void*){value_c_expr}, \"{opaque_type_name}\")"
+
+    # 4. Strings (const char* / char*)
+    if flags["is_string"]:
+        needed_marshalers.add("string")
+        return f"marshal_string({value_c_expr})"
+
+    # 5. Arrays decaying to pointers
+    if flags["is_array"]: # Note: is_pointer will also be true
+        element_type_info = flags["element_type_info"]
+        element_flags = get_type_info_flags(element_type_info, api_data, config) if element_type_info else {}
+        # Use resolved name of the *element* type for marshaler name/ID
+        element_c_type_resolved = element_flags.get('c_type_resolved') or "unknown"
+        sanitized_element_type = sanitize_name(element_c_type_resolved)
+        # Get the C type name of the element for the marshaler signature
+        element_c_type_name = get_c_type_name(element_type_info, api_data, config, use_opaque_typedef=True, remove_const=True) or element_c_type_resolved
+
+        # Generate specific array pointer marshaler based on element type
+        marshaler_id = f"array_ptr:{element_c_type_name}" # ID includes element type name
+        needed_marshalers.add(marshaler_id)
+        return f"marshal_array_{sanitized_element_type}_pointer({value_c_expr})"
+
+    # 6. Enums (passed by value)
+    if flags["is_enum"] and not flags["is_pointer"]:
+        # Use the original C type string (likely the typedef) for the C function arg type and ID
+        enum_c_type_name = get_c_type_name(type_info, api_data, config, use_opaque_typedef=True, remove_const=True) or c_type_resolved
+        sanitized_enum_name = sanitize_name(enum_c_type_name)
+        marshaler_id = f"enum:{enum_c_type_name}" # Use the C type name in the ID
+        needed_marshalers.add(marshaler_id)
+        return f"marshal_enum_{sanitized_enum_name}({value_c_expr})"
+
+    # 7. Concrete Structs
+    if flags["is_struct"] and not flags["is_opaque"]:
+        struct_c_type_name = get_c_type_name(type_info, api_data, config, use_opaque_typedef=True, remove_const=True) or c_type_resolved
+        sanitized_struct_name = sanitize_name(struct_c_type_name)
+        if flags["is_pointer"]:
+            marshaler_id = f"struct_ptr:{struct_c_type_name}"
+            needed_marshalers.add(marshaler_id)
+            # Add dependency on the value marshaler (which pointer marshaler calls)
+            needed_marshalers.add(f"struct_val:{struct_c_type_name}") # <<< Ensure value marshaler is added
+            return f"marshal_struct_{sanitized_struct_name}_pointer({value_c_expr})"
+        else:
+            marshaler_id = f"struct_val:{struct_c_type_name}"
+            needed_marshalers.add(marshaler_id)
+            return f"marshal_struct_{sanitized_struct_name}_value({value_c_expr})"
+
+    # 8. Concrete Unions
+    if flags["is_union"] and not flags["is_opaque"]:
+        union_c_type_name = get_c_type_name(type_info, api_data, config, use_opaque_typedef=True, remove_const=True) or c_type_resolved
+        sanitized_union_name = sanitize_name(union_c_type_name)
+        if flags["is_pointer"]:
+            marshaler_id = f"union_ptr:{union_c_type_name}"
+            needed_marshalers.add(marshaler_id)
+            # Add dependency on the value marshaler
+            needed_marshalers.add(f"union_val:{union_c_type_name}") # <<< Ensure value marshaler is added
+            return f"marshal_union_{sanitized_union_name}_pointer({value_c_expr})"
+        else:
+            marshaler_id = f"union_val:{union_c_type_name}"
+            needed_marshalers.add(marshaler_id)
+            return f"marshal_union_{sanitized_union_name}_value({value_c_expr})"
+
+    # 9. Function Pointers (passed by pointer/value?)
+    if flags["is_function_pointer"]:
+        fp_type_name = flags["base_type_name"] or c_type_resolved # Use the typedef name if available
+        needed_marshalers.add("function_pointer")
+        # Value expression might be the pointer itself, or a variable holding it
+        return f"marshal_function_pointer((const void*){value_c_expr}, \"{fp_type_name}\")"
+
+    # 10. Basic Primitive Types (passed by value)
+    if flags["is_primitive"] and not flags["is_pointer"]:
+        # Map C primitive names (including resolved LVGL typedefs) to marshaler names
+        primitive_map = {
+            "bool": "bool",
+            "char": "char", "signed char": "char", "int8_t": "char",
+            "unsigned char": "uchar", "uint8_t": "uchar",
+            "short": "short", "signed short": "short", "int16_t": "short",
+            "unsigned short": "ushort", "uint16_t": "ushort",
+            "int": "int", "signed int": "int", "int32_t": "int",
+            "unsigned int": "uint", "uint32_t": "uint",
+            "long": "long", "signed long": "long", "intptr_t": "long", "int64_t": "long", # Map 64bit explicitly if needed
+            "unsigned long": "ulong", "uintptr_t": "ulong", "size_t": "ulong", "uint64_t": "ulong", # Map 64bit explicitly if needed
+            "float": "float",
+            "double": "double",
+            # Map LVGL typedefs to base primitives using the *resolved* name
+            "lv_opa_t": "uchar",    # uint8_t
+            "lv_state_t": "short",  # int16_t (or check API json if different)
+            "lv_coord_t": "int",    # int32_t (usually)
+            "lv_res_t": "uint",     # uint8_t (lv_result_t usually) - CHECK THIS - lv_res_t is enum
+                                    # Let's remove lv_res_t here, should be handled by enum logic
+            "lv_part_t": "uint",    # uint32_t
+            "lv_style_selector_t": "uint", # uint32_t
+            # Add other primitive typedefs here if needed
+        }
+
+        # Use the *resolved* clean C type name for lookup
+        marshal_suffix = primitive_map.get(c_type_resolved)
+        if marshal_suffix:
+            marshaler_id = f"primitive:{marshal_suffix}" # Use the suffix (like 'int', 'bool') as ID
+            needed_marshalers.add(marshaler_id)
+            return f"marshal_{marshal_suffix}({value_c_expr})"
+        else:
+             # If it wasn't mapped but flagged as primitive, maybe it's an unmapped stdint or complex case
+             print(f"Warning: Unmapped primitive C type '{c_type_resolved}' (orig: '{c_type_str_orig}') for marshaling arg '{arg_name_hint}'. Using fallback 'unknown'.")
+             # Fall through to fallback
+
+    # 11. Pointers to Primitives/Stdlib (excluding char*)
+    if flags["is_primitive"] and flags["is_pointer"] and not flags["is_string"]:
+        primitive_type_name = flags["element_type_info"].get("name") if flags["element_type_info"] else c_type_resolved
+        needed_marshalers.add("primitive_pointer")
+        return f"marshal_primitive_pointer((const void*){value_c_expr}, \"{primitive_type_name}\")"
+
+    # 12. Void Pointers
+    if flags["is_void"] and flags["is_pointer"]:
+        needed_marshalers.add("void_pointer")
+        return f"marshal_void_pointer((const void*){value_c_expr})"
+
+    # --- Fallback ---
+    print(f"Warning: Could not determine specific marshaler for C type '{c_type_str_orig}' (resolved: '{c_type_resolved}', flags: {flags}), arg '{arg_name_hint}'. Generating fallback.")
+    needed_marshalers.add("unknown")
+    # Determine if value is likely a pointer for fallback call
+    is_likely_pointer = flags["is_pointer"] or "*" in c_type_str_orig
+    # Check if value_c_expr already starts with '&' before adding another one
+    fallback_value_expr = f"(const void*){value_c_expr}" if is_likely_pointer or value_c_expr.startswith('&') else f"(const void*)&{value_c_expr}"
+    return f"marshal_unknown(\"{c_type_str_orig}\", {fallback_value_expr})"
+
+# --- Code Generation Functions ---
+
+def generate_header(api_data, config):
+    """Generates the C header file content."""
+    h_content = []
+    h_content.append("// Generated by generate_emul_lvgl_wrapper.py. DO NOT EDIT.")
+    h_content.append(f"// Target LVGL API JSON: {config['json_api_file']}") # Add source info
+    h_content.append("#ifndef EMUL_LVGL_H")
+    h_content.append("#define EMUL_LVGL_H")
+    h_content.append("\n#ifdef __cplusplus")
+    h_content.append('extern "C" {')
+    h_content.append("#endif\n")
+
+    h_content.append("#include <stdint.h>")
+    h_content.append("#include <stdbool.h>")
+    h_content.append("#include <stddef.h>")
+    h_content.append("#include <stdarg.h>") # Needed for va_list type if used
+    h_content.append("")
+    h_content.append("typedef struct cJSON cJSON;")
+    h_content.append("")
+
+    # --- Refined Type Generation Order ---
+    processed_typedef_names = set()
+    processed_struct_union_enum_names = set() # Tracks internal names (_lv_...)
+    forward_declared_concrete_structs = set()
+    forward_declared_concrete_unions = set()
+    forward_declared_items = set() # Tracks names that got a forward declaration
+
+    # 1. Fundamental Primitive/Stdlib Typedefs
+    h_content.append("// --- Base Typedefs ---")
+    # These are often primitives but are good to ensure definition
+    fundamental_typedefs = ["lv_coord_t", "lv_opa_t", "lv_state_t", "lv_part_t", "lv_style_prop_t", "lv_color_t", "lv_res_t", "size_t", "intptr_t", "uintptr_t", "va_list"]
+    for name in fundamental_typedefs:
+        typedef = next((t for t in config['filtered_typedefs'] if t['name'] == name), None)
+        if typedef and name not in processed_typedef_names:
+             if not is_opaque(typedef, api_data, config):
+                underlying_type_info = typedef["type"]
+                c_type_str = get_c_type_name(underlying_type_info, api_data, config, use_opaque_typedef=False)
+                if c_type_str and "unknown" not in c_type_str:
+                    h_content.append(f"typedef {c_type_str} {name};")
+                    processed_typedef_names.add(name)
+                else:
+                     print(f"  Skipping fundamental typedef '{name}' due to unknown underlying type: {underlying_type_info}")
+        elif name in ["size_t", "intptr_t", "uintptr_t", "va_list"] and name not in processed_typedef_names:
+            # Assume stddef/stdarg provide these, just note them
+             h_content.append(f"// typedef /* from stddef.h/stdarg.h */ {name};")
+             processed_typedef_names.add(name)
+
+
+    h_content.append("")
+
+    # 2. Enum Definitions (and their potential typedefs)
+    h_content.append("// --- Enum Definitions ---")
+    for enum in sorted(config['filtered_enums'], key=lambda x: x['name']):
+        enum_internal_name = enum["name"]
+        typedef_name = find_typedef_for_base(enum_internal_name, api_data, config)
+        c_enum_name_to_use = typedef_name if typedef_name else enum_internal_name
+
+        if c_enum_name_to_use in processed_typedef_names or enum_internal_name in processed_struct_union_enum_names:
+            continue # Skip if already handled
+
+        h_content.append(f"typedef enum {{ // Internal name: {enum_internal_name}")
+        for member in enum.get("members", []):
+            h_content.append(f"    {member['name']} = {member.get('value', '/*?*/')},")
+        h_content.append(f"}} {c_enum_name_to_use};")
+
+        processed_struct_union_enum_names.add(enum_internal_name)
+        if typedef_name:
+            processed_typedef_names.add(typedef_name)
+        h_content.append("")
+    h_content.append("")
+
+    # 3. Struct/Union Forward Declarations (Concrete only needed for non-typedef'd)
+    h_content.append("// --- Struct/Union Forward Declarations ---")
+    # Combine structs and unions for sorting
+    all_structs_unions_to_sort = []
+    for s in config['filtered_structures']:
+        if not is_opaque(s, api_data, config):
+             all_structs_unions_to_sort.append(s)
+    for u in config['filtered_unions']:
+         if not is_opaque(u, api_data, config):
+             all_structs_unions_to_sort.append(u)
+
+    print("Sorting concrete structures/unions by dependency...")
+    all_structs_unions = sort_structs_by_dependency(
+        all_structs_unions_to_sort,
+        api_data,
+        config
+    )
+
+    for item in all_structs_unions: # Iterate through sorted concrete items
+        internal_name = item['name'] # e.g., _lv_point_t or lv_area_t
+        # Determine if it's struct or union based on the source list it came from originally
+        item_json_type = item.get('json_type') # Should be struct or union from original api_data
+        details = get_type_details(item, api_data)
+        if details and details.get("json_type"):
+             item_json_type = details.get("json_type")
+        else:
+             # Guess based on config list it ended up in (less reliable)
+             if any(s['name'] == internal_name for s in config['filtered_structures']): item_json_type = "struct"
+             elif any(u['name'] == internal_name for u in config['filtered_unions']): item_json_type = "union"
+             else: item_json_type = "unknown" # Should not happen
+
+        if item_json_type not in ("struct", "union"): continue # Safety check
+
+        item_type_keyword = item_json_type # "struct" or "union"
+
+        if internal_name in processed_typedef_names or internal_name in processed_struct_union_enum_names or internal_name in forward_declared_items:
+            continue # Skip if opaque, already defined, or forward declared
+
+        # Item is concrete and not yet handled
+        typedef_name = find_typedef_for_base(internal_name, api_data, config)
+
+        if typedef_name and typedef_name not in processed_typedef_names:
+             # Define the typedef using a forward declared struct/union
+             h_content.append(f"typedef {item_type_keyword} {internal_name} {typedef_name};")
+             processed_typedef_names.add(typedef_name)
+             forward_declared_items.add(internal_name) # Mark internal name as handled via typedef
+             if item_type_keyword == "struct": forward_declared_concrete_structs.add(internal_name)
+             else: forward_declared_concrete_unions.add(internal_name)
+        elif internal_name not in forward_declared_items:
+             # No typedef or typedef already processed, just forward declare the struct/union internal name
+             h_content.append(f"{item_type_keyword} {internal_name};")
+             forward_declared_items.add(internal_name)
+             if item_type_keyword == "struct": forward_declared_concrete_structs.add(internal_name)
+             else: forward_declared_concrete_unions.add(internal_name)
+
+    h_content.append("")
+
+
+    # 4. Opaque Type Definitions (typedef cJSON* ...)
+    h_content.append("// --- Opaque Type Definitions (as cJSON*) ---")
+    # Ensure all explicitly configured opaque prefixes result in a typedef
+    # Also include types determined as opaque heuristically
+    all_opaque_names = set(config.get("opaque_types", set()))
+    for prefix in config['opaque_type_prefixes']:
+        # Check if any known type starts with this prefix and add it if opaque
+        for type_name in config['all_known_types']:
+             if type_name.startswith(prefix):
+                 if is_opaque({"name": type_name}, api_data, config):
+                     all_opaque_names.add(type_name)
+
+    for type_name in sorted(list(all_opaque_names)):
+        if type_name not in processed_typedef_names and type_name not in processed_struct_union_enum_names:
+            # Don't generate typedefs for internal names like _lv_obj_t if lv_obj_t exists
+            if type_name.startswith("_lv_") and type_name[1:] in all_opaque_names:
+                continue
+
+            sanitized = sanitize_name(type_name)
+            # Use the sanitized original name for the typedef
+            h_content.append(f"typedef cJSON* {sanitized}; // Opaque type")
+            processed_typedef_names.add(type_name) # Mark the original LVGL name as handled by this typedef
+
+            # Check if this opaque type name corresponds to a struct/union internal name
+            # If so, mark the internal name as processed too, to prevent concrete definition later
+            details = get_type_details({"name": type_name}, api_data)
+            if details and details.get("json_type") in ("struct", "union"):
+                 # Check if a non-opaque typedef exists for this internal name
+                 public_typedef_name = find_typedef_for_base(details['name'], api_data, config)
+                 if public_typedef_name and public_typedef_name == type_name:
+                     processed_struct_union_enum_names.add(details['name']) # Mark internal name handled if public typedef matches
+                 elif not public_typedef_name: # If no public typedef, mark internal name handled by the opaque def
+                      processed_struct_union_enum_names.add(details['name'])
+
+    h_content.append("")
+
+
+    # 5. Concrete Struct/Union Definitions
+    h_content.append("// --- Concrete Struct/Union Definitions ---")
+    for item in all_structs_unions: # Iterate again through sorted concrete list
+        internal_name = item['name']
+        # Redetermine item type keyword
+        item_json_type = item.get('json_type')
+        details = get_type_details(item, api_data)
+        if details and details.get("json_type"): item_json_type = details.get("json_type")
+        else: item_json_type = "unknown"
+        if item_json_type not in ("struct", "union"): continue
+        item_type_keyword = item_json_type
+
+        # Check if it needs definition (is concrete and forward declared) and hasn't been defined yet
+        is_concrete_struct_fwd = (item_type_keyword == "struct" and internal_name in forward_declared_concrete_structs)
+        is_concrete_union_fwd = (item_type_keyword == "union" and internal_name in forward_declared_concrete_unions)
+
+        if (is_concrete_struct_fwd or is_concrete_union_fwd) and internal_name not in processed_struct_union_enum_names:
+            # Check if a public typedef was already defined for this internal name
+            public_typedef = find_typedef_for_base(internal_name, api_data, config)
+            if public_typedef and public_typedef in processed_typedef_names:
+                # Define the struct/union using its internal name
+                h_content.append(f"{item_type_keyword} {internal_name} {{")
+            else:
+                # No public typedef processed, define both internal struct/union and its typedef if found
+                h_content.append(f"typedef {item_type_keyword} {internal_name} {{")
+
+
+            fields = item.get("fields")
+            if fields:
+                for field in fields:
+                    field_name = sanitize_name(field["name"])
+                    # IMPORTANT: Pass use_opaque_typedef=True here for field types
+                    # Get the full type string including potential array dims
+                    field_type_full_str = get_c_type_name(field["type"], api_data, config, use_opaque_typedef=True)
+                    if not field_type_full_str or "unhandled_type" in field_type_full_str or "unknown_base" in field_type_full_str:
+                         print(f"  Warning: Skipping field '{field_name}' in {item_type_keyword} '{internal_name}' due to unhandled type: {field.get('type')}")
+                         h_content.append(f"    /* Field '{field_name}' skipped due to unknown type */")
+                         continue
+
+                    # Split base type from array/pointer suffix if necessary
+                    field_type_base_str, field_suffix = split_c_type_name(field_type_full_str)
+
+                    bitsize = field.get("bitsize")
+                    suffix = f" : {bitsize}" if bitsize else ""
+                    if field_suffix == '*' or field_suffix == '**':
+                        h_content.append(f"    {field_type_base_str} {field_suffix}{field_name}{suffix};")
+                    else:
+                        h_content.append(f"    {field_type_base_str} {field_name}{field_suffix}{suffix};")
+            else:
+                 h_content.append(f"    /* {item_type_keyword} {internal_name} has no fields in json */")
+
+            # Close definition
+            if public_typedef and public_typedef in processed_typedef_names:
+                 h_content.append(f"}};") # Just close the struct/union def
+            else:
+                 # Define the typedef here if it wasn't forward declared
+                 typedef_name_to_use = public_typedef if public_typedef else internal_name
+                 h_content.append(f"}} {typedef_name_to_use};")
+                 if public_typedef and public_typedef not in processed_typedef_names:
+                     processed_typedef_names.add(public_typedef)
+
+
+            processed_struct_union_enum_names.add(internal_name) # Mark internal name as defined
+            h_content.append("")
+    h_content.append("")
+
+
+    # 6. Remaining Typedefs (Function Pointers, etc.)
+    h_content.append("// --- Remaining Typedef Definitions (e.g., Function Pointers) ---")
+    typedef_list = sorted(config['filtered_typedefs'], key=lambda x: x['name'])
+    for typedef in typedef_list:
+        name = typedef["name"]
+        if name not in processed_typedef_names: # Check if typedef name itself is already processed
+             if is_opaque(typedef, api_data, config): continue # Should have been handled
+
+             underlying_type_info = typedef.get("type")
+             details = None
+             if underlying_type_info:
+                 # Check if it points *directly* to a function pointer definition or via name lookup
+                 if underlying_type_info.get("json_type") == "function_pointer":
+                     details = underlying_type_info # Directly defined function pointer
+                 elif underlying_type_info.get("json_type") == "pointer":
+                      pointee_type_info = underlying_type_info.get("type")
+                      pointee_details = get_type_details(pointee_type_info, api_data)
+                      if pointee_details and pointee_details.get("json_type") == "function_pointer":
+                           details = pointee_details # Typedef to pointer to function pointer type? Unlikely. Check base instead.
+                           details = get_type_details(underlying_type_info, api_data) # Get details of the typedef name itself
+                 else:
+                     details = get_type_details(underlying_type_info, api_data) # Check details of underlying type name
+
+             if details and details.get("json_type") == "function_pointer":
+                 # This typedef *is* a function pointer type (e.g., lv_event_cb_t)
+                 ret_type_info = details.get("type",{}) # This is the ret_type wrapper
+                 ret_type = get_c_type_name(ret_type_info.get("type",{}), api_data, config, use_opaque_typedef=True)
+                 args_info = details.get("args", [])
+                 arg_strs = []
+                 is_void_fnc = (not args_info or (len(args_info) == 1 and get_base_type_name(args_info[0].get("type")) == "void"))
+                 if is_void_fnc:
+                     arg_strs.append("void")
+                 else:
+                     for i, arg in enumerate(args_info):
+                         # Arg name doesn't matter in typedef signature
+                         arg_type_str = get_c_type_name(arg.get("type",{}), api_data, config, use_opaque_typedef=True)
+                         if not arg_type_str or "unknown" in arg_type_str: arg_type_str = "void*" # Fallback
+                         arg_strs.append(f"{arg_type_str}") # Omit name in typedef
+                 h_content.append(f"typedef {ret_type} (*{name})({', '.join(arg_strs)});")
+                 processed_typedef_names.add(name)
+             elif underlying_type_info:
+                 # Any other non-opaque, non-processed typedef (e.g. typedef int my_int_t;)
+                 c_type_str = get_c_type_name(underlying_type_info, api_data, config, use_opaque_typedef=True)
+                 base_name_underlying = get_base_type_name(underlying_type_info)
+                 if c_type_str and c_type_str != name and name != base_name_underlying and "unhandled" not in c_type_str and "unknown" not in c_type_str:
+                     h_content.append(f"typedef {c_type_str} {name}; // Other typedef")
+                     processed_typedef_names.add(name)
+    h_content.append("")
+
+
+    # 7. Macros
+    h_content.append("// --- Macro Definitions ---")
+    macro_list = sorted(config['filtered_macros'], key=lambda x: x['name'])
+    for macro in macro_list:
+        name = macro["name"]
+        params = macro.get("params")
+        initializer = macro.get("initializer", "")
+        if initializer is None: initializer = ""
+        initializer = initializer.strip().replace('\n', ' \\\n    ')
+        if params:
+            # Filter out None params if any slipped through JSON parsing
+            param_list = [p for p in params if p is not None]
+            param_str = ", ".join(param_list)
+            # Handle macros with empty initializers carefully
+            if initializer:
+                h_content.append(f"#define {name}({param_str}) {initializer}")
+            else:
+                h_content.append(f"#define {name}({param_str}) // No initializer")
+
+        else:
+            # Macro constant
+            if initializer:
+                 common_consts = {"NULL", "true", "false"} # Standard C constants
+                 if name not in common_consts:
+                     h_content.append(f"#define {name} {initializer}")
+                 else:
+                     h_content.append(f"// #define {name} {initializer} // Skipped standard define")
+            else:
+                # Simple definition macro (e.g., #define USE_MY_FEATURE)
+                h_content.append(f"#define {name}")
+    h_content.append("")
+
+    # 8. Function Prototypes
+    h_content.append("// --- Function Prototypes ---")
+    h_content.append("")
+    # Hard-code lv_label_set_text_fmt due to va_args - wrapper handles it specially.
+    h_content.append("void lv_label_set_text_fmt(lv_obj_t* obj, const char *fmt, ...);")
+    func_list = sorted(config['filtered_functions'], key=lambda x: x['name'])
+    for func in func_list:
+        func_name = func["name"]
+        # Skip special varargs functions we handle manually
+        if func_name == "lv_label_set_text_fmt": continue
+
+        ret_type_info = func.get("type", {}).get("type", {})
+        ret_type_str = get_c_type_name(ret_type_info, api_data, config, use_opaque_typedef=True)
+        if not ret_type_str: ret_type_str = "/* unknown_ret */ void" # Default to void on error
+
+        args = func.get("args", [])
+        arg_parts = []
+        is_void_func = (not args or (len(args) == 1 and get_base_type_name(args[0].get("type")) == "void"))
+
+        if is_void_func:
+            param_str = "void"
+        else:
+            for i, arg in enumerate(args):
+                 arg_name = sanitize_name(arg.get("name", f"arg{i}"))
+                 arg_type_str_full = get_c_type_name(arg["type"], api_data, config, use_opaque_typedef=True)
+                 if not arg_type_str_full: arg_type_str_full = "/* unknown_arg */ void*"
+
+                 if arg_type_str_full == "...":
+                      arg_parts.append("...")
+                 else:
+                    # Split type and potential array dims/pointers for clean formatting
+                    arg_type_base, arg_suffix = split_c_type_name(arg_type_str_full)
+                    if arg_suffix == '*' or arg_suffix == '**':
+                        arg_parts.append(f"{arg_type_base} {arg_suffix}{arg_name}")
+                    else:
+                        arg_parts.append(f"{arg_type_base} {arg_name}{arg_suffix}")
+
+            param_str = ", ".join(arg_parts)
+
+        h_content.append(f"{ret_type_str} {func_name}({param_str});")
+
+
+    # Utility Functions
+    h_content.append("\n// --- Utility Functions ---")
+    h_content.append("void emul_lvgl_init(void);")
+    h_content.append("void emul_lvgl_destroy(void);")
+    h_content.append("bool emul_lvgl_export(const char *filename, bool pretty);")
+    h_content.append("char *emul_lvgl_to_str(bool pretty);") # Changed signature
+    h_content.append("void emul_lvgl_register_external_ptr(const void *ptr, const char *id, const char* type_hint);")
+
+
+    h_content.append("\n#ifdef __cplusplus")
+    h_content.append("}")
+    h_content.append("#endif\n")
+    h_content.append("#endif // EMUL_LVGL_H")
+    return "\n".join(h_content)
+
+# --- C Code Generation ---
+def generate_c_source(api_data, config, needed_marshalers): # Add needed_marshalers param
+    """Generates the C source file content."""
+    c_content = []
+    # ... (Standard includes and header include) ...
+    c_content.append("// Generated by generate_emul_lvgl_wrapper.py. DO NOT EDIT.")
+    c_content.append(f"// Target LVGL API JSON: {config['json_api_file']}")
+    c_content.append(f"#include \"{config['output_base_name']}.h\"")
+    c_content.append("#include <stdio.h>")
+    c_content.append("#include <stdlib.h>")
+    c_content.append("#include <string.h>")
+    c_content.append("#include <inttypes.h>") # For PRIxPTR, PRIu64
+    c_content.append("#include <assert.h>")
+    c_content.append("#include <ctype.h>") # For isalnum in generate_unique_id
+    c_content.append("\n// --- Dependencies ---")
+    c_content.append("#include \"cJSON.h\"")
+    c_content.append("#include \"uthash.h\"")
+
+    # ... (Global State, Registry, ID generation, Registration helpers - unchanged) ...
+    c_content.append("\n// --- Global State ---")
+    c_content.append("static cJSON *g_root_json_array = NULL;")
+    c_content.append("static uint64_t g_id_counters[100];")
+    c_content.append("static const char* g_id_type_names[100];")
+    c_content.append("static int g_id_type_count = 0;")
+    c_content.append("#define MAX_ID_TYPES 100")
+    c_content.append("\ntypedef struct { const void *ptr_key; const char *id; cJSON *json_obj; const char *type_name; UT_hash_handle hh; } lvgl_registry_entry_t;")
+    c_content.append("\nstatic lvgl_registry_entry_t *g_object_registry = NULL;")
+    # --- ID Generation / Registry Helpers --- (Assume OK)
+    c_content.append("\n// --- Helper Functions [ID Generation, Registry] ---")
+    c_content.append("static int get_type_index(const char *type_name) { /* ... Assume OK ... */ \n\
+    for (int i = 0; i < g_id_type_count; ++i) { if (g_id_type_names[i] != NULL && strcmp(g_id_type_names[i], type_name) == 0) return i; } \n\
+    if (g_id_type_count < MAX_ID_TYPES) { g_id_type_names[g_id_type_count] = strdup(type_name); if (!g_id_type_names[g_id_type_count]) { perror(\"strdup type\"); assert(false); return -1; } g_id_counters[g_id_type_count] = 0; return g_id_type_count++; } \n\
+    else { fprintf(stderr, \"Error: Max ID types (%d) exceeded: %s\\n\", MAX_ID_TYPES, type_name); assert(false); return -1; } }")
+    c_content.append("static char* generate_unique_id(const char *base_type_name) { /* ... Assume OK ... */ \n\
+    int idx = get_type_index(base_type_name); if (idx < 0) return NULL; uint64_t cnt = ++g_id_counters[idx]; \n\
+    char s_base[128]; strncpy(s_base, base_type_name, 127); s_base[127] = 0; for(char *p = s_base; *p; ++p) if (!isalnum(*p) && *p != '_') *p = '_'; \n\
+    size_t len = strlen(s_base) + 1 + 20 + 1; char* buf = (char*)malloc(len); if (!buf) {perror(\"malloc id\"); assert(false); return NULL;} \n\
+    snprintf(buf, len, \"%s_%\" PRIu64, s_base, cnt); return buf; }")
+    c_content.append("static void register_opaque_object(const void *ptr, const char *type_name, char *id, cJSON *json_obj) { /* ... Assume OK ... */ \n\
+     if(!ptr){ fprintf(stderr, \"Warn: register NULL ptr type %s id %s\\n\",type_name,id); free(id); return;} \n\
+     lvgl_registry_entry_t *e; HASH_FIND_PTR(g_object_registry, &ptr, e); \n\
+     if(!e){ e=(lvgl_registry_entry_t*)malloc(sizeof(*e)); if(!e){perror(\"malloc entry\"); free(id); assert(false); return;} \n\
+     e->ptr_key=ptr; e->id=id; e->json_obj=json_obj; e->type_name=strdup(type_name); if(!e->type_name){perror(\"strdup type\"); free((void *)e->id); free(e); assert(false); return;} HASH_ADD_PTR(g_object_registry, ptr_key, e); } \n\
+     else { free((void*)e->id); free((void*)e->type_name); e->id=id; e->json_obj=json_obj; e->type_name=strdup(type_name); if(!e->type_name){perror(\"strdup type upd\"); free((void *)e->id); e->id=NULL; assert(false); return;} } }")
+    c_content.append("static cJSON* find_json_object(const void *ptr) { if(!ptr) return NULL; lvgl_registry_entry_t *e; HASH_FIND_PTR(g_object_registry, &ptr, e); return e ? e->json_obj : NULL; }")
+    c_content.append("static const char* find_id_by_ptr(const void *ptr) { if(!ptr) return NULL; lvgl_registry_entry_t *e; HASH_FIND_PTR(g_object_registry, &ptr, e); return e ? e->id : NULL; }")
+
+
+    # --- Generate Marshaler Prototypes (On-Demand) ---
+    c_content.append("\n// --- Marshaling Function Prototypes (Generated On-Demand) ---")
+    generated_prototypes = set() # Track generated prototypes to avoid duplicates
+
+    # Define prototype structures based on marshaler IDs
+    basic_types_args = { # Map marshaler suffix to C arguments
+        "bool": "bool value", "char": "char value", "uchar": "unsigned char value",
+        "short": "short value", "ushort": "unsigned short value",
+        "int": "int value", "uint": "unsigned int value",
+        "long": "long long value", "ulong": "unsigned long long value",
+        "float": "float value", "double": "double value",
+        "string": "const char* value",
+        "opaque_pointer": "const void* ptr, const char* type_name",
+        "void_pointer": "const void* ptr",
+        "primitive_pointer": "const void* ptr, const char* type_name",
+        "function_pointer": "const void* ptr, const char* type_name",
+        "ellipsis": "/* ... */", "va_list": "/* va_list */",
+        "unknown": "const char* type_str, const void* value_ptr",
+    }
+
+    for marshaler_id in sorted(list(needed_marshalers)):
+        proto = None
+        parts = marshaler_id.split(":", 1)
+        m_type = parts[0]
+        m_name = parts[1] if len(parts) > 1 else None
+        if not m_name and m_type in basic_types_args: # Handle single-word basic types
+            m_name = m_type # Use type itself as name for lookup
+
+        if m_type == "primitive":
+            if m_name in basic_types_args:
+                proto = f"static cJSON* marshal_{m_name}({basic_types_args[m_name]});"
+        elif m_type in basic_types_args: # Handle single-word basic types
+             proto = f"static cJSON* marshal_{m_type}({basic_types_args[m_type]});"
+        elif m_type == "enum":
+             # m_name is the C enum type name (e.g., lv_align_t)
+             sanitized_enum_name = sanitize_name(m_name)
+             proto = f"static cJSON* marshal_enum_{sanitized_enum_name}({m_name} value);"
+        elif m_type == "struct_ptr":
+             # m_name is the C struct type name (e.g., lv_point_t)
+             sanitized_struct_name = sanitize_name(m_name)
+             proto = f"static cJSON* marshal_struct_{sanitized_struct_name}_pointer(const {m_name}* value);"
+        elif m_type == "struct_val":
+             sanitized_struct_name = sanitize_name(m_name)
+             proto = f"static cJSON* marshal_struct_{sanitized_struct_name}_value({m_name} value);"
+        elif m_type == "union_ptr":
+             sanitized_union_name = sanitize_name(m_name)
+             proto = f"static cJSON* marshal_union_{sanitized_union_name}_pointer(const {m_name}* value);"
+        elif m_type == "union_val":
+             sanitized_union_name = sanitize_name(m_name)
+             proto = f"static cJSON* marshal_union_{sanitized_union_name}_value({m_name} value);"
+        elif m_type == "array_ptr":
+             # m_name is the C element type name (e.g., int32_t)
+             sanitized_element_name = sanitize_name(m_name)
+             # The argument is a pointer to the element type
+             proto = f"static cJSON* marshal_array_{sanitized_element_name}_pointer(const {m_name}* ptr);"
+
+        if proto and proto not in generated_prototypes:
+            c_content.append(proto)
+            generated_prototypes.add(proto)
+
+    c_content.append("")
+
+
+    # --- Marshaling Function Implementations (On-Demand) ---
+    c_content.append("// --- Marshaling Function Implementations (Generated On-Demand) ---")
+    generated_implementations = set() # Track implementations
+
+    # Define implementation bodies
+    basic_impl = {
+        "bool": "return cJSON_CreateBool(value);",
+        "char": "return cJSON_CreateNumber((double)value);",
+        "uchar": "return cJSON_CreateNumber((double)value);",
+        "short": "return cJSON_CreateNumber((double)value);",
+        "ushort": "return cJSON_CreateNumber((double)value);",
+        "int": "return cJSON_CreateNumber((double)value);",
+        "uint": "return cJSON_CreateNumber((double)value);",
+        "long": "return cJSON_CreateNumber((double)value);",
+        "ulong": "return cJSON_CreateNumber((double)value);",
+        "float": "return cJSON_CreateNumber((double)value);",
+        "double": "return cJSON_CreateNumber(value);",
+        "string": "return value ? cJSON_CreateString(value) : cJSON_CreateNull();",
+        "opaque_pointer": textwrap.dedent("""\
+            const char *id = find_id_by_ptr(ptr);
+            if (id) return cJSON_CreateString(id);
+            char buf[64];
+            snprintf(buf, sizeof(buf), "<unregistered_opaque:%s:%p>", type_name ? type_name : "?", ptr);
+            return cJSON_CreateString(buf);"""),
+        "void_pointer": textwrap.dedent("""\
+            if (!ptr) return cJSON_CreateNull();
+            char buf[32]; snprintf(buf, sizeof(buf), "<void*:%p>", ptr); return cJSON_CreateString(buf);"""),
+        "primitive_pointer": textwrap.dedent("""\
+            if (!ptr) return cJSON_CreateNull();
+            char buf[64]; snprintf(buf, sizeof(buf), "<pointer:%s*:%p>", type_name ? type_name : "primitive", ptr); return cJSON_CreateString(buf);"""),
+        "function_pointer": textwrap.dedent("""\
+            if (!ptr) return cJSON_CreateNull();
+            char buf[80]; snprintf(buf, sizeof(buf), "<func_ptr:%s:%p>", type_name ? type_name : "?", ptr); return cJSON_CreateString(buf);"""),
+        "ellipsis": "return cJSON_CreateString(\"<varargs>\");",
+        "va_list": "return cJSON_CreateString(\"<va_list>\");",
+        "unknown": textwrap.dedent("""\
+            char buf[128]; snprintf(buf, sizeof(buf), "<unknown_marshal:%s:%p>", type_str ? type_str : "?", value_ptr);
+            fprintf(stderr, "Warning: Marshaling fallback for type '%s'.\\n", type_str ? type_str : "?"); return cJSON_CreateString(buf);"""),
+    }
+
+    # Iterate through needed marshalers and generate implementation code
+    for marshaler_id in sorted(list(needed_marshalers)):
+        impl = None
+        func_sig = None
+        parts = marshaler_id.split(":", 1)
+        m_type = parts[0]
+        m_name = parts[1] if len(parts) > 1 else None
+        if not m_name and m_type in basic_types_args: m_name = m_type
+
+        # --- Basic Type Implementations ---
+        if m_type == "primitive" and m_name in basic_impl:
+            func_sig = f"static cJSON* marshal_{m_name}({basic_types_args[m_name]})"
+            impl = basic_impl[m_name]
+        elif m_type in basic_impl:
+            func_sig = f"static cJSON* marshal_{m_type}({basic_types_args[m_type]})"
+            impl = basic_impl[m_type]
+
+        # --- Enum Implementation ---
+        elif m_type == "enum":
+             enum_c_type_name = m_name
+             sanitized_enum_name = sanitize_name(enum_c_type_name)
+             func_sig = f"static cJSON* marshal_enum_{sanitized_enum_name}({enum_c_type_name} value)"
+             if func_sig not in generated_implementations:
+                 # Find the enum definition
+                 enum_def = next((e for e in config['filtered_enums'] if (find_typedef_for_base(e['name'], api_data, config) or e['name']) == enum_c_type_name), None)
+                 if not enum_def: enum_def = next((e for e in api_data.get('enums', []) if e['name'] == enum_c_type_name), None)
+
+                 impl_lines = []
+                 impl_lines.append(f"    switch (value) {{")
+                 if enum_def and enum_def.get("members"):
+                     cases = set()
+                     for member in enum_def["members"]:
+                         member_val_str = str(member.get('value', '/*?*/'))
+                         # Use original member name for case, JSON string value is also member name
+                         member_c_name = member['name']
+                         if member_val_str not in cases:
+                             impl_lines.append(f"        case {member_c_name}: return cJSON_CreateString(\"{member_c_name}\");")
+                             cases.add(member_val_str)
+                 impl_lines.append(f"        default: {{")
+                 impl_lines.append(f"            char buf[60]; snprintf(buf, sizeof(buf), \"{enum_c_type_name}_VALUE(%d)\", (int)value); return cJSON_CreateString(buf);")
+                 impl_lines.append(f"        }}")
+                 impl_lines.append(f"    }}")
+                 impl = "\n".join(impl_lines)
+
+        # --- Struct/Union Implementations ---
+        elif m_type in ["struct_ptr", "struct_val", "union_ptr", "union_val"]:
+             category = m_type.split("_")[0]
+             mode = m_type.split("_")[1]
+             c_type_name = m_name
+             sanitized_name = sanitize_name(c_type_name)
+
+             if mode == "ptr":
+                 func_sig = f"static cJSON* marshal_{category}_{sanitized_name}_pointer(const {c_type_name}* value)"
+                 if func_sig not in generated_implementations:
+                     # Find the definition
+                     item_defs = api_data.get(f'{category}es', []) + config.get(f'filtered_{category}es', [])
+                     item_def = next((i for i in item_defs if (find_typedef_for_base(i['name'], api_data, config) or i['name']) == c_type_name), None)
+
+                     impl_lines = []
+                     impl_lines.append("    if (!value) return cJSON_CreateNull();")
+                     impl_lines.append("    cJSON *obj = cJSON_CreateObject();")
+                     impl_lines.append("    if (!obj) return NULL;")
+                     impl_lines.append(f"    cJSON_AddStringToObject(obj, \"_{category}_type\", \"{c_type_name}\");")
+
+                     if category == "struct" and item_def and item_def.get("fields"):
+                         for field in item_def["fields"]:
+                             field_name_orig = field.get("name"); field_name_c = sanitize_name(field_name_orig)
+                             if not field_name_orig: continue
+                             field_type_info = field.get("type"); field_value_expr = f"value->{field_name_c}"
+                             # <<< RECURSIVE CALL - needed marshalers added elsewhere >>>
+                             marshaler_call = get_marshal_function_call(field_type_info, api_data, config, field_value_expr, needed_marshalers, field_name_orig)
+                             impl_lines.append(f"    cJSON *fj_{field_name_c} = {marshaler_call};") # fj = field_json
+                             impl_lines.append(f"    if (fj_{field_name_c}) cJSON_AddItemToObject(obj, \"{field_name_orig}\", fj_{field_name_c}); else cJSON_AddNullToObject(obj, \"{field_name_orig}\");")
+                     elif category == "union":
+                         impl_lines.append("    cJSON_AddStringToObject(obj, \"_value\", \"<union_data_omitted>\");")
+
+                     impl_lines.append("    return obj;")
+                     impl = "\n".join(impl_lines)
+
+             elif mode == "val":
+                 func_sig = f"static cJSON* marshal_{category}_{sanitized_name}_value({c_type_name} value)"
+                 if func_sig not in generated_implementations:
+                     # Value version calls the pointer version
+                     impl = f"    return marshal_{category}_{sanitized_name}_pointer(&value);"
+
+        # --- Array Pointer Implementation ---
+        elif m_type == "array_ptr":
+             element_c_type_name = m_name
+             sanitized_element_name = sanitize_name(element_c_type_name)
+             func_sig = f"static cJSON* marshal_array_{sanitized_element_name}_pointer(const {element_c_type_name}* ptr)"
+             if func_sig not in generated_implementations:
+                 impl_lines = []
+                 impl_lines.append("    if (!ptr) return cJSON_CreateNull();")
+                 impl_lines.append("    char buf[80];")
+                 impl_lines.append(f"    snprintf(buf, sizeof(buf), \"<array_ptr:{element_c_type_name}*:%p>\", (const void*)ptr);")
+                 impl_lines.append("    return cJSON_CreateString(buf);")
+                 impl = "\n".join(impl_lines)
+
+        # Add implementation if found and not already generated
+        if func_sig and impl and func_sig not in generated_implementations:
+             c_content.append(f"\n// Marshal implementation for {marshaler_id}")
+             c_content.append(f"{func_sig} {{")
+             c_content.append(textwrap.indent(impl, "    "))
+             c_content.append(f"}}")
+             generated_implementations.add(func_sig)
+
+
+    # --- Init/Destroy --- (unchanged)
+    c_content.append("\n// --- Initialization and Cleanup ---")
+    # ... (Assume OK, copy from previous version) ...
+    c_content.append("void emul_lvgl_init() { /* ... */ }")
+    c_content.append("void emul_lvgl_destroy() { /* ... */ }")
+
+    # --- Export --- (unchanged)
+    c_content.append("\n// --- Export Functions ---")
+    # ... (Assume OK, copy from previous version) ...
+    c_content.append("char *emul_lvgl_to_str(bool pretty) { /* ... */ return NULL; }")
+    c_content.append("bool emul_lvgl_export(const char *filename, bool pretty) { /* ... */ return false; }")
+
+
+    # --- External Pointer Registration --- (unchanged)
+    c_content.append("\n// --- External Pointer Registration ---")
+    # ... (Assume OK, copy from previous version) ...
+    c_content.append("void emul_lvgl_register_external_ptr(const void *ptr, const char *id, const char* type_hint) { /* ... */ }")
+
+    # --- Wrapped Function Implementations ---
+    c_content.append("\n// --- Wrapped LVGL Function Implementations ---")
+
+    # Special handling for lv_label_set_text_fmt (unchanged)
+    # ... (Copy from previous version) ...
+    c_content.append("\nvoid lv_label_set_text_fmt(lv_obj_t* obj, const char *fmt, ...) { /* ... special handling ... */ }")
+
+
+    # --- Standard function wrappers (use the modified get_marshal_function_call) ---
+    func_list = sorted(config['filtered_functions'], key=lambda x: x['name'])
+    for func in func_list:
+        func_name = func["name"]
+        if func_name in ["lv_label_set_text_fmt"]: continue # Skip manually handled
+
+        # ... (Function signature generation - unchanged) ...
+        func_type = get_function_type(func, api_data, config)
+        ret_type_wrapper = func.get("type", {})
+        ret_type_info = ret_type_wrapper.get("type", {})
+        ret_type_str = get_c_type_name(ret_type_info, api_data, config, use_opaque_typedef=True) or "void"
+        ret_flags = get_type_info_flags(ret_type_info, api_data, config)
+        ret_is_opaque_ptr = ret_flags["is_opaque"]
+        args = func.get("args", [])
+        param_parts = []; arg_names_c = []; arg_names_orig = []
+        is_void_func = (not args or (len(args) == 1 and get_base_type_name(args[0].get("type")) == "void"))
+        if is_void_func: param_str = "void"
+        else:
+            for i, arg in enumerate(args):
+                 arg_name_c = sanitize_name(arg.get("name", f"arg{i}")); arg_name_orig = arg.get("name", f"arg{i}")
+                 arg_names_c.append(arg_name_c); arg_names_orig.append(arg_name_orig)
+                 arg_type_str_full = get_c_type_name(arg["type"], api_data, config, use_opaque_typedef=True) or "void*"
+                 if arg_type_str_full == "...": param_parts.append("...")
+                 else: arg_type_base, arg_suffix = split_c_type_name(arg_type_str_full); param_parts.append(f"{arg_type_base} {arg_name_c}{arg_suffix}")
+            param_str = ", ".join(param_parts)
+
+        c_content.append(f"\n// Wrapper for: {func_name}")
+        c_content.append(f"{ret_type_str} {func_name}({param_str}) {{")
+        c_content.append(f"    /* Wrapper Classification: {func_type} */")
+        c_content.append("    if (!g_root_json_array) emul_lvgl_init();")
+        # Use assert for critical JSON creation failures
+        c_content.append("    cJSON *entry_json = cJSON_CreateObject(); assert(entry_json);")
+        c_content.append("    if (!entry_json) { /* Handle return if possible */ return; }") # Fallback if assert disabled
+        c_content.append(f"    cJSON_AddStringToObject(entry_json, \"func\", \"{func_name}\");")
+
+        target_obj_id_expr = "NULL"
+        if func_type in ["init", "setter"] and not is_void_func and len(arg_names_c) > 0:
+             target_ptr_arg_name_c = arg_names_c[0]
+             c_content.append(f"    const char* target_id = find_id_by_ptr({target_ptr_arg_name_c});")
+             target_obj_id_expr = f"target_id" # Use local var name
+             c_content.append(f"    if (target_id) cJSON_AddStringToObject(entry_json, \"target_obj\", target_id);")
+             c_content.append(f"    else if ({target_ptr_arg_name_c} != NULL) {{ char ub[64]; snprintf(ub, sizeof(ub), \"<unregistered:%p>\", (void*){target_ptr_arg_name_c}); cJSON_AddStringToObject(entry_json, \"target_obj\", ub); /* fprintf(...) */ }}")
+             c_content.append(f"    else cJSON_AddNullToObject(entry_json, \"target_obj\");")
+
+        # <<< MARSHAL ARGUMENTS using new helper >>>
+        if not is_void_func:
+            c_content.append("    cJSON *args_array = cJSON_CreateArray(); assert(args_array);")
+            c_content.append("    if (!args_array) {{ cJSON_Delete(entry_json); /* Handle return */ return; }} else {{")
+            c_content.append("        cJSON_AddItemToObject(entry_json, \"args\", args_array);")
+            arg_start_index = 1 if func_type in ["init", "setter"] else 0
+            for i in range(arg_start_index, len(args)):
+                arg_c_name = arg_names_c[i]; arg_orig_name = arg_names_orig[i]
+                arg_info = args[i]; arg_type_info = arg_info["type"]
+                # <<< THIS IS THE KEY CHANGE: Call the helper which uses needed_marshalers >>>
+                marshaler_call = get_marshal_function_call(arg_type_info, api_data, config, arg_c_name, needed_marshalers, arg_orig_name)
+                c_content.append(f"        cJSON* ma_{i} = {marshaler_call};")
+                c_content.append(f"        if (ma_{i}) cJSON_AddItemToArray(args_array, ma_{i}); else cJSON_AddItemToArray(args_array, cJSON_CreateNull());")
+            c_content.append("    }")
+
+        # ... (Constructor/Init unique ID generation - unchanged) ...
+        if func_type == "constructor" or func_type == "init":
+            base_type_name = ""
+            if func_type == "constructor":
+                if ret_is_opaque_ptr: base_type_name = get_base_type_name(ret_type_info.get("type")) or "unknown"
+            elif func_type == "init":
+                if not is_void_func and len(args) > 0: base_type_name = get_base_type_name(args[0]["type"].get("type")) or "unknown"
+            c_content.append(f"    const char* tn = \"{base_type_name}\";") # tn = type_name
+            c_content.append(f"    char* oid = generate_unique_id(tn);") # oid = obj_id
+            c_content.append(f"    if (!oid) {{ cJSON_Delete(entry_json); /* Handle return */ assert(false); }} else {{")
+            c_content.append(f"        cJSON_AddStringToObject(entry_json, \"created_obj_id\", oid);")
+            c_content.append(f"        cJSON_AddStringToObject(entry_json, \"created_obj_type\", tn);")
+            c_content.append(f"    }}")
+
+        c_content.append("    if (entry_json) cJSON_AddItemToArray(g_root_json_array, entry_json);")
+
+        # ... (Return value handling - unchanged, uses ret_flags) ...
+        if ret_type_str != "void":
+            if func_type == "constructor":
+                 c_content.append(f"    cJSON *reg_obj = cJSON_CreateObject(); assert(reg_obj);")
+                 c_content.append(f"    if (!reg_obj) return NULL;")
+                 c_content.append(f"    if (oid) {{") # Use local var oid
+                 c_content.append(f"        cJSON_AddStringToObject(reg_obj, \"id\", oid);")
+                 c_content.append(f"        cJSON_AddStringToObject(reg_obj, \"type\", tn);") # Use local var tn
+                 c_content.append(f"        cJSON_AddStringToObject(reg_obj, \"source\", \"constructor\");")
+                 c_content.append(f"        register_opaque_object((const void*)reg_obj, tn, oid, reg_obj);")
+                 c_content.append(f"        return ({ret_type_str})reg_obj;")
+                 c_content.append(f"    }} else {{ cJSON_Delete(reg_obj); return NULL; }}")
+            elif func_type == "init":
+                 # Use target_obj_id_expr which resolves to local 'target_id' or NULL
+                 first_arg_ptr_c = arg_names_c[0] if not is_void_func and len(arg_names_c)>0 else "NULL"
+                 c_content.append(f"    if ({target_obj_id_expr} == NULL && {first_arg_ptr_c} != NULL) {{ if (oid) free(oid); }}")
+                 # Default returns based on ret_flags
+                 if ret_is_opaque_ptr or ret_flags["is_pointer"]: c_content.append("    return NULL;")
+                 elif ret_flags["is_primitive"] and ret_type_str=="bool": c_content.append("    return false;")
+                 elif ret_flags["is_primitive"] and ("float" in ret_type_str or "double" in ret_type_str): c_content.append("    return 0.0;")
+                 else: c_content.append("    return 0;")
+            else: # Setter or Other
+                 if ret_is_opaque_ptr or ret_flags["is_pointer"]: c_content.append("    return NULL;")
+                 elif ret_flags["is_primitive"] and ret_type_str=="bool": c_content.append("    return false;")
+                 elif ret_flags["is_primitive"] and ("float" in ret_type_str or "double" in ret_type_str): c_content.append("    return 0.0;")
+                 elif ret_flags["is_struct"] or ret_flags["is_union"]: c_content.append(f"    {ret_type_str} dv = {{0}}; return dv;")
+                 else: c_content.append("    return 0;")
+        elif func_type == "init": # Cleanup ID for void init if register failed
+            first_arg_ptr_c = arg_names_c[0] if not is_void_func and len(arg_names_c)>0 else "NULL"
+            # Use target_obj_id_expr which resolves to local 'target_id' or NULL
+            c_content.append(f"    if ({target_obj_id_expr} == NULL && {first_arg_ptr_c} != NULL) {{ if (oid) free(oid); }}")
+
+        c_content.append("}") # End function wrapper
+
+    return "\n".join(c_content)
+
+# --- Main Script Logic ---
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Generate C wrapper for LVGL API to output JSON trace.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter # Show defaults
+    )
+    parser.add_argument("json_api_file", help="Path to the LVGL API JSON description file.")
+    parser.add_argument("-o", "--output-dir", default="generated_emul_lvgl", help="Directory to output the C header and source files.")
+    parser.add_argument("-p", "--output-prefix", default="emul_lvgl", help="Prefix for the output C files (e.g., 'lvgl_wrap' -> lvgl_wrap.h, lvgl_wrap.c).")
+
+    # Include/Exclude Lists (Keep existing defaults, adjust if needed)
+    parser.add_argument("--include-funcs", nargs='+', default=["lv_"], help="Prefixes for functions to include.")
+    parser.add_argument("--exclude-funcs", nargs='*', default=[
+        "lv_log_", "lv_mem_", "lv_tick_", "lv_timer_handler", "lv_init", "lv_deinit", "lv_is_initialized",
+        "lv_debug_", "lv_profiler_", "lv_assert_", "lv_memcpy", "lv_memset", "lv_memscpy",
+        "lv_malloc", "lv_free", "lv_realloc", # Exclude memory management
+        "lv_event_send", "lv_event_get_", "lv_event_register_id", "lv_event_dsc_get_", # Exclude event system internals (keep add/remove)
+        "lv_async_", # Exclude async calls for now
+        "lv_anim_custom_get", "lv_anim_get_timer", "lv_anim_get_playtime", "lv_anim_path_", # Exclude anim internals
+        "lv_draw_", # Exclude low-level drawing funcs and units
+        "lv_display_set_buffers", "lv_display_add_event", "lv_display_get_event", "lv_display_send_event", "lv_display_flush_", "lv_display_wait_", # Exclude display driver setup/internals
+        "lv_indev_read", "lv_indev_search", "lv_indev_get_read_timer", "lv_indev_read_timer_cb", # Exclude input driver details
+        "lv_obj_class_create_obj", "lv_obj_class_init_obj", "lv_obj_assign_spec_attr", "lv_obj_get_disp", # Exclude class internals
+        "lv_obj_invalidate_area", "lv_obj_redraw", # Low level redraw
+        "lv_global_get", # Internal global access
+        "lv_snapshot_", # Exclude snapshotting funcs
+        "lv_theme_apply", # Theme application is complex, maybe exclude?
+        "lv_image_decoder_get_", "lv_image_decoder_built_in_", "lv_image_cache_", # Image internals
+        "lv_font_get_", "lv_font_load", "lv_font_free", # Font management internals
+        "lv_fs_", # File system internals (keep open/close maybe?)
+        "lv_task_", "lv_timer_exec", # Task/timer execution
+        "lv_style_get_prop", "lv_style_prop_lookup_flags", # Style internals
+        "lv_rand", "lv_srand", # Random numbers
+        # Functions known to use callbacks or be problematic for simulation
+        "lv_timer_create", # Has callback
+        "lv_obj_add_event_cb", "lv_obj_remove_event", "lv_obj_remove_event_cb", # Event callbacks
+        "lv_anim_set_exec_cb", "lv_anim_set_custom_exec_cb", "lv_anim_set_start_cb", "lv_anim_set_completed_cb", "lv_anim_set_deleted_cb", "lv_anim_set_get_value_cb", # Anim callbacks
+        "lv_observer_create_with_handler", # Observer callback
+        "lv_subject_add_observer_with_handler", # Subject callback
+        "lv_group_set_focus_cb", "lv_group_set_edge_cb", # Group callbacks
+        "lv_display_set_flush_cb", "lv_display_set_flush_wait_cb", # Display callbacks
+        "lv_indev_set_read_cb", # Input callback
+        # Varargs functions (difficult to marshal reliably) - HANDLED MANUALLY
+        # "lv_label_set_text_fmt", # Keep manual handling separate
+        "lv_snprintf", "lv_subject_snprintf",
+        # Other potentially problematic / low-level
+        "lv_line_", "lv_canvas_get_image", "lv_group_get_edge_cb",
+        "lv_group_get_focus_cb", "lv_image_buf_", "lv_image_get_bitmap_map_src", "lv_image_buf_free", "lv_image_buf_set_palette",
+        "lv_image_set_bitmap_map_src", "lv_indev_get_read_cb",
+        "lv_indev_", "lv_refr_now", "lv_ll_clear_custom",
+        "lv_font_glyph_release_draw_data", "lv_group_get_focus_cb",
+        "lv_obj_init_draw_image_dsc", "lv_screen_load",
+        "lv_obj_init_draw_label_dsc", "lv_obj_init_draw_image_dsc",
+        "lv_obj_init_draw_line_dsc", "lv_obj_init_draw_rect_dsc",
+        "lv_obj_init_draw_rect_dsc", "lv_obj_init_draw_arc_dsc",
+        "lv_point_precise_", "lv_point_from_precise", "lv_tree_node_",
+        "lv_utils_bsearch",
+        # Deprecated
+        "lv_obj_set_style_local_", "lv_obj_get_style_",
+        ], help="Prefixes for functions to exclude.")
+    parser.add_argument("--include-enums", nargs='+', default=["lv_"], help="Prefixes for enums to include.")
+    parser.add_argument("--exclude-enums", nargs='*', default=["_lv_"], help="Prefixes for enums to exclude (e.g., internal ones).")
+    parser.add_argument("--include-structs", nargs='+', default=["lv_"], help="Prefixes for structs to include.")
+    parser.add_argument("--exclude-structs", nargs='*', default=[
+        "_lv_", "lv_global_t", "lv_ll_t", "lv_rb_t", "lv_event_dsc_t", "lv_ts_calibration_t",
+        "lv_draw_unit_t", "lv_draw_task_t", "lv_draw_buf_t", # Exclude low-level draw structs unless needed
+        "lv_font_fmt_", # Font format internals
+        "lv_anim_path_t", # Internal anim path
+        "lv_fs_drv_t", "lv_font_glyph_dsc_t",
+        "lv_draw_", "lv_yuv_buf_t", "lv_tree_class_t", "lv_yuv_plane_t",
+        "lv_point_precise_t", "lv_image_flags_t", "_lvimage_flags_t",
+        "lv_tree_node_t"
+        ], help="Prefixes for structs to exclude (often internal).")
+    parser.add_argument("--include-unions", nargs='+', default=["lv_"], help="Prefixes for unions to include.")
+    parser.add_argument("--exclude-unions", nargs='*', default=["_lv_",
+    "lv_yuv_buf_t"], help="Prefixes for unions to exclude.")
+    parser.add_argument("--include-typedefs", nargs='+', default=["lv_"], help="Prefixes for typedefs to include.")
+    parser.add_argument("--exclude-typedefs", nargs='*', default=['_lvimage_flags_t', 'lv_image_flags_t'], help="Prefixes for typedefs to exclude.")
+    parser.add_argument("--include-macros", nargs='+', default=["LV_", "lv_obj_clear_flag", "lv_obj_add_flag"], help="Prefixes for macros to include.")
+    parser.add_argument("--exclude-macros", nargs='*', default=[
+        "LV_UNUSED", "LV_ASSERT", "LV_LOG_", "LV_TRACE_", "LV_ATTRIBUTE_", "LV_DEPRECATED",
+        "LV_EXPORT_CONST_INT", "LV_USE_", "LV_CONF_", "LV_ENABLE_", "_LV_", "LV_INDEV_DEF_",
+        "LV_VERSION_", "LV_BIG_ENDIAN", "LV_LITTLE_ENDIAN", "LV_ARCH_", "LV_COMPILER_",
+        "LV_DRAW_SW_", # Exclude low-level SW draw defines
+        "LV_COLOR_DEPTH", "LV_COLOR_16_SWAP", "LV_COLOR_SCREEN_TRANSP", # Config defines
+        "LV_MEM_", # Memory config
+        "LV_GC_", # Garbage collector config
+        "LV_ASSERT_", # Assertion macros
+        "LV_DPX", # Screen density - hard to simulate generically
+        "LV_GRIDNAV_", # Gridnav internals
+        "LV_IMAGE_HEADER_MAGIC", # Internal magic number
+        ], help="Prefixes for macros to exclude.")
+    parser.add_argument("--opaque-types", nargs='*', default=DEFAULT_OPAQUE_TYPE_PREFIXES, help="Prefixes of types to *always* treat as opaque.")
+
+    args = parser.parse_args()
+
+    # --- Load API Data ---
+    try:
+        with open(args.json_api_file, 'r', encoding='utf-8') as f:
+            api_data = json.load(f)
+    except FileNotFoundError:
+        print(f"Error: API JSON file not found at {args.json_api_file}")
+        exit(1)
+    except json.JSONDecodeError as e:
+        print(f"Error: Could not parse API JSON file {args.json_api_file}: {e}")
+        exit(1)
+    except Exception as e:
+        print(f"An unexpected error occurred reading the JSON file: {e}")
+        exit(1)
+
+    # --- Filter API Data ---
+    config = {
+        "json_api_file": args.json_api_file, # Store for reference
+        "output_base_name": args.output_prefix,
+        "opaque_type_prefixes": args.opaque_types,
+        "filtered_functions": [],
+        "filtered_enums": [],
+        "filtered_structures": [],
+        "filtered_unions": [],
+        "filtered_typedefs": [],
+        "filtered_macros": [],
+        "opaque_types": set(), # Populated based on heuristics/config
+        "all_known_types": set() # All type names encountered
+    }
+
+    print("Filtering API elements...")
+    # Define categories and keys for filtering
+    categories_to_filter = [
+        ("functions", "name", args.include_funcs, args.exclude_funcs),
+        ("enums", "name", args.include_enums, args.exclude_enums),
+        ("structures", "name", args.include_structs, args.exclude_structs),
+        ("unions", "name", args.include_unions, args.exclude_unions),
+        ("typedefs", "name", args.include_typedefs, args.exclude_typedefs),
+        ("macros", "name", args.include_macros, args.exclude_macros),
+    ]
+
+    # First pass: Filter based on include/exclude prefixes
+    for category, key, inc_list, exc_list in categories_to_filter:
+        filtered_items = []
+        original_count = len(api_data.get(category, []))
+        for item in api_data.get(category, []):
+            item_name = item.get(key)
+            # Basic include/exclude check
+            included = False
+            if item_name:
+                 # Exact match in include list always includes
+                 if item_name in inc_list:
+                     included = True
+                 # Prefix match includes unless prefix excluded
+                 elif matches_prefix(item_name, inc_list) and not matches_prefix(item_name, exc_list):
+                      included = True
+
+            if included:
+                # --- Additional Filtering Logic ---
+                skip_item = False
+                if category == "functions":
+                     # Exclude functions with varargs (...) unless handled specially
+                    if any(arg and arg.get("type", {}).get("json_type") == "special_type" and arg["type"].get("name") == "ellipsis" for arg in item.get("args", [])):
+                        if item_name not in ["lv_label_set_text_fmt"]: # Allow known special cases
+                            print(f"  Excluding unhandled varargs function: {item_name}")
+                            skip_item = True
+
+                    # Exclude functions taking function pointers as arguments (simplification)
+                    # unless the func ptr type itself is opaque (less common but possible)
+                    elif any(
+                        (arg and (details := get_type_details(arg.get("type"), api_data)) and details.get("json_type") == "function_pointer" and not is_opaque(arg.get("type"), api_data, config))
+                        for arg in item.get("args", [])
+                    ):
+                        print(f"  Excluding function with non-opaque function pointer arg: {item_name}")
+                        skip_item = True
+                    # Exclude functions with common callback typedef names in args
+                    # unless the callback type itself is considered opaque
+                    elif any(
+                         (arg and (t_name := get_c_type_name(arg.get("type"), api_data, config, use_opaque_typedef=False)) and ("_cb_t" in t_name or "_f_t" in t_name) and not is_opaque(arg.get("type"), api_data, config))
+                        for arg in item.get("args",[])
+                    ):
+                        print(f"  Excluding function with non-opaque callback arg type: {item_name}")
+                        skip_item = True
+
+                if not skip_item:
+                    filtered_items.append(item)
+            # else:
+                 # print(f"  Excluding: {item_name} ({category}) based on prefix rules.")
+
+        config[f"filtered_{category}"] = filtered_items
+        print(f"  {category.capitalize()}: Kept {len(filtered_items)} out of {original_count}")
+
+
+    # Second pass: Collect all type names used by included elements
+    print("Collecting used type names...")
+    def collect_type_names(type_info, known_types):
+        if not type_info or not isinstance(type_info, dict):
+            return
+        base_name = get_base_type_name(type_info)
+        if base_name:
+            known_types.add(base_name)
+            # Also add the "clean" name used for marshalers
+            clean_name = get_clean_c_type_name(type_info, api_data, config)
+            if clean_name: known_types.add(clean_name)
+
+
+        # Recurse for pointers, arrays, typedefs, struct/union fields
+        json_type = type_info.get("json_type")
+        if json_type in ("pointer", "array", "ret_type"):
+             collect_type_names(type_info.get("type"), known_types)
+        elif json_type == "typedef":
+             # Also collect the typedef name itself
+             td_name = type_info.get("name")
+             if td_name: known_types.add(td_name)
+             collect_type_names(type_info.get("type"), known_types)
+        elif json_type in ("struct", "union"):
+             # Need full details to recurse into fields
+             # Add the struct/union name itself (already done by base_name)
+             # su_name = type_info.get("name")
+             # if su_name: known_types.add(su_name)
+             details = get_type_details(type_info, api_data)
+             if details and "fields" in details:
+                 for field in details["fields"]:
+                     collect_type_names(field.get("type"), known_types)
+
+    # Collect from functions (return types and args)
+    for func in config['filtered_functions']:
+        collect_type_names(func.get("type", {}).get("type"), config["all_known_types"])
+        for arg in func.get("args", []):
+            collect_type_names(arg.get("type"), config["all_known_types"])
+    # Collect from struct/union fields
+    for struct in config['filtered_structures']:
+        collect_type_names(struct, config["all_known_types"]) # Add struct type itself
+        if "fields" in struct:
+            for field in struct["fields"]:
+                collect_type_names(field.get("type"), config["all_known_types"])
+    for union_def in config['filtered_unions']:
+        collect_type_names(union_def, config["all_known_types"]) # Add union type itself
+        if "fields" in union_def:
+            for field in union_def["fields"]:
+                collect_type_names(field.get("type"), config["all_known_types"])
+    # Collect from typedef underlying types
+    for typedef in config['filtered_typedefs']:
+        collect_type_names(typedef, config["all_known_types"]) # Add typedef name itself
+        collect_type_names(typedef.get("type"), config["all_known_types"])
+    # Add names of included enums themselves
+    for enum in config['filtered_enums']:
+         collect_type_names(enum, config["all_known_types"])
+
+
+    print(f"  Found {len(config['all_known_types'])} unique type names potentially needed by included elements.")
+
+    # --- Determine Opaque Types ---
+    print("Determining opaque types...")
+    # Use the collected type names and heuristics/config lists
+    for type_name in list(config["all_known_types"]): # Iterate over a copy
+        type_info_stub = {"name": type_name} # Create a stub to pass to is_opaque
+        if is_opaque(type_info_stub, api_data, config):
+            config["opaque_types"].add(type_name)
+            # Add base types of opaque types too if they exist (e.g. struct _lv_obj_t for typedef lv_obj_t)
+            details = get_type_details(type_info_stub, api_data)
+            if details and details.get("json_type") == "typedef":
+                 underlying_type = details.get("type")
+                 if underlying_type:
+                     base = get_base_type_name(underlying_type)
+                     if base and base != type_name:
+                         # Check if the underlying base itself should be opaque
+                         if is_opaque(underlying_type, api_data, config):
+                              config["opaque_types"].add(base)
+
+    print(f"  Identified {len(config['opaque_types'])} opaque types/prefixes based on usage and config.")
+    # print(f"  Opaque types: {sorted(list(config['opaque_types']))}") # Debug print
+
+    global needed_marshalers # Use the global set
+    needed_marshalers.clear() # Ensure it's empty before this run
+    print("Determining needed marshalers by simulating function calls...")
+    for func in config['filtered_functions']:
+        fargs = func.get("args", [])
+        is_void_func = (not fargs or (len(fargs) == 1 and get_base_type_name(fargs[0].get("type")) == "void"))
+        if not is_void_func:
+            for i, arg in enumerate(fargs):
+                 _ = get_marshal_function_call(arg["type"], api_data, config, f"dummy_arg_{i}", needed_marshalers, arg.get("name", "?"))
+
+    # Recursively check struct fields
+    print("Checking struct/union field marshalers...")
+    processed_struct_union_ids = set() # Avoid infinite recursion on cyclic structs
+    check_queue = list(needed_marshalers) # Start with initially needed marshalers
+    while check_queue:
+        marshaler_id = check_queue.pop(0)
+        if marshaler_id in processed_struct_union_ids: continue
+
+        category = None
+        mode = None
+        if marshaler_id.startswith("struct_val:"): category, mode = "struct", "val"
+        # Ptr marshalers depend on value marshalers, so only need to check value ones
+        # elif marshaler_id.startswith("struct_ptr:"): category, mode = "struct", "ptr"
+        elif marshaler_id.startswith("union_val:"): category, mode = "union", "val"
+        # elif marshaler_id.startswith("union_ptr:"): category, mode = "union", "ptr"
+
+        if category and mode == "val":
+            processed_struct_union_ids.add(marshaler_id) # Mark this one as processed
+            c_type_name = marshaler_id.split(":", 1)[1]
+            # Find definition (check filtered first, then all)
+            item_defs = config.get(f'filtered_{category}es', []) + api_data.get(f'{category}es', [])
+            item_def = next((i for i in item_defs if (find_typedef_for_base(i['name'], api_data, config) or i['name']) == c_type_name), None)
+
+            if item_def and "fields" in item_def:
+                for field in item_def["fields"]:
+                    field_type_info = field.get("type")
+                    if field_type_info:
+                        # <<< Add field marshalers to the main set >>>
+                        _ = get_marshal_function_call(field_type_info, api_data, config, f"dummy_field", needed_marshalers, field.get("name", "?"))
+                        # Find the ID that *would* be generated for this field type
+                        temp_needed = set()
+                        _ = get_marshal_function_call(field_type_info, api_data, config, f"dummy_field", temp_needed, field.get("name", "?"))
+                        # If the field is a struct/union, add its marshaler ID to the check queue
+                        for field_id in temp_needed:
+                             if (field_id.startswith("struct_") or field_id.startswith("union_")) and field_id not in processed_struct_union_ids:
+                                 check_queue.append(field_id)
+
+
+    print(f"  Total marshalers needed: {len(needed_marshalers)}")
+
+    # --- Generate Code ---
+    print("Generating C header file...")
+    header_code = generate_header(api_data, config)
+
+    print("Generating C source file...")
+    source_code = generate_c_source(api_data, config, needed_marshalers)
+
+    # --- Save Configuration ---
+    # (Keep this section as is - useful for reproducibility)
+    print("Saving build configuration...")
+    config_to_save = {
+        "generator": "gen_wrapper.py",
+        "lvgl_json_source": args.json_api_file,
+        "output_prefix": args.output_prefix,
+        "include_funcs": args.include_funcs,
+        "exclude_funcs": args.exclude_funcs,
+        "include_enums": args.include_enums,
+        "exclude_enums": args.exclude_enums,
+        "include_structs": args.include_structs,
+        "exclude_structs": args.exclude_structs,
+        "include_unions": args.include_unions,
+        "exclude_unions": args.exclude_unions,
+        "include_typedefs": args.include_typedefs,
+        "exclude_typedefs": args.exclude_typedefs,
+        "include_macros": args.include_macros,
+        "exclude_macros": args.exclude_macros,
+        "opaque_type_prefixes_config": args.opaque_types,
+        "determined_opaque_types": sorted(list(config['opaque_types'])),
+    }
+    config_filename = os.path.join(args.output_dir, f"{args.output_prefix}_config.json")
+    try:
+        os.makedirs(args.output_dir, exist_ok=True) # Ensure dir exists before writing
+        with open(config_filename, 'w', encoding='utf-8') as f_cfg:
+            json.dump(config_to_save, f_cfg, indent=4)
+        print(f"Successfully wrote configuration file: {config_filename}")
+    except IOError as e:
+        print(f"Error writing configuration file {config_filename}: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred writing the configuration file: {e}")
+    # --- End Save Configuration ---
+
+    # --- Write Output Files ---
+    os.makedirs(args.output_dir, exist_ok=True)
+    header_path = os.path.join(args.output_dir, f"{args.output_prefix}.h")
+    source_path = os.path.join(args.output_dir, f"{args.output_prefix}.c")
+
+    try:
+        with open(header_path, 'w', encoding='utf-8') as f:
+            f.write(header_code)
+        print(f"Successfully wrote header file: {header_path}")
+    except IOError as e:
+        print(f"Error writing header file {header_path}: {e}")
+        exit(1)
+    except Exception as e:
+        print(f"An unexpected error occurred writing the header file: {e}")
+        exit(1)
+
+
+    try:
+        with open(source_path, 'w', encoding='utf-8') as f:
+            f.write(source_code)
+        print(f"Successfully wrote source file: {source_path}")
+    except IOError as e:
+        print(f"Error writing source file {source_path}: {e}")
+        exit(1)
+    except Exception as e:
+        print(f"An unexpected error occurred writing the source file: {e}")
+        exit(1)
+
+    print("\nGeneration complete. Remember to:")
+    print(f"1. Add '{os.path.basename(source_path)}' and cJSON source to your build system.")
+    print(f"2. Include '{os.path.basename(header_path)}' in your application code.")
+    print(f"3. Ensure 'uthash.h' is in your compiler's include path.")
+    print(f"4. Call `emul_lvgl_init()` before using any wrapped LVGL functions.")
+    print(f"5. Call `emul_lvgl_register_external_ptr()` for any fonts, images, etc., declared outside the wrapper *before* they are used in setters/functions.")
+    print(f"6. Call `emul_lvgl_export(\"output.json\", true)` (true for pretty-print) to generate the simulation trace.")
+    print(f"   Alternatively, call `char* json_str = emul_lvgl_to_str(true);` and handle the string.")
+    print(f"7. Call `emul_lvgl_destroy()` when your application exits to clean up resources.")
+
+if __name__ == "__main__":
+    main()

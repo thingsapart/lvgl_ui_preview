@@ -1,6 +1,7 @@
 // client_main.c
 #include <stdio.h>
 #include <stdlib.h>
+#define LV_COLOR_DEPTH 16
 #include "emul_lvgl.h"
 
 // Font pointers remain the same

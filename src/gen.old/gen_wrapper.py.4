@@ -1,0 +1,1493 @@
+#!/usr/bin/env python3
+
+import json
+import argparse
+import os
+import sys
+import re
+from collections import defaultdict
+from typing import List, Dict, Set, Any, Optional, Tuple
+
+_debug = print
+
+# --- Default Include/Exclude Lists (Adjusted for state building) ---
+DEFAULT_INCLUDES = {
+    "functions": [
+        "lv_init", "lv_deinit", # Core lifecycle
+        "lv_obj_create", "lv_obj_del", # Base object
+        "lv_obj_set_parent",
+        "lv_obj_set_pos", "lv_obj_set_x", "lv_obj_set_y",
+        "lv_obj_set_size", "lv_obj_set_width", "lv_obj_set_height",
+        "lv_obj_set_align", "lv_obj_align", "lv_obj_align_to", # Alignment needs careful state mapping
+        "lv_obj_add_style", "lv_obj_remove_style", # Referencing styles
+        "lv_obj_add_flag", "lv_obj_clear_flag", "lv_obj_set_state", # State flags
+        "lv_obj_set_style_local_", # Local style properties
+        "lv_style_init", "lv_style_reset", "lv_style_set_", # Style definition functions
+        # Common Widgets
+        "lv_label_create", "lv_label_set_text", "lv_label_set_long_mode",
+        "lv_btn_create",
+        "lv_button_create",
+        "lv_img_create", "lv_img_set_src",
+        # Color helpers (needed by callers)
+        "lv_color_",
+        # Screen management (optional but useful context)
+        "lv_disp_get_default", "lv_disp_load_scr", "lv_scr_act",
+    ],
+    "enums": ["lv_", "LV_"], # Need states, aligns, etc.
+    "structs": ["lv_color_t", "lv_font_t", "lv_img_dsc_t", "lv_grad_stop_t"], # Only structs passed by value or whose members are accessed
+    "typedefs": ["lv_", "LV_", "bool", "int", "uint", "char", "float", "double", "size_t", "intptr_t", "uintptr_t"], # Base types
+    "macros": ["LV_"], # Colors, constants etc.
+}
+
+DEFAULT_EXCLUDES: Dict[str, List[str]] = {
+    "functions": [
+         # Exclude things hard to model statefully or less common for basic UI desc
+        "_lv_", "lv_debug_", "lv_mem_", "lv_log_", "lv_ll_", "lv_timer_",
+        "lv_anim_", "lv_event_", "lv_group_", "lv_indev_",
+        "lv_obj_get_", # Getters are mostly irrelevant for state building
+        "lv_style_get_",
+        "lv_refr_", # Refresh/rendering related
+        "lv_theme_", # Themes add complexity, handle later if needed
+        "lv_fs_", # Filesystem
+        "lv_draw_", # Drawing internals
+        "lv_color_filter_dsc_init",
+        "lv_obj_delete_anim_completed_cb",
+        "lv_style_set_color_filter_dsc",
+        "lv_style_set_anim"
+    ],
+    "enums": ["_LV_"],
+    "structs": ["_lv_", "lv_obj", "lv_style", "lv_group", "lv_timer", "lv_event"], # Exclude internal/complex structs we replace/ignore
+    "typedefs": ["_lv_", "lv_disp_t"],
+    "macros": ["_LV_"],
+}
+
+POINTER_ID_PREFIX='@'
+
+# --- Helper Functions (largely reused, minor adjustments) ---
+
+def matches_filters(name: str, includes: List[str], excludes: List[str]) -> bool:
+    # ... (same as before) ...
+    if not name:
+        return False
+    if name in excludes: return False
+    if name in includes: return True
+    for prefix in excludes:
+        if name.startswith(prefix): return False
+    for prefix in includes:
+        if name.startswith(prefix): return True
+    return False
+
+
+def get_type_name(type_info: Dict[str, Any]) -> Optional[str]:
+    # ... (same as before) ...
+    if not isinstance(type_info, dict): return None
+    json_type = type_info.get("json_type")
+    if json_type == "pointer": return get_type_name(type_info.get("type"))
+    elif json_type == "array": return get_type_name(type_info.get("type"))
+    elif json_type in ["ret_type", "typedef", "arg", "field"]: return get_type_name(type_info.get("type"))
+    else: return type_info.get("name")
+
+def is_pointer_type(type_info: Dict[str, Any]) -> bool:
+    # ... (same as before) ...
+    return isinstance(type_info, dict) and type_info.get("json_type") == "pointer"
+
+
+def get_pointee_type_info(type_info: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+     """ Gets the type info pointed to by a pointer type """
+     if is_pointer_type(type_info):
+         return type_info.get("type")
+     return None
+
+
+def get_base_type_info(type_info: Dict[str, Any], api_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    # ... (mostly same as before, ensure it stops at lv_obj_t etc.) ...
+    if not isinstance(type_info, dict): return None
+    current_type_info = type_info
+    visited_typedefs = set()
+
+    while True:
+        json_type = current_type_info.get("json_type")
+        name = current_type_info.get("name")
+
+        # Stop if we hit our special typedefs
+        if name in ["lv_obj_t"]:
+            # We treat lv_obj_t as opaque pointer to cJSON, return simplified info
+            return {"name": "lv_obj_t", "json_type": "lvgl_type", "_is_emulated_pointer": True}
+        # lv_style_t is treated as an opaque struct pointer in C code
+        if name == "lv_style_t":
+             return {"name": "lv_style_t", "json_type": "lvgl_type", "_is_emulated_struct": True}
+
+        if json_type == "pointer" or json_type == "array":
+            current_type_info = current_type_info.get("type")
+        elif json_type in ["ret_type", "arg", "field"]:
+             current_type_info = current_type_info.get("type")
+        elif json_type == "typedef":
+            if name in visited_typedefs: return None # Cycle
+            visited_typedefs.add(name)
+            typedef_def = next((t for t in api_data.get("typedefs", []) if t.get("name") == name), None)
+            if not typedef_def:
+                 current_type_info = current_type_info.get("type")
+                 if not isinstance(current_type_info, dict): return None
+                 continue
+            else:
+                 current_type_info = typedef_def.get("type")
+
+        elif json_type in ["enum", "struct", "union", "lvgl_type", "stdlib_type", "primitive_type", "function_pointer"]:
+             if json_type == "lvgl_type" and name:
+                 base_def = find_api_definition(api_data, name)
+                 if base_def:
+                     # Check again if the resolved definition is one we emulate specially
+                     if base_def.get("name") in ("lv_obj_t"):
+                          return {"name": "lv_obj_t", "json_type": "lvgl_type", "_is_emulated_pointer": True}
+                     if base_def.get("name") == "lv_style_t":
+                          return {"name": "lv_style_t", "json_type": "lvgl_type", "_is_emulated_struct": True}
+                     return base_def # Found actual definition
+                 else:
+                     typedef_def = next((t for t in api_data.get("typedefs", []) if t.get("name") == name), None)
+                     if typedef_def:
+                         current_type_info = typedef_def.get("type")
+                         continue
+                     # Return the lvgl_type info itself if unresolved but named
+                     return current_type_info
+             else:
+                 return current_type_info # Found a non-lvgl base type
+        else:
+             print(f"Warning: Cannot resolve base type for: {current_type_info}", file=sys.stderr)
+             return None
+
+        if not isinstance(current_type_info, dict): return None
+
+
+def find_api_definition(api_data: Dict[str, Any], name: str) -> Optional[Dict[str, Any]]:
+    # ... (same as before) ...
+    if not name: return None
+    for category in ["enums", "structs", "unions", "typedefs", "function_pointers"]:
+        for item in api_data.get(category, []):
+            if item.get("name") == name:
+                return item
+    return None
+
+def get_c_type_str(type_info: Dict[str, Any], is_arg_or_field=False) -> str:
+    # ... (Needs adjustment for lv_obj_t and lv_style_t) ...
+    if not isinstance(type_info, dict):
+        import traceback
+        for line in traceback.format_stack():
+            print(line.strip())
+        _debug("FAILED TO GET TYPE", type_info)
+        return "/* unknown */"
+
+    # Check for our emulated types first
+    if type_info.get("_is_emulated_pointer"):
+        return type_info.get("name", "cJSON *") # Should be "lv_obj_t"
+    if type_info.get("_is_emulated_struct"):
+        return type_info.get("name", "struct _emul_struct") # Should be "lv_style_t"
+
+
+    json_type = type_info.get("json_type")
+    name = type_info.get("name")
+    quals = type_info.get("quals", [])
+
+    # --- Handle special cases for emulated types found deeply ---
+    base_type_info = get_base_type_info(type_info, {}) # Use dummy api_data, only care about name match
+    if base_type_info:
+        if base_type_info.get("name") == "lv_obj_t":
+             # If original type was pointer lv_obj_t*, just return lv_obj_t (which is cJSON*)
+             # If it was lv_obj_t, that's an error (can't pass cJSON by value)
+             if is_pointer_type(type_info): return "lv_obj_t *"
+             else: return "lv_obj_t *"
+             #else: return "/* ERROR: Cannot pass lv_obj_t by value */"
+        if base_type_info.get("name") == "lv_style_t":
+             if is_pointer_type(type_info): return "lv_style_t *" # Pointer to our opaque struct
+             else: return "lv_style_t" # The opaque struct itself
+
+    # --- Original logic for other types ---
+    qual_prefix = " ".join(q for q in quals if q != 'volatile') + (" " if quals else "")
+    volatile_qual = " volatile" if 'volatile' in quals else ""
+
+    if json_type == "pointer":
+        pointee_type = type_info.get("type")
+        if isinstance(pointee_type, dict) and pointee_type.get("json_type") == "function_pointer":
+             fp_name = pointee_type.get("name", "fptr")
+             return f"{qual_prefix}{fp_name}{volatile_qual} *"
+        else:
+             # Check pointee type for emulated types
+             pointee_base_info = get_base_type_info(pointee_type, {})
+             if pointee_base_info:
+                  if pointee_base_info.get("name") == "lv_obj_t":
+                       return f"{qual_prefix}lv_obj_t{volatile_qual} *" # Pointer to cJSON* -> lv_obj_t *
+                  if pointee_base_info.get("name") == "lv_style_t":
+                       return f"{qual_prefix}lv_style_t{volatile_qual} *" # Pointer to struct -> lv_style_t *
+
+             pointee_str = get_c_type_str(pointee_type)
+             return f"{pointee_str}{volatile_qual} *{qual_prefix.strip()}"
+
+    elif json_type == "array":
+        #base_type_str = get_c_type_str(type_info.get("type"))
+        base_type_str = type_info.get("name")
+        return f"{qual_prefix}{base_type_str}{volatile_qual}" # Dimension added later
+
+    elif json_type in ["ret_type", "arg", "field", "typedef"]:
+        return get_c_type_str(type_info.get("type")) # Recurse
+
+    # --- Other base types remain mostly the same ---
+    elif json_type == "enum":
+        enum_name = type_info.get("name")
+        return f"{qual_prefix}{enum_name or f'enum anon_enum_{hash(str(type_info))}'}{volatile_qual}"
+
+    elif json_type == "struct":
+         struct_name = type_info.get("name")
+         # Crucially, filter out the actual lv_obj struct definition if found
+         if struct_name == "lv_obj_t":
+             return "/* emulated lv_obj_t */" # Should not happen if base_type check works
+         elif struct_name == "lv_style_t":
+              return "lv_style_t" # The opaque struct name
+         elif struct_name:
+             return f"{qual_prefix}{struct_name}{volatile_qual}"
+         else:
+             internal_name = type_info.get("type",{}).get("name")
+             if type_info.get('type',{}).get('json_type') == 'primitive_type' and internal_name == 'struct':
+                 return f"{qual_prefix}struct /* anonymous */{volatile_qual}"
+             else:
+                 return f"{qual_prefix}{struct_name or '/* unknown_struct */'}{volatile_qual}"
+
+    elif json_type == "union":
+        union_name = type_info.get("name")
+        return f"{qual_prefix}{union_name or '/* anonymous_union */'}{volatile_qual}"
+
+    elif json_type == "lvgl_type":
+        if name == "lv_obj_t": return "lv_obj_t" # The typedef cJSON*
+        if name == "lv_style_t": return "lv_style_t" # The typedef struct
+        return f"{qual_prefix}{name}{volatile_qual}"
+
+    elif json_type in ["stdlib_type", "primitive_type"]:
+        return f"{qual_prefix}{name}{volatile_qual}"
+
+    elif json_type == "function_pointer":
+        return f"{qual_prefix}{name}{volatile_qual}"
+
+    elif json_type == "special_type" and name == "ellipsis":
+        return "..."
+
+    else:
+        return f"/* unknown_type: {json_type} name: {name} */"
+
+
+# --- C Code Generation ---
+
+C_HEADER_TEMPLATE = """\
+#ifndef EMUL_LVGL_H
+#define EMUL_LVGL_H
+
+#ifdef __cplusplus
+extern "C" {{
+#endif
+
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h> // For size_t
+#include "cJSON.h" // Include cJSON
+
+// --- Core Emulation Type Definitions ---
+typedef cJSON lv_obj_t; // *** Map lv_obj_t to cJSON node ***
+
+// Define lv_style_t as an opaque struct for type safety in C
+// Its actual JSON representation is managed internally.
+typedef struct _emul_lv_style_t {{ uint8_t _dummy; /* Needs at least one member */ }} lv_style_t;
+
+typedef void * lv_font_t;
+
+// --- Forward Declarations (for other structs if needed) ---
+{forward_declarations}
+
+// --- Emulation Control ---
+/** @brief Initializes the LVGL emulator. Call once at the beginning. */
+void emul_lvgl_init(const char* output_json_path);
+
+/** @brief Deinitializes the LVGL emulator and writes the final JSON state. */
+void emul_lvgl_deinit(void);
+
+/** @brief Registers a pointer (like a font or image) with a symbolic name for JSON output. */
+void emul_lvgl_register_pointer(const void *ptr, const char *name);
+
+// --- Primitive LVGL Type Definitions (Excluding lv_obj_t, lv_style_t) ---
+{typedef_defs}
+
+// --- LVGL Enum Definitions ---
+{enum_defs}
+
+// --- LVGL Struct Definitions (Excluding lv_obj_t, lv_style_t) ---
+{struct_defs}
+
+// --- LVGL Union Definitions ---
+{union_defs}
+
+// --- LVGL Type Definitions (Excluding lv_obj_t, lv_style_t) ---
+{lvgl_typedef_defs}
+
+// --- LVGL Macro Definitions ---
+{macro_defs}
+
+// --- LVGL Function Prototypes (Using emulated types) ---
+{function_prototypes}
+
+#ifdef __cplusplus
+}} /*extern "C"*/
+#endif
+
+#endif /* EMUL_LVGL_H */
+"""
+
+C_SOURCE_TEMPLATE = """\
+#include "emul_lvgl.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdarg.h> // For varargs
+
+// --- Internal State ---
+#define MAX_POINTER_MAP_ENTRIES 1024
+#define MAX_STYLE_MAP_ENTRIES 256
+#define POINTER_ID_PREFIX "@" // Prefix for registered pointers in JSON
+
+#define LV_COLOR_DEPTH 16
+
+typedef struct {{
+    const void *ptr;
+    char name[128]; // Full name including prefix, e.g., "@lv_font_montserrat_14"
+}} PointerMapEntry;
+
+typedef struct {{
+    const void *style_ptr; // Address of the user's lv_style_t struct
+    cJSON *json_node;      // The cJSON object representing this style
+}} StyleMapEntry;
+
+// Global JSON state
+static cJSON *g_root_json = NULL; 
+static cJSON *g_root_objects_array = NULL; // Array under "roots" key
+static cJSON *g_styles_object = NULL;      // Object under "styles" key
+static cJSON *g_resources_object = NULL;   // Object under "resources" key (for fonts etc)
+
+// Pointer and style mapping
+static PointerMapEntry g_pointer_map[MAX_POINTER_MAP_ENTRIES];
+static size_t g_pointer_map_count = 0;
+
+static StyleMapEntry g_style_map[MAX_STYLE_MAP_ENTRIES];
+static size_t g_style_map_count = 0;
+
+static FILE *g_json_output_file = NULL;
+
+// --- Internal Helper Functions ---
+
+// Get JSON object associated with an lv_style_t pointer
+static cJSON* get_style_json_node(const lv_style_t *style_ptr) {{
+    if (!style_ptr) return NULL;
+    for (size_t i = 0; i < g_style_map_count; ++i) {{
+        if (g_style_map[i].style_ptr == style_ptr) {{
+            return g_style_map[i].json_node;
+        }}
+    }}
+    fprintf(stderr, "EMUL_LVGL Warning: Style object %p not initialized with lv_style_init()?\\n", (void*)style_ptr);
+    return NULL;
+}}
+
+// --- Pointer Management ---
+
+// Generates the string ID for a pointer (e.g., "@lv_font_montserrat_14" or "@ptr_0x...")
+static const char* get_pointer_id(const void *ptr) {{
+    if (ptr == NULL) {{
+        // Represent null pointers explicitly if needed, or handle contextually
+        return NULL; // Or return a specific string like "@null"?
+    }}
+    // Check registered pointers first
+    for (size_t i = 0; i < g_pointer_map_count; ++i) {{
+        if (g_pointer_map[i].ptr == ptr) {{
+            return g_pointer_map[i].name;
+        }}
+    }}
+    // Not registered, generate a unique ID based on address
+    // Need a static buffer pool to return transient strings
+    static char generated_id_buffer[MAX_POINTER_MAP_ENTRIES][64]; // Pool of buffers
+    static int buffer_idx = 0;
+
+    int current_buf_idx = buffer_idx;
+    buffer_idx = (buffer_idx + 1) % MAX_POINTER_MAP_ENTRIES; // Cycle through buffers
+
+    snprintf(generated_id_buffer[current_buf_idx], sizeof(generated_id_buffer[0]),
+             "%sptr_%p", POINTER_ID_PREFIX, ptr); // Format as "@ptr_0x..."
+    return generated_id_buffer[current_buf_idx];
+}}
+
+void emul_lvgl_register_pointer(const void *ptr, const char *name) {{
+    if (!ptr || !name) return;
+    if (g_pointer_map_count >= MAX_POINTER_MAP_ENTRIES) {{
+        fprintf(stderr, "EMUL_LVGL Warning: Pointer map full. Cannot register %s (%p).\\n", name, ptr);
+        return;
+    }}
+
+    // Format the name with prefix for consistency
+    char full_name[128];
+    snprintf(full_name, sizeof(full_name), "%s%s", POINTER_ID_PREFIX, name);
+
+    // Check if already registered (update name?)
+    for (size_t i = 0; i < g_pointer_map_count; ++i) {{
+        if (g_pointer_map[i].ptr == ptr) {{
+            strncpy(g_pointer_map[i].name, full_name, sizeof(g_pointer_map[i].name) - 1);
+            g_pointer_map[i].name[sizeof(g_pointer_map[i].name) - 1] = '\\0';
+            // Also update the resources object if it exists
+             if (g_resources_object && cJSON_HasObjectItem(g_resources_object, full_name)) {{
+                 // We might rename the key here if needed, but simple update is fine for now
+             }} else if (g_resources_object) {{
+                 cJSON_AddItemToObject(g_resources_object, full_name, cJSON_CreateObject()); // Add basic resource info
+             }}
+            return;
+        }}
+    }}
+
+    // Add new entry
+    g_pointer_map[g_pointer_map_count].ptr = ptr;
+    strncpy(g_pointer_map[g_pointer_map_count].name, full_name, sizeof(g_pointer_map[0].name) - 1);
+    g_pointer_map[g_pointer_map_count].name[sizeof(g_pointer_map[0].name) - 1] = '\\0';
+    g_pointer_map_count++;
+
+    // Add to resources JSON object (simple placeholder for now)
+    if (g_resources_object) {{
+         cJSON_AddItemToObject(g_resources_object, full_name, cJSON_CreateObject()); // Or add type info if known
+    }}
+}}
+
+
+// --- cJSON Marshalling Helpers ---
+
+// Marshals simple types to cJSON values. Caller manages returned object lifetime IF it's added to another object/array.
+static cJSON* marshal_int(int val) {{ return cJSON_CreateNumber(val); }}
+static cJSON* marshal_uint(unsigned int val) {{ return cJSON_CreateNumber(val); }} // cJSON uses double internally
+static cJSON* marshal_long(long val) {{ return cJSON_CreateNumber(val); }}
+static cJSON* marshal_ulong(unsigned long val) {{ return cJSON_CreateNumber(val); }}
+static cJSON* marshal_int64(int64_t val) {{ return cJSON_CreateNumber((double)val); }} // Potential precision loss for large 64-bit
+static cJSON* marshal_uint64(uint64_t val) {{ return cJSON_CreateNumber((double)val); }} // Potential precision loss
+static cJSON* marshal_float(float val) {{ return cJSON_CreateNumber(val); }}
+static cJSON* marshal_double(double val) {{ return cJSON_CreateNumber(val); }}
+static cJSON* marshal_bool(bool val) {{ return cJSON_CreateBool(val); }}
+
+static cJSON* marshal_string(const char *str) {{
+    if (!str) return cJSON_CreateNull();
+    return cJSON_CreateString(str);
+}}
+
+static cJSON* marshal_pointer(const void *ptr) {{
+    const char* id_str = get_pointer_id(ptr);
+    if (!id_str) return cJSON_CreateNull(); // Handle NULL pointers as JSON null
+    return cJSON_CreateString(id_str);
+}}
+
+// Specific marshaller for lv_color_t
+// ADJUST based on actual lv_color_t definition in your lvgl_api.json/generated header
+static cJSON* marshal_lv_color_t(lv_color_t color) {{
+    // Example: Assuming lv_color_t is: typedef struct {{ uint32_t full; }} lv_color_t;
+    // Or maybe: typedef uint32_t lv_color_t;
+    // Or: struct {{ uint8_t r, g, b, alpha; }}
+#if LV_COLOR_DEPTH == 32 || LV_COLOR_DEPTH == 24
+    // Assuming 'full' member or direct typedef to uint32_t
+    char buf[10];
+    union {{ lv_color_t c; uint32_t full; }} col = { .c = color };
+    uint32_t color_val = col.full; // Adjust if direct typedef: uint32_t color_val = color;
+    snprintf(buf, sizeof(buf), "#%06X", (unsigned int)(color_val & 0xFFFFFF));
+    return cJSON_CreateString(buf);
+#elif LV_COLOR_DEPTH == 16
+    // Need conversion logic for 16-bit color to hex string (e.g., RGB565)
+    char buf[10];
+    union {{ lv_color_t c; uint16_t full; }} col = { c. = color };
+    uint16_t color_val = col.full; // Adjust if direct typedef
+    uint8_t r = (color_val >> 11) & 0x1F;
+    uint8_t g = (color_val >> 5) & 0x3F;
+    uint8_t b = color_val & 0x1F;
+    // Scale to 8-bit for hex representation
+    r = (r * 255) / 31;
+    g = (g * 255) / 63;
+    b = (b * 255) / 31;
+    snprintf(buf, sizeof(buf), "#%02X%02X%02X", r, g, b);
+    return cJSON_CreateString(buf);
+#else // 8-bit, 1-bit etc. - represent numerically or add specific logic
+    return cJSON_CreateNumber(color.full); // Fallback: marshal as number
+#endif
+}}
+
+// Helper to marshal common style property args (value, state) into a JSON array
+static cJSON* marshal_style_property_args(cJSON *value_json, int32_t state) {{
+    if (!value_json) value_json = cJSON_CreateNull(); // Ensure value is not NULL
+
+    cJSON *args_array = cJSON_CreateArray();
+    if (!args_array) {{
+        cJSON_Delete(value_json); // Clean up value if array creation fails
+        return NULL;
+    }}
+    cJSON_AddItemToArray(args_array, value_json); // Add value (takes ownership)
+    cJSON_AddItemToArray(args_array, cJSON_CreateNumber(state)); // Add state
+    return args_array;
+}}
+
+
+// --- Emulation Control Implementation ---
+
+void emul_lvgl_init(const char* output_json_path) {{
+    if (g_root_json) {{
+        fprintf(stderr, "EMUL_LVGL Warning: Already initialized.\\n");
+        return;
+    }}
+
+    g_root_json = cJSON_CreateObject();
+    if (!g_root_json) {{
+        fprintf(stderr, "EMUL_LVGL Error: Failed to create root JSON object.\\n");
+        exit(1);
+    }}
+
+    g_root_objects_array = cJSON_AddArrayToObject(g_root_json, "roots");
+    g_styles_object = cJSON_AddObjectToObject(g_root_json, "styles");
+    g_resources_object = cJSON_AddObjectToObject(g_root_json, "resources");
+
+    if (!g_root_objects_array || !g_styles_object || !g_resources_object) {{
+         fprintf(stderr, "EMUL_LVGL Error: Failed to create root JSON structure.\\n");
+         cJSON_Delete(g_root_json);
+         g_root_json = NULL;
+         exit(1);
+    }}
+
+    g_json_output_file = fopen(output_json_path, "w");
+    if (!g_json_output_file) {{
+        perror("EMUL_LVGL Error: Cannot open output JSON file");
+        cJSON_Delete(g_root_json);
+        g_root_json = NULL;
+        exit(1);
+    }}
+
+    g_pointer_map_count = 0;
+    g_style_map_count = 0;
+    // Optional: Add metadata
+    cJSON *meta = cJSON_CreateObject();
+    cJSON_AddStringToObject(meta, "generator", "emul_lvgl");
+    cJSON_AddNumberToObject(meta, "timestamp", (double)time(NULL)); // Include time.h
+    cJSON_AddItemToObject(g_root_json, "metadata", meta);
+}}
+
+void emul_lvgl_deinit(void) {{
+    if (!g_root_json || !g_json_output_file) {{
+         fprintf(stderr, "EMUL_LVGL Warning: Not initialized or already deinitialized.\\n");
+        return;
+    }}
+
+    // Serialize the final JSON state to the file
+    char *json_string = cJSON_PrintBuffered(g_root_json, 4096, 1); // Use formatting (1)
+    if (json_string) {{
+        fprintf(g_json_output_file, "%s\\n", json_string);
+        cJSON_free(json_string); // Free buffer allocated by cJSON_PrintBuffered
+    }} else {{
+        fprintf(stderr, "EMUL_LVGL Error: Failed to serialize JSON to string.\\n");
+        // Try unformatted as fallback?
+        json_string = cJSON_PrintUnformatted(g_root_json);
+         if (json_string) {{
+             fprintf(g_json_output_file, "%s\\n", json_string);
+             cJSON_free(json_string);
+         }}
+    }}
+
+
+    fclose(g_json_output_file);
+    g_json_output_file = NULL;
+
+    // Clean up all cJSON memory
+    cJSON_Delete(g_root_json);
+    g_root_json = NULL;
+    g_root_objects_array = NULL; // Pointers are part of g_root_json
+    g_styles_object = NULL;
+    g_resources_object = NULL;
+
+    // Reset maps
+    g_pointer_map_count = 0;
+    g_style_map_count = 0;
+}}
+
+// --- LVGL Function Implementations ---
+{function_implementations}
+
+"""
+
+# --- Main Generator Class (EmulLvglGenerator) ---
+
+class EmulLvglGenerator:
+    def __init__(self, api_file_path: str, includes: Dict[str, List[str]], excludes: Dict[str, List[str]], output_dir: str):
+        # ... (Initialization same as before) ...
+        self.api_file_path = api_file_path
+        self.includes = includes
+        self.excludes = excludes
+        self.output_dir = output_dir
+        self.api_data = self._load_api()
+        self.filtered_api: Dict[str, Dict[str, Any]] = {}
+        self.needed_types: Set[str] = set()
+        # Add cJSON include path if needed (user might need to provide)
+        self.cjson_include_path = "cjson" # Assume cJSON headers are in "cjson" subdir relative to include paths
+
+    # ... (_load_api, matches_filters, find_api_definition remain same) ...
+    # ... (get_type_name, is_pointer_type adjusted slightly by get_c_type_str changes) ...
+
+    def _load_api(self) -> Dict[str, Any]:
+        """Loads the LVGL API JSON file."""
+        try:
+            with open(self.api_file_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            print(f"Error: API JSON file not found at '{self.api_file_path}'", file=sys.stderr)
+            sys.exit(1)
+        except json.JSONDecodeError as e:
+            print(f"Error: Failed to parse API JSON file: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    def _initial_filter(self):
+        """Performs the first pass filtering based on include/exclude lists."""
+        print("Performing initial filtering...")
+        categories = ["functions", "enums", "structs", "unions", "typedefs", "macros", "variables"]
+        for category in categories:
+            self.filtered_api[category] = {}
+            inc_list = self.includes.get(category, [])
+            exc_list = self.excludes.get(category, [])
+            # Special handling: ensure lv_obj_t and lv_style_t are EXCLUDED from structs category
+            # because we define them specially.
+            if category == "structs":
+                 exc_list = list(set(exc_list + ["lv_obj_t", "_lv_obj_t", "lv_style_t", "_lv_style_t"]))
+
+            for item in self.api_data.get(category, []):
+                name = item.get("name")
+                if name and matches_filters(name, inc_list, exc_list):
+                    self.filtered_api[category][name] = item
+                else:
+                    _debug("Rejected:", name)
+
+
+    def _find_dependencies_recursive(self, type_info: Dict[str, Any]):
+        # ... (Same logic as before, but relies on get_base_type_info which now handles lv_obj/style_t) ...
+        if not isinstance(type_info, dict): return
+
+        base_type = get_base_type_info(type_info, self.api_data)
+        if not base_type: return
+
+        # If it resolves to our emulated types, no further C definition is needed here
+        if base_type.get("_is_emulated_pointer") or base_type.get("_is_emulated_struct"):
+            return
+
+        json_type = base_type.get("json_type")
+        name = base_type.get("name")
+
+        # 1. Handle nested types (pointers, args, fields, etc.) - Follow pointer/typedef chain
+        if type_info.get("json_type") in ["pointer", "array", "ret_type", "arg", "field", "typedef"]:
+             if type_info.get("json_type") == "typedef" and name and name not in self.needed_types:
+                  typedef_def = find_api_definition(self.api_data, name)
+                  if typedef_def:
+                      self.needed_types.add(name)
+                      self._find_dependencies_recursive(typedef_def.get("type")) # Recurse on underlying
+             elif type_info.get("json_type") != "typedef": # Avoid infinite loop on typedef itself
+                 self._find_dependencies_recursive(type_info.get("type")) # Recurse on nested type
+             return
+
+
+        # 2. Handle base types that ARE definitions (struct, enum, union, func_ptr)
+        # Note: lv_obj_t/lv_style_t structs are filtered out earlier or by get_base_type_info
+        if json_type in ["struct", "union", "enum", "function_pointer", "lvgl_type"]:
+             if name and name not in self.needed_types:
+                 actual_def = find_api_definition(self.api_data, name)
+                 if actual_def:
+                     # Add the definition name itself (e.g., lv_color_t)
+                     self.needed_types.add(name)
+                     _debug("ADDED needed_type", name)
+                     # Recurse into the definition's contents (fields, members, args)
+                     if actual_def.get("json_type") in ["struct", "union"]:
+                         for field in actual_def.get("fields", []):
+                             self._find_dependencies_recursive(field.get("type"))
+                     elif actual_def.get("json_type") == "function_pointer":
+                          self._find_dependencies_recursive(actual_def.get("type")) # Return type
+                          for arg in actual_def.get("args", []):
+                               self._find_dependencies_recursive(arg.get("type"))
+                     # Enums don't have nested types needing recursion here
+                     # lvgl_type was resolved to actual_def, handled above.
+
+        # 3. stdlib_type, primitive_type: No C definitions needed.
+
+
+    def _resolve_dependencies(self):
+        # ... (Mostly same logic, but applies _find_dependencies_recursive) ...
+        print("Resolving dependencies...")
+        self.needed_types = set()
+
+        # Start with types explicitly included (that aren't obj/style)
+        for category in ["enums", "structs", "unions", "typedefs", "function_pointers"]:
+             for name, item in self.filtered_api.get(category, {}).items():
+                  self.needed_types.add(name)
+                  # Also scan the fields/members/args of explicitly included items
+                  self._find_dependencies_recursive(item)
+
+
+        # Iterate through filtered functions to find types they use
+        items_to_scan = list(self.filtered_api.get("functions", {}).values()) + list(self.filtered_api.get("structs", {}).values())
+
+        for item in items_to_scan:
+             if item.get("json_type") == "function":
+                 self._find_dependencies_recursive(item.get("type")) # Return type
+                 for arg in item.get("args", []):
+                     self._find_dependencies_recursive(arg.get("type"))
+             elif item.get("json_type") == "struct":
+                 for field in item.get("fields", []):
+                    self._find_dependencies_recursive(field.get("type")) 
+
+        # Add needed types back to the filtered_api
+        print(f"  Found {len(self.needed_types)} total needed C types (excluding emulated).")
+        added_count = 0
+        added = []
+        for type_name in self.needed_types:
+            # Ensure we don't try to add back the types we handle specially
+             if type_name in ["lv_obj_t", "lv_style_t"]: continue
+
+             definition = find_api_definition(self.api_data, type_name)
+             if definition:
+                category = definition.get("json_type") + "s"
+                if category == "function_pointers": category = "typedefs" # Treat func ptr typedefs as typedefs
+
+                if category in self.filtered_api and type_name not in self.filtered_api[category]:
+                    exc_list = self.excludes.get(category, [])
+                    if type_name not in exc_list:
+                       self.filtered_api[category][type_name] = definition
+                       added_count += 1
+                       added.append(definition.get('name'))
+        print(f"  Added {added_count} missing C dependencies ({added}).")
+
+
+    def _generate_forward_declarations(self) -> str:
+        """Generates forward declarations for structs and unions (excluding emulated)."""
+        decls = []
+        #struct_names = sorted([name for name in self.filtered_api.get("structs", {}).keys()
+        #                       if name not in ["lv_obj_t", "lv_style_t"]]) # Exclude emulated
+        #union_names = sorted(self.filtered_api.get("unions", {}).keys())
+        struct_names = [name for name in self.filtered_api.get("structs", {}).keys()
+                               if name not in ["lv_obj_t", "lv_style_t"]] # Exclude emulated
+        union_names = self.filtered_api.get("unions", {}).keys()
+
+        for name in struct_names:
+             # Check if it's a named struct (struct Name) or needs typedef (typedef struct _Name Name)
+             item = self.filtered_api["structs"][name]
+             internal_name = item.get("type", {}).get("name") # Should be "struct"
+             if name.startswith("_"): # Assume convention struct _X {}; typedef struct _X X;
+                  decls.append(f"typedef struct {name} {name[1:]};")
+             else: # Asssume struct X {}; typedef struct X X; (or just struct X)
+                  decls.append(f"typedef struct {name} {name};")
+
+        for name in union_names:
+            decls.append(f"typedef union {name} {name};") # Assuming similar pattern
+
+        return "\n".join(decls)
+
+    def _generate_typedefs(self) -> str:
+        """Generates C typedef definitions (excluding lv_obj_t, lv_style_t)."""
+        defs = []
+        lvgl_defs = []
+        names_done = set(["lv_obj_t", "lv_style_t"]) # Exclude emulated
+        #typedef_items = sorted(self.filtered_api.get("typedefs", {}).values(), key=lambda x: x.get("name", ""))
+        typedef_items = self.filtered_api.get("typedefs", {}).values()
+
+        for item in typedef_items:
+            name = item.get("name")
+            if not name or name in names_done: continue
+
+            type_info = item.get("type")
+            # Use the updated get_c_type_str which handles emulated types internally
+            c_type_str = get_c_type_str(type_info)
+
+            is_lvgl_def = type_info.get('json_type') == 'lvgl_type'
+            defs_ = lvgl_defs if is_lvgl_def else defs
+
+            # Handle function pointer typedefs specifically
+            is_func_ptr = False
+            base_type_info_check = type_info
+            if base_type_info_check.get("json_type") == "pointer":
+                base_type_info_check = base_type_info_check.get("type",{})
+            if base_type_info_check.get("json_type") == "function_pointer":
+                 is_func_ptr = True
+
+            if is_func_ptr:
+                 fp_def = find_api_definition(self.api_data, name) # Find the typedef itself
+                 if not fp_def: # If not in typedefs, maybe directly in function_pointers?
+                     fp_def = next((fp for fp in self.api_data.get("function_pointers", []) if fp.get("name") == name), None)
+
+                 if fp_def:
+                     # Reconstruct typedef void (*Name)(Args);
+                     ret_type_str = get_c_type_str(fp_def.get("type"))
+                     args_list = []
+                     args_info = fp_def.get("args", [])
+                     if not args_info or (len(args_info) == 1 and get_type_name(args_info[0].get("type")) == "void"):
+                         args_list.append("void")
+                     else:
+                         for i, arg in enumerate(args_info):
+                              arg_type_str = get_c_type_str(arg.get("type"))
+                              args_list.append(f"{arg_type_str}") # No names in typedef
+                     args_str = ", ".join(args_list)
+                     defs_.append(f"typedef {ret_type_str} (*{name})({args_str});")
+                     names_done.add(name)
+                 else:
+                     print(f"Warning: Could not find definition for function pointer typedef: {name}", file=sys.stderr)
+                     defs_.append(f"// typedef ??? (*{name})(???); // Definition not found")
+
+            # Handle regular typedefs (if not emulated type and not self-typedef)
+            elif c_type_str and c_type_str != name and "/*" not in c_type_str:
+                 base_type = get_base_type_info(type_info, self.api_data)
+                 # Avoid generating typedef for the emulated types themselves
+                 if base_type and (base_type.get("_is_emulated_pointer") or base_type.get("_is_emulated_struct")):
+                       names_done.add(name)
+                       continue
+
+                 # Define anonymous struct/union directly in the typedef if needed
+                 if base_type and base_type.get("json_type") in ["struct", "union"] and not base_type.get("name"):
+                     def_str = self._generate_struct_union_definition(base_type, is_typedef=True)
+                     defs_.append(f"typedef {def_str} {name};")
+                 else:
+                     # Simple typedef: typedef underlying_type name;
+                     defs_.append(f"typedef {c_type_str} {name};")
+                 names_done.add(name)
+
+        return ["\n".join(d for d in defs if d), "\n".join(d for d in lvgl_defs if d)] # Filter out empty strings
+
+
+    def _generate_enums(self) -> str:
+        # ... (Same as before - enums are needed as is) ...
+        defs = []
+        # enum_items = sorted(self.filtered_api.get("enums", {}).values(), key=lambda x: x.get("name") or "")
+        enum_items = self.filtered_api.get("enums", {}).values()
+        for item in enum_items:
+            name = item.get("name") # Typedef name e.g. lv_align_t
+            internal_name = item.get("name") # May differ e.g., _lv_align_t
+
+            definition = f"typedef enum {{\n" # Start directly with typedef enum
+            members = item.get("members", [])
+            for member in members:
+                m_name = member.get("name")
+                m_value = member.get("value", "").replace("0x", "0x")
+                if m_name:
+                    definition += f"  {m_name}"
+                    if m_value: definition += f" = {m_value}"
+                    definition += ",\n"
+            definition += f"}} {name or internal_name or f'anon_enum_{hash(str(item))}'};" # Add typedef name
+
+            defs.append(definition)
+        return "\n\n".join(defs)
+
+
+    def _generate_struct_union_definition(self, item: Dict[str, Any], is_typedef: bool = False) -> str:
+        """Generates C struct/union definition string (excluding emulated)."""
+        name = item.get("name")
+        kind = item.get("json_type") # struct or union
+
+        _debug("ENUM:", name, kind)
+
+        # *** Skip definition for emulated types ***
+        if name in ["lv_obj_t", "_lv_obj_t", "lv_style_t", "_lv_style_t"]:
+             return f"// Emulated {kind}: {name}"
+
+        # Use name for definition tag if available
+        struct_union_tag = name or f"anon_{kind}_{hash(str(item))}"
+
+        definition = f"{kind} {struct_union_tag} {{\n"
+        fields = item.get("fields", [])
+        if not fields and kind == "struct":
+             definition += "  uint8_t _emul_placeholder; // Placeholder for empty struct\n"
+
+        for field in fields:
+            f_name = field.get("name")
+            f_type_info = field.get("type")
+            f_bitsize = field.get("bitsize")
+            if f_name and f_type_info:
+                f_type_str = get_c_type_str(f_type_info, is_arg_or_field=True)
+                array_dims = ""
+                current_type = f_type_info
+                while isinstance(current_type, dict) and current_type.get("json_type") == "array":
+                    array_dims += f"[{current_type.get('dim', '')}]"
+                    current_type = current_type.get("type")
+
+                definition += f"  {f_type_str} {f_name}{array_dims}"
+                if f_bitsize: definition += f" : {f_bitsize}"
+                definition += ";\n"
+
+        definition += "}"
+        return definition
+
+    def _generate_structs_unions(self, kind="struct") -> str:
+         """Generates C struct/union definitions (excluding emulated)."""
+         defs = []
+         category = kind + "s" # "structs" or "unions"
+         #items = sorted(self.filtered_api.get(category, {}).values(), key=lambda x: x.get("name") or "")
+         items = self.filtered_api.get(category, {}).values()
+         # _debug("ITEMS:", kind, items)
+
+         for item in items:
+             name = item.get("name")
+             if name in ["lv_obj_t", "_lv_obj_t", "lv_style_t", "_lv_style_t"]: continue # Skip emulated
+
+             # Generate definition only if it has fields or is not just a forward decl placeholder
+             # Opaque structs needed as types (like lv_font_t) should be generated.
+             is_fwd_decl_placeholder = False # Add logic if needed to detect pure forward decls
+
+             if item.get("fields") or not is_fwd_decl_placeholder:
+                  # If it's a named struct/union (not anonymous)
+                  if name:
+                      # Check if typedef already handled it implicitly via anonymous def
+                      typedef_handled = any(t.get("name") == name and \
+                                             get_base_type_info(t.get("type"), self.api_data).get("name") is None
+                                             for t in self.filtered_api.get("typedefs",{}).values())
+
+                      if not typedef_handled:
+                           definition = self._generate_struct_union_definition(item)
+                           # Add typedef: typedef struct _X X; or typedef struct X X;
+                           typedef_name = name[1:] if name.startswith("_") else name
+                           defs.append(definition + ";")
+                           # Add typedef if not already present from _generate_typedefs
+                           # This is tricky synchronization, maybe rely on _generate_typedefs only?
+                           # Let's keep it simple: define struct/union, assume typedef exists or is generated elsewhere.
+                           # defs.append(f"typedef {kind} {name} {typedef_name};")
+             else:
+                _debug("SKIP", name, item.get("fields"), is_fwd_decl_placeholder)
+
+
+         return "\n\n".join(defs)
+
+    def _generate_macros(self) -> str:
+        # ... (Same as before) ...
+        defs = []
+        macro_items = sorted(self.filtered_api.get("macros", {}).values(), key=lambda x: x.get("name", ""))
+        for item in macro_items:
+            name = item.get("name")
+            params = item.get("params")
+            initializer = item.get("initializer")
+            if not name: continue
+            definition = f"#define {name}"
+            if params is not None: definition += f"({', '.join(params)})"
+            if initializer is not None: definition += f" {initializer}"
+            defs.append(definition)
+        return "\n".join(defs)
+
+    def _generate_function_prototypes(self) -> str:
+        # ... (Uses updated get_c_type_str) ...
+        protos = []
+        func_items = sorted(self.filtered_api.get("functions", {}).values(), key=lambda x: x.get("name", ""))
+        for item in func_items:
+            name = item.get("name")
+            ret_type_info = item.get("type")
+            args_info = item.get("args", [])
+            if not name: continue
+
+            ret_type_str = get_c_type_str(ret_type_info)
+            args_list = []
+
+            if not args_info or (len(args_info) == 1 and get_type_name(args_info[0].get("type")) == "void"):
+                args_list.append("void")
+            else:
+                for i, arg in enumerate(args_info):
+                    arg_name = arg.get("name") or f"arg{i}"
+                    arg_type_info = arg.get("type")
+                    arg_type_str = get_c_type_str(arg_type_info)
+
+                    array_dims = ""
+                    current_type = arg_type_info
+                    while isinstance(current_type, dict) and current_type.get("json_type") == "array":
+                         array_dims += f"[{current_type.get('dim', '')}]"
+                         current_type = current_type.get("type")
+
+                    if arg_type_str == "...": args_list.append("...")
+                    elif arg_name and arg_type_str: args_list.append(f"{arg_type_str} {arg_name}{array_dims}")
+                    elif arg_type_str: args_list.append(arg_type_str) # Type only
+
+            args_str = ", ".join(args_list)
+            protos.append(f"{ret_type_str} {name}({args_str});")
+        return "\n".join(protos)
+
+
+    def _get_marshal_func_for_type(self, type_info: Dict[str, Any]) -> Optional[str]:
+         """Determines the C marshalling function name that returns cJSON*."""
+         base_type_info = get_base_type_info(type_info, self.api_data)
+         if not base_type_info: # Try direct name
+             name = get_type_name(type_info)
+             # Check simple C types
+             if name in ["int", "signed int", "int32_t", "int16_t", "int8_t", "lv_coord_t"]: return "marshal_int" # lv_coord_t often int32
+             if name in ["unsigned int", "uint32_t", "uint16_t", "uint8_t", "lv_opa_t"]: return "marshal_uint" # lv_opa_t often uint8
+             if name in ["long", "signed long", "long int"]: return "marshal_long"
+             if name in ["unsigned long", "unsigned long int", "size_t"]: return "marshal_ulong"
+             if name == "int64_t": return "marshal_int64"
+             if name == "uint64_t": return "marshal_uint64"
+             if name == "float": return "marshal_float"
+             if name == "double": return "marshal_double"
+             if name == "bool": return "marshal_bool"
+             if name in ["char", "signed char", "unsigned char"]: return "marshal_int" # Marshal char as number
+             # Check specific LVGL typedefs we know
+             if name == "lv_color_t": return "marshal_lv_color_t"
+             if name == "lv_res_t": return "marshal_uint" # Usually uint8_t
+             if name == "lv_style_int_t": return "marshal_int" # Usually int16_t
+             # If it's an enum type name
+             enum_def = find_api_definition(self.api_data, name)
+             if enum_def and enum_def.get("json_type") == "enum": return "marshal_int" # Marshal enums as int
+             # Check for pointers
+             if is_pointer_type(type_info):
+                 pointee_type = get_pointee_type_info(type_info)
+                 pointee_base_info = get_base_type_info(pointee_type, self.api_data) if pointee_type else None
+                 if pointee_base_info and pointee_base_info.get("name") == "char":
+                     return "marshal_string"
+                 else:
+                     # Includes lv_obj_t*, lv_font_t*, lv_style_t*, other pointers
+                     return "marshal_pointer"
+             return None # Fallback
+
+
+         json_type = base_type_info.get("json_type")
+         name = base_type_info.get("name")
+
+         # Check resolved base type
+         if base_type_info.get("_is_emulated_pointer"): return "marshal_pointer" # lv_obj_t
+         if base_type_info.get("_is_emulated_struct"): return "marshal_pointer" # lv_style_t (pass pointer)
+
+         if is_pointer_type(type_info): # Check original type for pointer nature
+             pointee_type = get_pointee_type_info(type_info)
+             pointee_base_info = get_base_type_info(pointee_type, self.api_data) if pointee_type else None
+             if pointee_base_info and pointee_base_info.get("name") == "char": return "marshal_string"
+             else: return "marshal_pointer" # Includes lv_font_t*, other struct*, void* etc.
+
+         elif json_type == "enum": return "marshal_int" # Enums as integers
+
+         elif json_type in ["stdlib_type", "primitive_type"]:
+             if name in ["int", "signed int", "int32_t", "int16_t", "int8_t"]: return "marshal_int"
+             if name in ["unsigned int", "uint32_t", "uint16_t", "uint8_t"]: return "marshal_uint"
+             if name in ["long", "signed long", "long int"]: return "marshal_long"
+             if name in ["unsigned long", "unsigned long int", "size_t"]: return "marshal_ulong"
+             if name == "int64_t": return "marshal_int64"
+             if name == "uint64_t": return "marshal_uint64"
+             if name == "float": return "marshal_float"
+             if name == "double": return "marshal_double"
+             if name == "bool": return "marshal_bool"
+             if name in ["char", "signed char", "unsigned char"]: return "marshal_int"
+             if name == "void": return None # Cannot marshal void
+             return None
+
+         elif json_type == "lvgl_type":
+             # Specific known LVGL types passed by value
+             if name == "lv_color_t": return "marshal_lv_color_t"
+             if name == "lv_opa_t": return "marshal_uint"
+             if name == "lv_res_t": return "marshal_uint"
+             if name == "lv_style_int_t": return "marshal_int"
+             # If it's an enum typedef
+             enum_def = find_api_definition(self.api_data, name)
+             if enum_def and enum_def.get("json_type") == "enum": return "marshal_int"
+             print(f"Warning: Marshalling for lvgl_type '{name}' by value not explicitly handled.", file=sys.stderr)
+             return None
+
+         elif json_type in ["struct", "union"]:
+             if name == "lv_color_t": return "marshal_lv_color_t"
+             
+             # Passing non-emulated structs/unions by value is complex
+             print(f"Warning: Marshalling struct/union '{name}' by value is not supported.", file=sys.stderr)
+             return None
+
+         return None
+
+
+    def _generate_function_implementations(self) -> str:
+        """Generates C function implementations using cJSON."""
+        impls = []
+        func_items = sorted(self.filtered_api.get("functions", {}).values(), key=lambda x: x.get("name", ""))
+
+        for item in func_items:
+            name = item.get("name")
+            ret_type_info = item.get("type")
+            args_info = item.get("args", [])
+            ret_type_str = get_c_type_str(ret_type_info)
+            base_ret_type_name = get_type_name(ret_type_info.get("type"))
+
+            if not name: continue
+
+            # --- Function Signature ---
+            args_list_sig = []
+            args_list_call = [] # Arg names for use inside body
+            is_varargs = False
+            if not args_info or (len(args_info) == 1 and get_type_name(args_info[0].get("type")) == "void"):
+                args_list_sig.append("void")
+            else:
+                for i, arg in enumerate(args_info):
+                    arg_name = arg.get("name") or f"arg{i}"
+                    arg_type_info = arg.get("type")
+                    arg_type_str = get_c_type_str(arg_type_info)
+
+                    array_dims = "" # Array handling needs more thought for state building
+                    # ... array dim calculation ...
+
+                    if arg_type_str == "...":
+                        args_list_sig.append("...")
+                        is_varargs = True
+                    elif arg_name and arg_type_str and "/*" not in arg_type_str:
+                        args_list_sig.append(f"{arg_type_str} {arg_name}{array_dims}")
+                        args_list_call.append(arg_name)
+                    elif arg_type_str and "/*" not in arg_type_str:
+                        args_list_sig.append(arg_type_str)
+                        args_list_call.append(f"arg{i}")
+
+
+            args_sig_str = ", ".join(args_list_sig)
+            func_sig = f"{ret_type_str} {name}({args_sig_str})"
+            impls.append(func_sig + " {")
+
+            # --- Function Body (using cJSON) ---
+            body = []
+            # Get target object/style node if applicable (usually first arg)
+            target_cjson_expr = "NULL"
+            target_is_style = False
+            style_ptr_expr = "NULL"
+            if args_list_call:
+                first_arg_name = args_list_call[0]
+                first_arg_info = args_info[0]
+                first_arg_type_str = get_c_type_str(first_arg_info.get("type"))
+
+                if first_arg_type_str == "lv_obj_t": # Which is cJSON*
+                    target_cjson_expr = first_arg_name
+                elif first_arg_type_str == "lv_style_t *": # Pointer to our opaque style struct
+                     target_cjson_expr = f"get_style_json_node({first_arg_name})"
+                     target_is_style = True
+                     style_ptr_expr = first_arg_name # Store the C pointer expr
+
+            # --- Specific Function Logic ---
+
+            if name.endswith("_create") and base_ret_type_name == "lv_obj_t":
+                widget_type = name.replace("lv_", "").replace("_create", "")
+                parent_arg = args_list_call[0] if args_list_call else "NULL" # Usually 'parent'
+                body.append(f"  // Create widget '{widget_type}'")
+                body.append(f"  lv_obj_t *node = cJSON_CreateObject();")
+                body.append(f"  if (!node) return NULL;")
+                body.append(f"  cJSON_AddStringToObject(node, \"type\", \"{widget_type}\");")
+                # Add ID based on the cJSON node pointer itself
+                body.append(f"  char id_str[64]; snprintf(id_str, sizeof(id_str), \"{POINTER_ID_PREFIX}obj_%p\", (void*)node);")
+                body.append(f"  cJSON_AddStringToObject(node, \"id\", id_str);")
+                # Handle parenting
+                body.append(f"  lv_obj_t *parent_node = {parent_arg};") # parent_arg is the cJSON* passed in
+                body.append(f"  if (parent_node) {{")
+                body.append(f"      cJSON* children_array = cJSON_GetObjectItem(parent_node, \"children\");")
+                body.append(f"      if (!children_array) {{ children_array = cJSON_AddArrayToObject(parent_node, \"children\"); }}")
+                body.append(f"      if (children_array) {{ cJSON_AddItemToArray(children_array, node); }}") # cJSON handles ownership
+                body.append(f"      else {{ cJSON_Delete(node); return NULL; /* Failed to add child */ }}")
+                body.append(f"  }} else {{")
+                body.append(f"      // Add to root objects")
+                body.append(f"      if (g_root_objects_array) {{ cJSON_AddItemToArray(g_root_objects_array, node); }}")
+                body.append(f"      else {{ cJSON_Delete(node); return NULL; /* Root array missing */ }}")
+                body.append(f"  }}")
+                body.append(f"  return node;") # Return the cJSON* cast to lv_obj_t
+
+            elif name == "lv_style_init":
+                 style_ptr_arg = args_list_call[0] # Arg is lv_style_t* style
+                 body.append(f"  // Initialize style object for {style_ptr_arg}")
+                 body.append(f"  if (!{style_ptr_arg}) return;") # Check for null pointer
+                 # Check if style already initialized/mapped
+                 body.append(f"  if (get_style_json_node({style_ptr_arg})) {{")
+                 body.append(f"     // Style already initialized, maybe reset it?")
+                 body.append(f"     cJSON* style_node = get_style_json_node({style_ptr_arg});")
+                 body.append(f"     // Simple reset: remove all items except type and id")
+                 body.append(f"     cJSON *child = style_node->child;")
+                 body.append(f"     while (child) {{")
+                 body.append(f"         cJSON *next = child->next;")
+                 body.append(f"         if (child->string && strcmp(child->string, \"type\") != 0 && strcmp(child->string, \"id\") != 0) {{")
+                 body.append(f"             cJSON_DeleteItemFromObjectCaseSensitive(style_node, child->string);")
+                 body.append(f"         }}")
+                 body.append(f"         child = next;")
+                 body.append(f"     }}")
+                 body.append(f"     return; // Exit after reset")
+                 body.append(f"  }}")
+                 # Create new style JSON
+                 body.append(f"  cJSON *style_node = cJSON_CreateObject();")
+                 body.append(f"  if (!style_node) return;")
+                 body.append(f"  cJSON_AddStringToObject(style_node, \"type\", \"style\");")
+                 # ID based on the C lv_style_t struct address
+                 body.append(f"  const char* style_id = get_pointer_id({style_ptr_arg}); // Generate ID like @ptr_... ")
+                 body.append(f"  if (!style_id) {{ cJSON_Delete(style_node); return; }} // Failed to get ID")
+                 body.append(f"  cJSON_AddStringToObject(style_node, \"id\", style_id);")
+                 # Register in internal style map
+                 body.append(f"  if (g_style_map_count < MAX_STYLE_MAP_ENTRIES) {{")
+                 body.append(f"      g_style_map[g_style_map_count].style_ptr = {style_ptr_arg};")
+                 body.append(f"      g_style_map[g_style_map_count].json_node = style_node;")
+                 body.append(f"      g_style_map_count++;")
+                 body.append(f"  }} else {{")
+                 body.append(f"      fprintf(stderr, \"EMUL_LVGL Warning: Style map full!\\n\");")
+                 body.append(f"      cJSON_Delete(style_node); // Clean up node we can't store")
+                 body.append(f"      return;")
+                 body.append(f"  }}")
+                 # Register pointer for lookups (e.g., by lv_obj_add_style)
+                 # We need the ID string without the prefix for the second arg of register_pointer
+                 body.append(f"  const char* base_id = style_id + strlen(POINTER_ID_PREFIX); // Get part after '@'")
+                 body.append(f"  emul_lvgl_register_pointer({style_ptr_arg}, base_id);")
+                 # Add to global styles object
+                 body.append(f"  if (g_styles_object) {{")
+                 # Use style_id which includes the '@' prefix as the key
+                 body.append(f"      cJSON_AddItemToObject(g_styles_object, style_id, style_node);")
+                 body.append(f"  }} else {{")
+                 body.append(f"      // Error: global style object not init? Style node will leak if not added.")
+                 body.append(f"      // Or: Clean up the node if we can't add it. AddItemToObject takes ownership.")
+                 body.append(f"      // If AddItemToObject fails, style_node is NOT deleted. We must delete it.")
+                 body.append(f"      fprintf(stderr, \"EMUL_LVGL Error: Global styles object missing!\\n\");")
+                 body.append(f"      // Remove from map if add fails? Complex cleanup needed.")
+                 body.append(f"  }}")
+
+
+            elif name == "lv_style_reset":
+                 style_ptr_arg = args_list_call[0]
+                 body.append(f"  // Reset style object {style_ptr_arg}")
+                 body.append(f"  cJSON* style_node = get_style_json_node({style_ptr_arg});")
+                 body.append(f"  if (style_node) {{")
+                 body.append(f"     // Simple reset: remove all items except type and id")
+                 body.append(f"     cJSON *child = style_node->child;")
+                 body.append(f"     while (child) {{")
+                 body.append(f"         cJSON *next = child->next;")
+                 body.append(f"         if (child->string && strcmp(child->string, \"type\") != 0 && strcmp(child->string, \"id\") != 0) {{")
+                 body.append(f"             cJSON_DeleteItemFromObjectCaseSensitive(style_node, child->string);")
+                 body.append(f"         }}")
+                 body.append(f"         child = next;")
+                 body.append(f"     }}")
+                 body.append(f"  }}")
+
+
+            elif name.startswith("lv_style_set_"):
+                 # Target is style node, looked up via get_style_json_node
+                 prop_name = name.replace("lv_style_set_", "")
+                 body.append(f"  // Set style property '{prop_name}'")
+                 body.append(f"  cJSON* target_node = {target_cjson_expr};")
+                 body.append(f"  if (target_node) {{")
+                 # Marshal remaining args (value, potentially state - though style funcs usually don't have state arg)
+                 if len(args_list_call) > 1:
+                      value_arg_name = args_list_call[1]
+                      value_arg_info = args_info[1]
+                      marshal_func = self._get_marshal_func_for_type(value_arg_info.get("type"))
+                      if marshal_func:
+                           body.append(f"    cJSON* value_json = {marshal_func}({value_arg_name});")
+                           body.append(f"    if (value_json) {{")
+                           # Use ReplaceItem to handle updates correctly
+                           body.append(f"      if (cJSON_HasObjectItem(target_node, \"{prop_name}\")) {{")
+                           body.append(f"          cJSON_ReplaceItemInObjectCaseSensitive(target_node, \"{prop_name}\", value_json);")
+                           body.append(f"      }} else {{")
+                           body.append(f"          cJSON_AddItemToObject(target_node, \"{prop_name}\", value_json);")
+                           body.append(f"      }}")
+                           body.append(f"    }}") # End if value_json
+                      else: body.append(f"    // Cannot marshal value for {prop_name}")
+                 else: body.append(f"    // No value argument found for {prop_name}")
+                 body.append(f"  }}") # End if target_node
+
+            elif name.startswith("lv_obj_set_style_local_"):
+                 # Target is lv_obj_t node (cJSON*)
+                 prop_name = name.replace("lv_obj_set_", "") # Keep "style_local_" prefix
+                 body.append(f"  // Set local style property '{prop_name}'")
+                 body.append(f"  lv_obj_t target_node = {target_cjson_expr};")
+                 body.append(f"  if (target_node) {{")
+                 # Args: obj, value, state
+                 if len(args_list_call) == 3:
+                      value_arg_name = args_list_call[1]
+                      value_arg_info = args_info[1]
+                      state_arg_name = args_list_call[2]
+                      marshal_func = self._get_marshal_func_for_type(value_arg_info.get("type"))
+                      if marshal_func:
+                           body.append(f"    cJSON* value_json = {marshal_func}({value_arg_name});")
+                           # Create array [value, state]
+                           body.append(f"    cJSON* args_array = marshal_style_property_args(value_json, {state_arg_name});")
+                           body.append(f"    if (args_array) {{")
+                           body.append(f"      // Replace or add")
+                           body.append(f"      if (cJSON_HasObjectItem(target_node, \"{prop_name}\")) {{")
+                           body.append(f"          cJSON_ReplaceItemInObjectCaseSensitive(target_node, \"{prop_name}\", args_array);")
+                           body.append(f"      }} else {{")
+                           body.append(f"          cJSON_AddItemToObject(target_node, \"{prop_name}\", args_array);")
+                           body.append(f"      }}")
+                           body.append(f"    }} else {{ if (value_json) cJSON_Delete(value_json); }} // Clean up value if array failed") # End if args_array
+                      else: body.append(f"    // Cannot marshal value for {prop_name}")
+                 else: body.append(f"    // Incorrect arguments for {prop_name}")
+                 body.append(f"  }}") # End if target_node
+
+
+            elif name == "lv_obj_add_style":
+                 # Args: obj, style, selector (state is part of selector)
+                 body.append(f"  // Add style reference")
+                 body.append(f"  lv_obj_t target_node = {target_cjson_expr};")
+                 body.append(f"  if (target_node && {len(args_list_call) > 1}) {{")
+                 style_ptr_arg = args_list_call[1] # lv_style_t* style
+                 # selector_arg = args_list_call[2] # uint32_t selector
+                 body.append(f"      const char* style_id = get_pointer_id({style_ptr_arg});")
+                 body.append(f"      if (style_id) {{")
+                 # Store simple reference for now: add ID to a "styles" array
+                 # More complex would involve selector mapping
+                 body.append(f"          cJSON* styles_array = cJSON_GetObjectItem(target_node, \"styles\");")
+                 body.append(f"          if (!styles_array) {{ styles_array = cJSON_AddArrayToObject(target_node, \"styles\"); }}")
+                 body.append(f"          if (styles_array) {{")
+                 body.append(f"              // Avoid adding duplicates? Simple add for now.")
+                 body.append(f"              cJSON_AddItemToArray(styles_array, cJSON_CreateString(style_id));")
+                 body.append(f"          }}")
+                 body.append(f"      }}") # End if style_id
+                 body.append(f"  }}") # End if target_node
+
+
+            elif name.startswith(("lv_obj_set_", "lv_label_set_", "lv_btn_set_", "lv_img_set_")): # Common setters
+                 # Target is lv_obj_t node (cJSON*)
+                 match = re.match(r"lv_\w+_set_([a-zA-Z0-9_]+)", name)
+                 prop_name = match.group(1) if match else name.split("set_")[-1] # Guess prop name
+
+                 body.append(f"  // Set property '{prop_name}'")
+                 body.append(f"  lv_obj_t target_node = {target_cjson_expr};")
+                 body.append(f"  if (target_node) {{")
+                 # Assume value is the second argument
+                 if len(args_list_call) > 1:
+                      value_arg_name = args_list_call[1]
+                      value_arg_info = args_info[1]
+                      marshal_func = self._get_marshal_func_for_type(value_arg_info.get("type"))
+                      if marshal_func:
+                           body.append(f"    cJSON* value_json = {marshal_func}({value_arg_name});")
+                           body.append(f"    if (value_json) {{")
+                           body.append(f"      // Replace or add")
+                           body.append(f"      if (cJSON_HasObjectItem(target_node, \"{prop_name}\")) {{")
+                           body.append(f"          cJSON_ReplaceItemInObjectCaseSensitive(target_node, \"{prop_name}\", value_json);")
+                           body.append(f"      }} else {{")
+                           body.append(f"          cJSON_AddItemToObject(target_node, \"{prop_name}\", value_json);")
+                           body.append(f"      }}")
+                           body.append(f"    }}") # End if value_json
+                      else: body.append(f"    // Cannot marshal value for {prop_name}")
+                 else: body.append(f"    // No value argument found for {prop_name}")
+                 body.append(f"  }}") # End if target_node
+
+
+            # --- Default / Other functions ---
+            else:
+                 # Log unsupported calls? Or just make them no-ops?
+                 body.append(f"  // Function '{name}' - Not directly modifying JSON state (or unsupported).")
+                 # Add logging if desired:
+                 # body.append(f"  printf(\"EMUL_LVGL: Called {name}()\\n\");")
+                 pass
+
+
+            # --- Return Value ---
+            if base_ret_type_name != "void":
+                 if base_ret_type_name == "lv_obj_t": # Check actual return type name
+                      # Already handled by create functions, others return NULL?
+                      if not name.endswith("_create"): body.append("  return NULL;")
+                 elif is_pointer_type(ret_type_info.get("type")):
+                      body.append("  return NULL; // Default NULL for pointers")
+                 elif base_ret_type_name == "bool":
+                      body.append("  return false; // Default false for bool")
+                 elif base_ret_type_name == "lv_result_t" or base_ret_type_name == "lv_res_t":
+                      body.append("  return 1; // Assume LV_RESULT_OK / LV_RES_OK is 1") # TODO: Use actual enum value if defined
+                 elif base_ret_type_name == "lv_color_t":
+                      body.append("  lv_color_t dummy_color = {0}; return dummy_color; // Return black/zero color") # Adjust based on lv_color_t def
+                 else: # Assume integer/enum types
+                      body.append("  return 0; // Default 0 for other types")
+
+
+            impls.append("\n".join(body))
+            impls.append("}") # End function body
+
+        return "\n\n".join(impls)
+
+
+    def generate_files(self):
+        """Generates the .h and .c files."""
+        print("Generating C files...")
+        os.makedirs(self.output_dir, exist_ok=True)
+
+        # Prepare content for templates
+        forward_decls = self._generate_forward_declarations()
+        typedef_defs, lvgl_typedef_defs = self._generate_typedefs()
+        enum_defs = self._generate_enums()
+        # Generate actual struct defs (excluding obj/style)
+        struct_defs = self._generate_structs_unions(kind="struct")
+        union_defs = self._generate_structs_unions(kind="union")
+        macro_defs = self._generate_macros()
+        function_protos = self._generate_function_prototypes()
+        function_impls = self._generate_function_implementations()
+
+        # Generate Header File
+        header_path = os.path.join(self.output_dir, "emul_lvgl.h")
+        header_content = C_HEADER_TEMPLATE.format(
+            forward_declarations=forward_decls,
+            typedef_defs=typedef_defs,
+            enum_defs=enum_defs,
+            struct_defs=struct_defs, # Use specific key
+            union_defs=union_defs,   # Use specific key
+            macro_defs=macro_defs,
+            function_prototypes=function_protos,
+            lvgl_typedef_defs=lvgl_typedef_defs,
+        )
+        with open(header_path, 'w', encoding='utf-8') as f:
+            f.write(header_content)
+        print(f"  Generated header: {header_path}")
+
+        # Generate Source File
+        source_path = os.path.join(self.output_dir, "emul_lvgl.c")
+        # Need to include time.h for timestamp in init
+        source_content = "#include <time.h> // For timestamp\n" + C_SOURCE_TEMPLATE.format(
+            function_implementations=function_impls
+        )
+        with open(source_path, 'w', encoding='utf-8') as f:
+            f.write(source_content)
+        print(f"  Generated source: {source_path}")
+
+    def run(self):
+        """Runs the full generation process."""
+        self._initial_filter()
+        self._resolve_dependencies()
+        self.generate_files()
+        print("Done.")
+
+# --- Command Line Argument Parsing ---
+# ... (Same as before: parse_list_arg, main(), argparse setup) ...
+def parse_list_arg(arg: Optional[str]) -> List[str]:
+    """Parses comma-separated string into a list."""
+    return [item.strip() for item in arg.split(',')] if arg else []
+
+def main():
+    parser = argparse.ArgumentParser(description="Generate LVGL Emulation C Library (State Builder) from API JSON.")
+    parser.add_argument("api_json_file", help="Path to the LVGL API JSON definition file.")
+    parser.add_argument("-o", "--output-dir", default="emul_lvgl_state_output",
+                        help="Directory to output generated emul_lvgl.h and emul_lvgl.c files (default: emul_lvgl_state_output).")
+    # Add include path for cJSON if needed
+    parser.add_argument("--cjson-include", default="cjson", help="Subdirectory/path for cJSON headers relative to include paths (e.g., 'cjson' or 'vendor/cjson/include')")
+
+    # Include/Exclude filters (same as before)
+    parser.add_argument("--include-funcs", help="Comma-separated list of function prefixes/names to include.")
+    parser.add_argument("--include-enums", help="Comma-separated list of enum prefixes/names to include.")
+    parser.add_argument("--include-structs", help="Comma-separated list of struct prefixes/names to include (excluding lv_obj_t, lv_style_t).")
+    parser.add_argument("--include-typedefs", help="Comma-separated list of typedef prefixes/names to include (excluding lv_obj_t, lv_style_t).")
+    parser.add_argument("--include-macros", help="Comma-separated list of macro prefixes/names to include.")
+    parser.add_argument("--exclude-funcs", help="Comma-separated list of function prefixes/names to exclude.")
+    parser.add_argument("--exclude-enums", help="Comma-separated list of enum prefixes/names to exclude.")
+    parser.add_argument("--exclude-structs", help="Comma-separated list of struct prefixes/names to exclude.")
+    parser.add_argument("--exclude-typedefs", help="Comma-separated list of typedef prefixes/names to exclude.")
+    parser.add_argument("--exclude-macros", help="Comma-separated list of macro prefixes/names to exclude.")
+
+    args = parser.parse_args()
+
+    includes = DEFAULT_INCLUDES.copy()
+    excludes = DEFAULT_EXCLUDES.copy()
+    # ... (Apply command-line filters to includes/excludes dicts) ...
+    if args.include_funcs: includes["functions"] = parse_list_arg(args.include_funcs)
+    if args.include_enums: includes["enums"] = parse_list_arg(args.include_enums)
+    if args.include_structs: includes["structs"] = parse_list_arg(args.include_structs)
+    if args.include_typedefs: includes["typedefs"] = parse_list_arg(args.include_typedefs)
+    if args.include_macros: includes["macros"] = parse_list_arg(args.include_macros)
+
+    if args.exclude_funcs: excludes["functions"] = parse_list_arg(args.exclude_funcs)
+    if args.exclude_enums: excludes["enums"] = parse_list_arg(args.exclude_enums)
+    if args.exclude_structs: excludes["structs"] = parse_list_arg(args.exclude_structs)
+    if args.exclude_typedefs: excludes["typedefs"] = parse_list_arg(args.exclude_typedefs)
+    if args.exclude_macros: excludes["macros"] = parse_list_arg(args.exclude_macros)
+
+    _debug("INC/EXC:", includes, excludes)
+
+    generator = EmulLvglGenerator(
+        api_file_path=args.api_json_file,
+        includes=includes,
+        excludes=excludes,
+        output_dir=args.output_dir
+    )
+    generator.cjson_include_path = args.cjson_include # Store cJSON path if needed later
+
+    generator.run()
+
+# --- Entry Point ---
+if __name__ == "__main__":
+    main()

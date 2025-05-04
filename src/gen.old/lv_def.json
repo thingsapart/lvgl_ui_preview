@@ -79159,7 +79159,7 @@
             "quals": []
         }
     ],
-    "structures": [
+    "structs": [
         {
             "name": "lv_mem_monitor_t",
             "type": {

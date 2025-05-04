@@ -21,7 +21,7 @@
 // Assuming lv_drivers are used internally by these functions now
 // If not, you might need specific includes from lv_drivers/sdl
 // #include "lv_drivers/sdl/sdl.h"
-#include "ui_builder.h" // Your UI builder header
+#include "lvgl_json_renderer.h" // Your UI builder header
 
 // Define resolution if not coming from lv_conf.h or elsewhere
 #ifndef SDL_HOR_RES
@@ -38,12 +38,15 @@
 
 // Use the provided logging macros
 #define LOG(s, ...) printf(s __VA_OPT__(,) __VA_ARGS__)
+#ifndef LOG_INFO
 #define LOG_INFO(s, ...) do { printf("[INFO] "); printf(s __VA_OPT__(,) __VA_ARGS__); printf("\n"); } while(0)
+#endif
 #define LOG_ERROR(s, ...) do { printf("[ERROR] "); printf(s __VA_OPT__(,) __VA_ARGS__); printf("\n"); } while(0)
+#ifndef LOG_WARN
 #define LOG_WARN(s, ...) do { printf("[WARN] "); printf(s __VA_OPT__(,) __VA_ARGS__); printf("\n"); } while(0)
+#endif
 #define LOG_USER(s, ...) do { printf("[USER] "); printf(s __VA_OPT__(,) __VA_ARGS__); printf("\n"); } while(0)
 #define LOG_TRACE(s, ...) do { printf("[TRACE] "); printf(s __VA_OPT__(,) __VA_ARGS__); printf("\n"); } while(0)
-
 
 // --- Global state for file monitoring ---
 static char *monitored_filepath = NULL;
@@ -96,19 +99,14 @@ bool load_and_build_ui(const char *filepath) {
         fclose(fp);
         // Treat empty file as "show nothing". build_ui_from_json should handle null/empty string gracefully
         // or we clear explicitly here.
-         if (!build_ui_from_json("")) { // Pass empty string
-             LOG_ERROR("build_ui_from_json failed for empty input.");
-             // Should not happen if build_ui handles it, but show error just in case
-              lv_obj_t * scr = lv_screen_active();
-              if (scr) {
-                  lv_obj_clean(scr);
-                  lv_obj_t* lbl = lv_label_create(scr);
-                  lv_label_set_text(lbl, "Error:\nFailed processing\nempty UI file.");
-                  lv_obj_center(lbl);
-              }
-              return false; // Indicate failure
-         }
-        return true; // Successfully loaded "nothing"
+        lv_obj_t * scr = lv_screen_active();
+        if (scr) {
+            lv_obj_clean(scr);
+            lv_obj_t* lbl = lv_label_create(scr);
+            lv_label_set_text(lbl, "Error:\nFailed processing\nempty UI file.");
+            lv_obj_center(lbl);
+        }
+        return false; // Indicate failure
     }
 
     // --- Allocate buffer and read file ---
@@ -133,13 +131,19 @@ bool load_and_build_ui(const char *filepath) {
 
     // --- Build UI ---
     // build_ui_from_json will clear the screen before building
-    bool success = build_ui_from_json(file_content);
+    cJSON *root = cJSON_Parse(file_content);
+    if (!root) {
+        LOG_ERROR("Failed to parse JSON");
+        return false;
+    }
     free(file_content); // Free the buffer
+    lv_obj_t * scr = lv_screen_active();
+    bool success = lvgl_json_render_ui(root, scr);
 
     if (!success) {
         LOG_ERROR("Failed to build UI from JSON content of '%s'.", filepath);
          // build_ui_from_json might have cleared screen, show error
-         lv_obj_t * scr = lv_screen_active();
+         // lv_obj_t * scr = lv_screen_active();
          if (scr) {
             // Check if screen is already empty from build_ui_from_json failure
             if(lv_obj_get_child_count(scr) == 0) {
