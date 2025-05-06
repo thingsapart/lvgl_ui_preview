@@ -6,6 +6,9 @@ from type_utils import get_c_type_str, get_signature, WIDGET_CREATE_SIGNATURE
 
 logger = logging.getLogger(__name__)
 
+# Max args for table entry type storage
+MAX_ARGS_SUPPORTED = 8
+
 # Store generated invoke function names by signature category to avoid duplicates
 # Key: signature tuple, Value: C function name
 generated_invoke_fns = {}
@@ -16,7 +19,8 @@ def generate_invoke_signatures(filtered_functions):
     for func in filtered_functions:
         try:
             sig = get_signature(func) # Uses the updated get_signature
-            signatures[sig].append(func['name'])
+            # Store the whole function dict for later use if needed (e.g., representative)
+            signatures[sig].append(func)
         except Exception as e:
             logger.error(f"Could not get signature for {func.get('name', 'UNKNOWN')}: {e}")
     logger.info(f"Found {len(signatures)} unique function signatures.")
@@ -25,28 +29,28 @@ def generate_invoke_signatures(filtered_functions):
         logger.info(f"-> Detected {len(signatures[WIDGET_CREATE_SIGNATURE])} functions matching WIDGET_CREATE signature.")
     return signatures
 
+
 def _generate_widget_create_invoker():
     """Generates the specific C invoker for lv_widget_create(parent) functions."""
     sig_c_name = "invoke_widget_create"
+    # Updated signature: takes entry pointer
     c_code = f"// Specific Invoker for functions like lv_widget_create(lv_obj_t *parent)\n"
     c_code += f"// Signature: expects target_obj_ptr = parent, dest = lv_obj_t**, args_array = NULL\n"
-    c_code += f"static bool {sig_c_name}(void *target_obj_ptr, void *dest, cJSON *args_array, void *func_ptr) {{\n"
-    c_code += f"    if (!func_ptr) {{ LOG_ERR(\"Invoke Error: func_ptr is NULL for {sig_c_name}\"); return false; }}\n"
+    c_code += f"static bool {sig_c_name}(const invoke_table_entry_t *entry, void *target_obj_ptr, void *dest, cJSON *args_array) {{\n"
+    c_code += f"    if (!entry || !entry->func_ptr) {{ LOG_ERR(\"Invoke Error: NULL entry or func_ptr for {sig_c_name}\"); return false; }}\n"
     c_code += f"    if (!dest) {{ LOG_ERR(\"Invoke Error: dest is NULL for {sig_c_name} (needed for result)\"); return false; }}\n"
 
-    # Although args_array should be NULL, add a warning if it's not.
+    c_code += f"    // Although args_array should be NULL, add a warning if it's not.\n"
     c_code += f"    if (args_array != NULL && cJSON_GetArraySize(args_array) > 0) {{\n"
-    c_code += f"       LOG_WARN_JSON(args_array, \"Invoke Warning: {sig_c_name} expected 0 JSON args, got %d. Ignoring JSON args.\", cJSON_GetArraySize(args_array));\n"
+    c_code += f"       LOG_WARN_JSON(args_array, \"Invoke Warning: {sig_c_name} expected 0 JSON args, got %d for func '%s'. Ignoring JSON args.\", cJSON_GetArraySize(args_array), entry->name);\n"
     c_code += f"    }}\n\n"
 
     # Cast arguments and function pointer
     c_code += f"    lv_obj_t* parent = (lv_obj_t*)target_obj_ptr;\n"
-    # Allow NULL parent (for screen objects, although renderer usually passes active screen)
-    # c_code += f"    if (!parent) {{ LOG_ERR("Invoke Error: parent (target_obj_ptr) is NULL for {sig_c_name}"); return false; }}\n"
 
-    c_code += f"    // Define the specific function pointer type\n"
+    c_code += f"    // Define the specific function pointer type (always lv_obj_t*(lv_obj_t*) for this invoker)\n"
     c_code += f"    typedef lv_obj_t* (*specific_lv_create_func_type)(lv_obj_t*);\n"
-    c_code += f"    specific_lv_create_func_type target_func = (specific_lv_create_func_type)func_ptr;\n\n"
+    c_code += f"    specific_lv_create_func_type target_func = (specific_lv_create_func_type)entry->func_ptr;\n\n"
 
     # Call the actual LVGL create function
     c_code += f"    // Call the target LVGL create function\n"
@@ -58,10 +62,8 @@ def _generate_widget_create_invoker():
 
     # Check if result is NULL (optional, LVGL create might return NULL on failure)
     c_code += f"    if (!result) {{\n"
-    c_code += f"        // The name of the actual function isn't known here easily, maybe log func_ptr address?\n"
-    c_code += f"        LOG_WARN(\"Invoke Warning: {sig_c_name} (func ptr %p) returned NULL.\", func_ptr);\n"
-    c_code += f"        // Return true because the invoker itself succeeded, even if LVGL func failed.\n"
-    c_code += f"        // The renderer should check the returned object pointer.\n"
+    c_code += f"        LOG_WARN(\"Invoke Warning: Create function '%s' returned NULL.\", entry->name);\n"
+    c_code += f"        // Return true because the invoker itself succeeded.\n"
     c_code += f"    }}\n\n"
 
     c_code += f"    return true;\n"
@@ -69,113 +71,267 @@ def _generate_widget_create_invoker():
     return sig_c_name, c_code
 
 
-def _generate_generic_invoke_fn(signature_category, sig_c_name, repr_func_name, api_info):
+def _get_buffer_type_for_sig_component(sig_comp):
+    """ Determine appropriate C stack buffer type for a simplified signature component """
+    if sig_comp == 'INT' or sig_comp == 'BOOL' or sig_comp == 'lv_color_t':
+        # Use a type guaranteed to hold the largest integer/enum/color type
+        return "int64_t" # Sufficiently large for most integer/enum types
+    elif sig_comp == 'FLOAT':
+        return "double" # Use double to hold float or double
+    elif sig_comp == 'POINTER' or sig_comp == 'const char *' or sig_comp.endswith('*'):
+        return "void*" # Pointers are stored as void*
+    elif sig_comp == 'void':
+         return "void" # Should not be used for args normally
+    else:
+        logger.warning(f"Cannot determine buffer type for signature component: {sig_comp}. Using void*.")
+        return "void*"
+
+
+def _generate_generic_invoke_fn(signature_category, sig_c_name, function_list, api_info):
     """Generates the C code for a generic invoke_fn_t implementation."""
-    # Find the representative function to get specific C types
-    func_repr = next((f for f in api_info['functions'] if f['name'] == repr_func_name), None)
-    if not func_repr:
-        logger.error(f"Could not find representative function '{repr_func_name}' for signature {signature_category}")
-        return "" # Should not happen
+    # function_list contains the list of function dicts sharing this signature category.
+    # We only need one representative function *in Python* to determine buffer sizes.
+    if not function_list:
+         logger.error(f"Cannot generate invoker {sig_c_name}: function list is empty.")
+         return ""
+    representative_func = function_list[0] # Used only for buffer sizing check
 
-    # Extract specific C types for return value and arguments
-    ret_c_type, ret_ptr_lvl, _ = func_repr['_resolved_ret_type']
-    specific_ret_c_type_str = get_c_type_str(ret_c_type, ret_ptr_lvl)
-    is_void_return = (ret_c_type == 'void' and ret_ptr_lvl == 0)
+    # Simplified signature components (used for buffer types)
+    sig_ret_comp = signature_category[0]
+    sig_arg_comps = signature_category[1:]
+    num_c_args = len(sig_arg_comps) # Number of args based on *simplified* signature
 
-    specific_arg_c_type_strs = []
-    specific_arg_c_types_full = [] # Keep tuple (base, ptr_lvl, is_array)
-    if func_repr['_resolved_arg_types']:
-        for i, (arg_c_type, arg_ptr_lvl, arg_is_array) in enumerate(func_repr['_resolved_arg_types']):
-             specific_arg_c_type_strs.append(get_c_type_str(arg_c_type, arg_ptr_lvl))
-             specific_arg_c_types_full.append((arg_c_type, arg_ptr_lvl, arg_is_array))
+    # Check if the number of args in the representative function matches the simplified one
+    # This is a sanity check
+    if len(representative_func['_resolved_arg_types']) != num_c_args:
+         logger.warning(f"Mismatch between simplified arg count ({num_c_args}) and representative func '{representative_func['name']}' ({len(representative_func['_resolved_arg_types'])} args) for invoker {sig_c_name}.")
+         # Proceed cautiously, num_c_args from simplified signature dictates the loop below
 
-    num_c_args = len(specific_arg_c_type_strs) # Number of C arguments for the representative func
-
+    # Updated C function signature: takes entry pointer
     c_code = f"// Generic Invoker for signature category: {signature_category}\n"
-    c_code += f"// Representative LVGL func: {repr_func_name} ({specific_ret_c_type_str}({', '.join(specific_arg_c_type_strs)}))\n"
-    c_code += f"static bool {sig_c_name}(void *target_obj_ptr, void *dest, cJSON *args_array, void *func_ptr) {{\n"
-    c_code += f"    if (!func_ptr) {{ LOG_ERR(\"Invoke Error: func_ptr is NULL for {sig_c_name}\"); return false; }}\n"
+    c_code += f"// Handles {len(function_list)} functions like '{representative_func['name']}'\n"
+    c_code += f"static bool {sig_c_name}(const invoke_table_entry_t *entry, void *target_obj_ptr, void *dest, cJSON *args_array) {{\n"
+    c_code += f"    if (!entry || !entry->func_ptr || !entry->ret_type || !entry->arg_types) {{ LOG_ERR(\"Invoke Error: Invalid entry passed to {sig_c_name} (for func '%s')\", entry ? entry->name : \"NULL_ENTRY\"); return false; }}\n" # Improved error log
 
-    # Declare C argument variables
+    # Declare stack buffers for arguments based on simplified signature
+    c_code += "    // Declare stack buffers for arguments (sized based on signature category)\n"
     for i in range(num_c_args):
-        c_code += f"    {specific_arg_c_type_strs[i]} arg{i};\n"
-    if not is_void_return:
-        c_code += f"    {specific_ret_c_type_str} result;\n"
+        buffer_type = _get_buffer_type_for_sig_component(sig_arg_comps[i])
+        if buffer_type != "void":
+           c_code += f"    {buffer_type} arg_buf{i};\n"
+
+    # Declare buffer for result if needed
+    result_buffer_type = "void"
+    if sig_ret_comp != 'void':
+        result_buffer_type = _get_buffer_type_for_sig_component(sig_ret_comp)
+        c_code += f"    {result_buffer_type} result_buf;\n"
 
     c_code += "\n"
-
-    # Define the specific C function pointer type
-    args_for_typedef = ", ".join(specific_arg_c_type_strs) if specific_arg_c_type_strs else "void"
-    c_code += f"    // Define specific function pointer type based on representative function\n"
-    c_code += f"    typedef {specific_ret_c_type_str} (*specific_lv_func_type)({args_for_typedef});\n"
-    c_code += f"    specific_lv_func_type target_func = (specific_lv_func_type)func_ptr;\n\n"
 
     # --- Argument Unmarshaling Logic ---
     num_json_args_expected = num_c_args
     first_arg_is_target = False
 
-    # Check if the function expects the target object as its *first* C argument (heuristic: ptr to lv_..._t)
-    if num_c_args > 0 and specific_arg_c_types_full:
-         first_c_arg_type, first_c_arg_ptr, _ = specific_arg_c_types_full[0]
-         # Assume first arg is target if it's a pointer to an LVGL type (struct/widget)
-         if first_c_arg_ptr == 1 and first_c_arg_type.startswith("lv_") and first_c_arg_type.endswith("_t"):
-             first_arg_is_target = True
-             num_json_args_expected = num_c_args - 1 # JSON provides args *after* the target
-             # Assign target_obj_ptr to the first C argument variable
-             c_code += f"    // Assign target_obj_ptr to first C argument (arg0)\n"
-             c_code += f"    arg0 = ({specific_arg_c_type_strs[0]})target_obj_ptr;\n"
-             c_code += f"    // It's okay if target_obj_ptr is NULL for some functions (e.g. lv_style_set_...)\n"
-             c_code += f"    // Add validation if target MUST be non-NULL for this signature group if needed.\n"
-             # c_code += f"    if (!arg0) {{ LOG_ERR("Invoke Error: target_obj_ptr (first arg) is NULL for {sig_c_name}"); return false; }}\n"
+    # Check if the *first argument based on simplified signature* is the target object
+    # This relies on the simplified signature accurately reflecting the target object pattern.
+    if num_c_args > 0 and (sig_arg_comps[0] == 'POINTER' or sig_arg_comps[0].endswith('*')):
+        first_arg_is_target = True
+        num_json_args_expected = num_c_args - 1
+        c_code += f"    // Assign target_obj_ptr to first C argument buffer (arg_buf0)\n"
+        c_code += f"    // Expected specific type for target is entry->arg_types[0]\n"
+        c_code += f"    if (!entry->arg_types[0]) {{ LOG_ERR(\"Invoke Error: Missing type string for target arg 0 of '%s'\", entry->name); return false; }}\n"
+        c_code += f"    arg_buf0 = (void*)target_obj_ptr; // Store as void* in buffer\n"
+        # Add check if target MUST be non-NULL? Requires analyzing all functions in the group.
+        # c_code += f"    if (!arg_buf0 && /* check if non-null required */ ) {{ ... return false; }} \n"
+
 
     # Check JSON array validity and size
-    c_code += f"    // Expecting {num_json_args_expected} arguments from JSON array\n"
+    c_code += f"    // Expecting {num_json_args_expected} arguments from JSON array for function '{representative_func}'\n"
     c_code += f"    if (!cJSON_IsArray(args_array)) {{\n"
-    # Allow 0 expected JSON args if array is NULL (e.g., void function with only target object)
     c_code += f"       if ({num_json_args_expected} == 0 && args_array == NULL) {{ /* Okay */ }}\n"
-    c_code += f"       else {{ LOG_ERR_JSON(args_array, \"Invoke Error: args_array is not a valid array for {sig_c_name}\"); return false; }}\n"
+    c_code += f"       else {{ LOG_ERR_JSON(args_array, \"Invoke Error: args_array is not a valid array for {sig_c_name} (func '%s')\", entry->name); return false; }}\n"
     c_code += f"    }}\n"
     c_code += f"    int arg_count = (args_array == NULL) ? 0 : cJSON_GetArraySize(args_array);\n"
-    c_code += f"    if (arg_count != {num_json_args_expected}) {{ LOG_ERR_JSON(args_array, \"Invoke Error: Expected {num_json_args_expected} JSON args, got %d for {sig_c_name}\", arg_count); return false; }}\n\n"
+    c_code += f"    if (arg_count != {num_json_args_expected}) {{ LOG_ERR_JSON(args_array, \"Invoke Error: Expected {num_json_args_expected} JSON args for func '%s', got %d for {sig_c_name}\", entry->name, arg_count); return false; }}\n\n"
 
-    # Unmarshal arguments from JSON array
-    c_code += "    // Unmarshal arguments from JSON\n"
+    # Unmarshal arguments from JSON array into stack buffers
+    c_code += "    // Unmarshal arguments from JSON into stack buffers using specific types from entry\n"
     for i in range(num_json_args_expected):
-        c_arg_index = i + (1 if first_arg_is_target else 0) # Index into specific_arg_c_type_strs/argN vars
-        c_code += f"    cJSON *json_arg{i} = cJSON_GetArrayItem(args_array, {i});\n"
-        c_code += f"    if (!json_arg{i}) {{ LOG_ERR(\"Invoke Error: Failed to get JSON arg {i} for {sig_c_name}\"); return false; }}\n"
+        c_arg_index = i + (1 if first_arg_is_target else 0) # Index into arg_bufN and entry->arg_types
 
-        base_arg_type, ptr_lvl, is_array = specific_arg_c_types_full[c_arg_index]
-        specific_type_str = specific_arg_c_type_strs[c_arg_index]
-        # Use the main unmarshal_value dispatcher
-        unmarshal_call = f"unmarshal_value(json_arg{i}, \"{specific_type_str}\", &arg{c_arg_index})"
-        c_code += f"    // Unmarshal JSON arg {i} into C arg {c_arg_index} (type {specific_type_str})\n"
+        # C code accesses entry->arg_types at runtime
+        c_code += f"    const char* specific_type_str{c_arg_index} = entry->arg_types[{c_arg_index}];\n"
+        c_code += f"    if (!specific_type_str{c_arg_index}) {{\n"
+        c_code += f"        LOG_ERR(\"Invoke Error: Internal setup error - missing type for arg {c_arg_index} of '%s'\", entry->name);\n"
+        c_code += f"        return false;\n"
+        c_code += f"    }}\n"
+
+        buffer_ptr = f"&arg_buf{c_arg_index}" # Address of the stack buffer
+
+        c_code += f"    cJSON *json_arg{i} = cJSON_GetArrayItem(args_array, {i});\n"
+        c_code += f"    if (!json_arg{i}) {{ LOG_ERR(\"Invoke Error: Failed to get JSON arg {i} for func '%s' ({sig_c_name})\", entry->name); return false; }}\n"
+
+        # Generate the call to unmarshal_value using the specific type string retrieved *at runtime*
+        unmarshal_call = f"unmarshal_value(json_arg{i}, specific_type_str{c_arg_index}, (void*){buffer_ptr})"
+        c_code += f"    // Unmarshal JSON arg {i} into C arg buffer {c_arg_index} (using specific type found in entry->arg_types[{c_arg_index}])\n"
         c_code += f"    if (!({unmarshal_call})) {{\n"
-        c_code += f"        LOG_ERR_JSON(json_arg{i}, \"Invoke Error: Failed to unmarshal JSON arg {i} (expected C type {specific_type_str}) for {sig_c_name}\");\n"
+        # Log the specific type string used during the failed unmarshal attempt
+        c_code += f"        LOG_ERR_JSON(json_arg{i}, \"Invoke Error: Failed to unmarshal JSON arg {i} as type '%s' for func '%s' ({sig_c_name})\", specific_type_str{c_arg_index}, entry->name);\n"
         c_code += f"        return false;\n"
         c_code += f"    }}\n"
     c_code += "\n"
 
     # --- Function Call ---
-    c_code += "    // Call the target LVGL function\n"
-    call_args_str = ", ".join([f"arg{i}" for i in range(num_c_args)]) # Pass all declared C args
-    if is_void_return:
+    # Cast the generic func_ptr to the SPECIFIC function type using info from entry
+    c_code += "    // Cast function pointer to specific type from table entry\n"
+    c_code += "    // Generate the C typedef string dynamically based on entry->ret_type and entry->arg_types\n"
+    # This part needs careful C string construction within the generated C code.
+    c_code += "    char func_typedef_str[512];\n" # Buffer for typedef string
+    c_code += "    char func_args_str[256];\n" # Buffer for args part of typedef
+    c_code += "    func_args_str[0] = '\\0';\n"
+    c_code += f"   if ({num_c_args} == 0) {{\n"
+    c_code += "        strcpy(func_args_str, \"void\");\n"
+    c_code += "    } else {\n"
+    c_code += "        for (int i = 0; i < " + str(num_c_args) + "; ++i) {\n" # Use Python's num_c_args here
+    c_code += "            if (!entry->arg_types[i]) { strcat(func_args_str, \"void /*ERROR*/\"); }\n" # Error case
+    c_code += "            else { strcat(func_args_str, entry->arg_types[i]); }\n"
+    c_code += "            if (i < " + str(num_c_args - 1) + ") { strcat(func_args_str, \", \"); }\n"
+    c_code += "        }\n"
+    c_code += "    }\n"
+    # Ensure ret_type exists
+    c_code += "    const char* specific_ret_type = entry->ret_type ? entry->ret_type : \"void\";\n"
+    c_code += "    snprintf(func_typedef_str, sizeof(func_typedef_str), \"%s (*)(%s)\", specific_ret_type, func_args_str);\n"
+    c_code += "    // This ^^^ string building is just for potential debugging/logging.\n"
+    c_code += "    // The actual cast uses the specific types directly:\n"
+
+    # Generate the specific typedef and cast
+    specific_ret_type_c = "entry->ret_type ? entry->ret_type : \"void\"" # C expression
+    specific_arg_types_list_c = []
+    if num_c_args > 0:
+        for i in range(num_c_args):
+            specific_arg_types_list_c.append(f"entry->arg_types[{i}] ? entry->arg_types[{i}] : \"void /*ERROR*/\"")
+    specific_arg_types_str_c = ", ".join(specific_arg_types_list_c) if specific_arg_types_list_c else "void"
+
+    # C code generation: typedef needs actual types, not strings. This approach is flawed.
+    # We cannot dynamically create a C typedef from strings at runtime easily.
+    # The C code must CAST the generic function pointer directly.
+
+    # Revert: We *must* cast the generic void* func_ptr to the specific type *known at C compile time*.
+    # This means the invoker *cannot* be fully generic based on the entry struct alone
+    # without using libffi or similar.
+
+    # --- Backtrack: Simpler approach that might work for common cases ---
+    # Assume the simplified signature grouping is good enough for the function pointer *cast*.
+    # This is the original flawed assumption, but let's try making the *call* work.
+
+    c_code = f"// Generic Invoker for signature category: {signature_category}\n"
+    c_code += f"// Handles {len(function_list)} functions like '{representative_func['name']}'\n"
+    c_code += f"// WARNING: Uses simplified signature for casting func_ptr, relies on compatible calling conventions.\n"
+    c_code += f"static bool {sig_c_name}(const invoke_table_entry_t *entry, void *target_obj_ptr, void *dest, cJSON *args_array) {{\n"
+    c_code += f"    if (!entry || !entry->func_ptr || !entry->ret_type) {{ LOG_ERR(\"Invoke Error: Invalid entry passed to {sig_c_name} (for func '%s')\", entry ? entry->name : \"NULL_ENTRY\"); return false; }}\n"
+
+    # Declare stack buffers based on simplified signature
+    c_code += "    // Declare stack buffers for arguments (sized based on signature category)\n"
+    arg_buffers = [] # Store names of buffer variables
+    for i in range(num_c_args):
+        buffer_type = _get_buffer_type_for_sig_component(sig_arg_comps[i])
+        if buffer_type != "void":
+           c_code += f"    {buffer_type} arg_buf{i};\n"
+           arg_buffers.append(f"arg_buf{i}")
+
+    result_buffer_type = "void"
+    result_buffer_name = None
+    if sig_ret_comp != 'void':
+        result_buffer_type = _get_buffer_type_for_sig_component(sig_ret_comp)
+        result_buffer_name = "result_buf"
+        c_code += f"    {result_buffer_type} {result_buffer_name};\n"
+    c_code += "\n"
+
+    # --- Unmarshal using specific types from entry ---
+    num_json_args_expected = num_c_args
+    first_arg_is_target = False
+    if num_c_args > 0 and (sig_arg_comps[0] == 'POINTER' or sig_arg_comps[0].endswith('*')):
+        first_arg_is_target = True
+        num_json_args_expected = num_c_args - 1
+        c_code += f"    if (!entry->arg_types[0]) {{ LOG_ERR(\"Invoke Error: Missing type string for target arg 0 of '%s'\", entry->name); return false; }}\n"
+        c_code += f"    arg_buf0 = (void*)target_obj_ptr;\n"
+
+    # Check JSON array validity and size (same as before)
+    c_code += f"    // Expecting {num_json_args_expected} arguments from JSON array for function '{representative_func}'\n"
+    c_code += f"    if (!cJSON_IsArray(args_array)) {{\n"
+    c_code += f"       if ({num_json_args_expected} == 0 && args_array == NULL) {{ /* Okay */ }}\n"
+    c_code += f"       else {{ LOG_ERR_JSON(args_array, \"Invoke Error: args_array is not a valid array for {sig_c_name} (func '%s')\", entry->name); return false; }}\n"
+    c_code += f"    }}\n"
+    c_code += f"    int arg_count = (args_array == NULL) ? 0 : cJSON_GetArraySize(args_array);\n"
+    c_code += f"    if (arg_count != {num_json_args_expected}) {{ LOG_ERR_JSON(args_array, \"Invoke Error: Expected {num_json_args_expected} JSON args for func '%s', got %d for {sig_c_name}\", entry->name, arg_count); return false; }}\n\n"
+
+    # Unmarshal into buffers using specific types from entry
+    c_code += "    // Unmarshal arguments from JSON into stack buffers using specific types from entry\n"
+    for i in range(num_json_args_expected):
+        c_arg_index = i + (1 if first_arg_is_target else 0)
+        c_code += f"    const char* specific_type_str{c_arg_index} = entry->arg_types[{c_arg_index}];\n"
+        c_code += f"    if (!specific_type_str{c_arg_index}) {{ LOG_ERR(\"Invoke Error: Internal setup error - missing type for arg {c_arg_index} of '%s'\", entry->name); return false; }}\n"
+        buffer_ptr = f"&arg_buf{c_arg_index}"
+        c_code += f"    cJSON *json_arg{i} = cJSON_GetArrayItem(args_array, {i});\n"
+        c_code += f"    if (!json_arg{i}) {{ LOG_ERR(\"Invoke Error: Failed to get JSON arg {i} for func '%s' ({sig_c_name})\", entry->name); return false; }}\n"
+        unmarshal_call = f"unmarshal_value(json_arg{i}, specific_type_str{c_arg_index}, (void*){buffer_ptr})"
+        c_code += f"    // Unmarshal JSON arg {i} into C arg buffer {c_arg_index} (using specific type 'specific_type_str{c_arg_index}')\n"
+        c_code += f"    if (!({unmarshal_call})) {{\n"
+        c_code += f"        LOG_ERR_JSON(json_arg{i}, \"Invoke Error: Failed to unmarshal JSON arg {i} as type '%s' for func '%s' ({sig_c_name})\", specific_type_str{c_arg_index}, entry->name);\n"
+        c_code += f"        return false;\n"
+        c_code += f"    }}\n"
+    c_code += "\n"
+
+    # --- Function Call ---
+    # Cast func_ptr based on the SIMPLIFIED signature category. This is the weak point.
+    c_code += "    // Cast function pointer based on simplified signature category\n"
+    simplified_ret_type = _get_buffer_type_for_sig_component(sig_ret_comp)
+    simplified_arg_types = []
+    for i in range(num_c_args):
+        simplified_arg_types.append(_get_buffer_type_for_sig_component(sig_arg_comps[i]))
+    simplified_args_str = ", ".join(simplified_arg_types) if simplified_arg_types else "void"
+
+    c_code += f"    typedef {simplified_ret_type} (*invoker_func_type)({simplified_args_str});\n"
+    c_code += f"    invoker_func_type target_func = (invoker_func_type)entry->func_ptr;\n\n"
+
+    c_code += "    // Call the target LVGL function using values from stack buffers\n"
+    call_args_str = ", ".join(arg_buffers)
+
+    if sig_ret_comp == 'void':
         c_code += f"    target_func({call_args_str});\n"
     else:
-        c_code += f"    result = target_func({call_args_str});\n"
-
+        c_code += f"    {result_buffer_name} = target_func({call_args_str});\n"
     c_code += "\n"
 
     # --- Store Result ---
-    if not is_void_return:
-        c_code += "    // Store result if dest is provided\n"
+    if sig_ret_comp != 'void':
+        c_code += "    // Store result (from result_buf) if dest is provided\n"
         c_code += "    if (dest) {\n"
-        c_code += f"        *(({specific_ret_c_type_str} *)dest) = result;\n"
+        # Copy result buffer to destination. Size mismatch IS possible here.
+        # Use specific type string from entry for casting the destination pointer.
+        c_code += f"        const char* specific_ret_type_str = entry->ret_type ? entry->ret_type : \"void\";\n"
+        c_code += f"        // Copy result from buffer to dest (casting dest based on specific return type '{sig_ret_comp}')\n"
+        c_code += f"        // WARNING: Assumes calling convention compatibility & sufficient space at dest!\n"
+        # Simple assignment cast (assuming primitive/pointer returns)
+        c_code += f"        if (strchr(specific_ret_type_str, '*')) {{ // Pointer type\n"
+        c_code += f"             *(void**)dest = (void*){result_buffer_name};\n"
+        c_code += f"        }} else if (strcmp(specific_ret_type_str, \"float\") == 0 || strcmp(specific_ret_type_str, \"double\") == 0) {{ // Float/Double\n"
+        c_code += f"             *({result_buffer_type} *)dest = ({result_buffer_type}){result_buffer_name};\n" # Assumes result_buffer_type is double
+        c_code += f"        }} else if (strcmp(specific_ret_type_str, \"void\") != 0) {{ // Integer/Enum/Bool/Color?\n"
+        c_code += f"             *({result_buffer_type} *)dest = ({result_buffer_type}){result_buffer_name};\n" # Assumes result_buffer_type is int64_t
+        c_code += f"             // TODO: Potential truncation/sign issues if specific_ret_type is smaller than {result_buffer_type}\n"
+        c_code += f"        }}\n"
         c_code += "    }\n"
 
     c_code += "\n    return true;\n"
     c_code += "}\n\n"
     return c_code
+
+
+# Rest of invocation.py (generate_invocation_helpers, generate_invoke_table, generate_find_function)
+# remains the same as in the previous correct version, using the updated invoke_fn_t signature
+# and populating the table entry fields correctly.
+
 
 def generate_invocation_helpers(signatures, api_info):
     """Generates all the C invoke_fn_t helper functions."""
@@ -185,13 +341,18 @@ def generate_invocation_helpers(signatures, api_info):
     c_code = ""
     c_code += "// Forward declaration for the main unmarshaler\n"
     c_code += "static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest);\n\n"
+    # Forward declare the table struct type for the invoker signatures
+    c_code += "struct invoke_table_entry_s;\n"
+    c_code += "typedef struct invoke_table_entry_s invoke_table_entry_t;\n\n"
+
 
     c_code += "// --- Invocation Helper Functions ---\n"
 
     signature_map = {} # Map func_name -> invoke_fn_name
 
     # Sort signatures for consistent output order (optional)
-    sorted_signatures = sorted(signatures.keys())
+    # Need to convert dict_keys to list before sorting if using Python 3.7+
+    sorted_signatures = sorted(list(signatures.keys()))
 
     # Generate the special create invoker if needed
     widget_create_invoker_name = None
@@ -200,8 +361,8 @@ def generate_invocation_helpers(signatures, api_info):
         c_code += create_invoker_code
         generated_invoke_fns[WIDGET_CREATE_SIGNATURE] = widget_create_invoker_name
         # Map all functions with this signature to the special invoker
-        for func_name in signatures[WIDGET_CREATE_SIGNATURE]:
-            signature_map[func_name] = widget_create_invoker_name
+        for func_dict in signatures[WIDGET_CREATE_SIGNATURE]:
+            signature_map[func_dict['name']] = widget_create_invoker_name
         logger.info(f"Generated specific invoker '{widget_create_invoker_name}' for WIDGET_CREATE functions.")
 
 
@@ -211,42 +372,59 @@ def generate_invocation_helpers(signatures, api_info):
         if signature_category == WIDGET_CREATE_SIGNATURE:
             continue
 
-        # Get list of functions and pick one as representative for C types
-        func_name_list = signatures[signature_category]
-        if not func_name_list: continue # Should not happen
-        representative_func_name = func_name_list[0]
+        # Get list of function dicts
+        function_list = signatures[signature_category]
+        if not function_list: continue # Should not happen
 
-        # Create a C-safe name for the signature function
+        # Create a C-safe name for the signature function based on category
         sig_c_name_parts = [str(s).replace(' ', '_').replace('*', 'p').replace('[', '_').replace(']', '_') for s in signature_category]
         sig_c_name = f"invoke_{'_'.join(sig_c_name_parts)}"
-        # Ensure C name validity (e.g., starts with letter/underscore, max length?)
         sig_c_name = ''.join(c if c.isalnum() else '_' for c in sig_c_name) # Basic sanitization
         if not sig_c_name[0].isalpha() and sig_c_name[0] != '_':
              sig_c_name = "_" + sig_c_name
+        # Add length limit? Avoid collisions. Maybe add hash of signature? For now, keep simple.
+
+        # Check if we already generated an invoker for this exact C name
+        # (Can happen if different categories sanitize to same name) - Add suffix if needed.
+        original_sig_c_name = sig_c_name
+        name_suffix = 0
+        while sig_c_name in generated_invoke_fns.values() and name_suffix < 100:
+            name_suffix += 1
+            sig_c_name = f"{original_sig_c_name}_{name_suffix}"
+        if name_suffix >= 100:
+            logger.error(f"Could not generate unique C name for invoker category {signature_category}")
+            continue
 
         # Store the mapping for the table generation
         generated_invoke_fns[signature_category] = sig_c_name
-        for func_name in func_name_list:
+        for func_dict in function_list:
             # Only map if not already mapped (e.g., create funcs mapped above)
-            if func_name not in signature_map:
-                 signature_map[func_name] = sig_c_name
+            if func_dict['name'] not in signature_map:
+                 signature_map[func_dict['name']] = sig_c_name
 
         # Generate the C code for this invoker
-        c_code += _generate_generic_invoke_fn(signature_category, sig_c_name, representative_func_name, api_info)
+        # Pass function_list which contains representative function info needed by generator
+        c_code += _generate_generic_invoke_fn(signature_category, sig_c_name, function_list, api_info)
 
     return c_code, signature_map
 
 def generate_invoke_table_def():
-    c_code = "// Signature of the function pointers in the table entry\n"
-    c_code += "typedef bool (*invoke_fn_t)(void *target_obj_ptr, void *dest, cJSON *args_array, void *func_ptr);\n\n"
-    c_code += "// Structure for each entry in the invocation table\n"
-    c_code += "typedef struct {\n"
-    c_code += "    const char *name;       // LVGL function name (e.g., \"lv_obj_set_width\")\n"
-    c_code += "    invoke_fn_t invoke;   // Pointer to the C invocation wrapper function\n"
-    c_code += "    void *func_ptr;     // Pointer to the actual LVGL function\n"
-    c_code += "} invoke_table_entry_t;\n\n"
-    return c_code
+    """Generates the invoke table definition and data."""
 
+    c_code = "// --- Invocation Table ---\n\n"
+    c_code += "// Forward declaration of the invoker function signature type\n"
+    c_code += "struct invoke_table_entry_s;\n"
+    c_code += "typedef bool (*invoke_fn_t)(const struct invoke_table_entry_s *entry, void *target_obj_ptr, void *dest, cJSON *args_array);\n\n"
+
+    c_code += "// Structure for each entry in the invocation table\n"
+    c_code += f"typedef struct invoke_table_entry_s {{\n" # Use struct tag here
+    c_code += "    const char *name;           // LVGL function name (e.g., \"lv_obj_set_width\")\n"
+    c_code += "    invoke_fn_t invoke;       // Pointer to the C invocation wrapper function\n"
+    c_code += "    void *func_ptr;         // Pointer to the actual LVGL function\n"
+    c_code += "    const char *ret_type;       // Specific C return type string\n"
+    c_code += f"    const char *arg_types[{MAX_ARGS_SUPPORTED}]; // Specific C argument type strings\n"
+    c_code += f"}} invoke_table_entry_t;\n\n" # Typedef name here
+    return c_code
 
 def generate_invoke_table(filtered_functions, signature_map):
     """Generates the invoke table definition and data."""
@@ -262,20 +440,39 @@ def generate_invoke_table(filtered_functions, signature_map):
         name = func['name']
         if name in signature_map:
             invoke_func_name = signature_map[name]
-            # Ensure the C invoker function exists (was generated)
-            # This check is somewhat redundant if signature_map is built correctly
-            # from generated_invoke_fns keys
-            sig = get_signature(func) # Recalculate signature to look up in generated_invoke_fns
+            # Ensure the C invoker function exists
+            sig = get_signature(func)
             if sig not in generated_invoke_fns:
-                 logger.error(f"Internal Error: Signature {sig} for function '{name}' has a mapping to '{invoke_func_name}' but no invoker was generated for this signature.")
+                 logger.error(f"Internal Error: Signature {sig} for function '{name}' mapped to '{invoke_func_name}' but no invoker function was generated for this signature.")
                  continue
 
-            c_code += f"    {{\"{name}\", &{invoke_func_name}, (void*)&{name}}},\n"
+            # Get specific type strings
+            ret_c_type, ret_ptr_lvl, _ = func['_resolved_ret_type']
+            specific_ret_type_str = get_c_type_str(ret_c_type, ret_ptr_lvl)
+
+            specific_arg_type_strs = ["NULL"] * MAX_ARGS_SUPPORTED # Initialize with NULL
+            num_args = len(func['_resolved_arg_types'])
+            if num_args > MAX_ARGS_SUPPORTED:
+                logger.error(f"Function '{name}' has {num_args} arguments, exceeding MAX_ARGS_SUPPORTED ({MAX_ARGS_SUPPORTED}). Skipping invoke table entry.")
+                continue
+            for i in range(num_args):
+                 arg_c_type, arg_ptr_lvl, _ = func['_resolved_arg_types'][i]
+                 specific_arg_type_strs[i] = f"\"{get_c_type_str(arg_c_type, arg_ptr_lvl)}\"" # Store as quoted string literal
+
+            # Format the entry
+            c_code += f"    {{\n"
+            c_code += f"        .name = \"{name}\",\n"
+            c_code += f"        .invoke = &{invoke_func_name},\n"
+            c_code += f"        .func_ptr = (void*)&{name},\n"
+            c_code += f"        .ret_type = \"{specific_ret_type_str}\",\n"
+            c_code += f"        .arg_types = {{ {', '.join(specific_arg_type_strs)} }}\n"
+            c_code += f"    }},\n"
             count += 1
         else:
-            logger.warning(f"Function '{name}' is filtered but has no signature mapping. Skipping invoke table entry.")
+            # This function was filtered but didn't map to any generated invoker
+            logger.warning(f"Function '{name}' is filtered but has no invoker mapping. Skipping invoke table entry.")
 
-    c_code += "    {NULL, NULL, NULL} // Sentinel\n"
+    c_code += "    {NULL, NULL, NULL, NULL, {NULL}} // Sentinel\n" # Match struct init
     c_code += "};\n\n"
     c_code += f"#define INVOKE_TABLE_SIZE {count}\n\n"
 

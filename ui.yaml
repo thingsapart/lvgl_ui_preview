@@ -1,7 +1,29 @@
-- type: button
-  width:
-        - call: lv_pct
-          args: [100]
+-
+  width: 100%
+  radius: 0
+  layout: LV_LAYOUT_FLEX
+  flex_flow: LV_FLEX_FLOW_ROW
+
   children:
-        - type: label
-          text: "Testing 1-2-1-2"
+    - type: button
+      #width: 100%
+      width: LV_SIZE_CONTENT
+      radius: 0
+      pad_all: 20
+      children:
+            - type: label
+              bg_color: '#ff0000'
+              bg_opa: 255
+              align: LV_ALIGN_CENTER
+              text: Testing 1-2-1-2
+              radius: 0
+              pad_all: 20
+
+    - type: label
+      #width: 100%
+      bg_color: '#00ff00'
+      bg_opa: 255
+      align: LV_ALIGN_CENTER
+      text: Test-2
+      radius: 0
+      pad_all: 20

@@ -138,6 +138,7 @@ bool load_and_build_ui(const char *filepath) {
     }
     free(file_content); // Free the buffer
     lv_obj_t * scr = lv_screen_active();
+    lv_obj_clean(scr);
     bool success = lvgl_json_render_ui(root, scr);
 
     if (!success) {

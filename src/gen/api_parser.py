@@ -26,12 +26,25 @@ DEFAULT_FUNCTION_EXCLUDE_PREFIXES = ["_lv_", "lv_obj_class", "lv_group_",
                                      "lv_draw_", "lv_obj_set_id", "lv_ll_clear_custom"
                                      ] # Exclude internal/complex subsystems by default
 
-DEFAULT_ENUM_INCLUDES = [] # Typically include all needed enums based on function args
+DEFAULT_ENUM_INCLUDES = ['lv_align_t', 'lv_opa_enum_t', 'lv_layout_t', 
+                         'lv_text_align_t', 'lv_flex_align_t', 'lv_flex_flow_t', 
+                         'lv_grid_align_t', 'lv_text_decor_t', 'lv_scrollbar_mode_t', 
+                         'lv_style_parts_t', 'lv_arc_mode_t', 'lv_bar_mode_t', 
+                         'lv_bar_orientation_t', 'lv_buttonmatrix_ctrl_t', 'lv_scale_mode_t', 
+                         'lv_slider_mode_t', 'lv_slider_orientation_t', 'lv_span_overflow_t', 
+                         'lv_span_mode_t', 'lv_table_cell_ctrl_t', 'lv_gridnav_ctrl_t', ]
 DEFAULT_ENUM_INCLUDE_PREFIXES = ["LV_"]
 DEFAULT_ENUM_EXCLUDES = []
 DEFAULT_ENUM_EXCLUDE_PREFIXES = ["_LV_"]
 
 logger = logging.getLogger(__name__)
+
+def djb2_hash(s):
+    hash_val = 5381
+    for char in s:
+        hash_val = ((hash_val << 5) + hash_val) + ord(char) # hash * 33 + c
+        hash_val &= 0xFFFFFFFF # Ensure it's a 32-bit unsigned integer
+    return hash_val
 
 def _get_base_type_name(type_obj):
     """Drills down into nested type objects to find the innermost name."""
@@ -206,30 +219,6 @@ def parse_api(api_filepath,
             except Exception as e:
                  logger.error(f"Error resolving types for function {name}: {e}")
 
-    # Filter Enums (include all members if enum type is included)
-    filtered_enums = []
-    all_enum_members = {} # Store members for lookup later if needed
-    for enum in api_data.get('enums', []):
-        # Decide based on enum type name (e.g., lv_align_t) or the first member's prefix if no type name
-        enum_type_name = enum.get('name') # This might be the typedef name like 'lv_align_t'
-        first_member_name = enum.get('members', [{}])[0].get('name')
-
-        identifier = enum_type_name if enum_type_name else (first_member_name if first_member_name else None)
-
-        if _should_include(identifier, enum_includes, enum_excludes, enum_include_prefixes, enum_exclude_prefixes):
-            filtered_enums.append(enum)
-            for member in enum.get('members', []):
-                 member_name = member.get('name')
-                 if member_name:
-                     # Store value safely (it's often hex string)
-                     try:
-                         value_str = member.get('value', '0')
-                         value = int(value_str, 0) # Handle hex (0x) and decimal
-                         all_enum_members[member_name] = value
-                     except ValueError:
-                         logger.warning(f"Could not parse enum value for {member_name}: {value_str}")
-
-
     # Gather needed typedefs (those used by filtered functions/structs)
     # This is complex. For now, let's just pass all typedefs and let C compiler handle it.
     # A more refined approach would trace dependencies.
@@ -239,17 +228,75 @@ def parse_api(api_filepath,
     # Also collect global variables if needed (e.g., fonts like lv_font_montserrat_14)
     variables = api_data.get('variables', [])
 
+    # Filter Enums (include all members if enum type is included)
+    filtered_enums = [] # List of original enum dicts that are included
+    # Globally collected, hashed, and sorted enum members for the new unmarshaler
+    # Each item: {'name': str, 'value': int, 'hash': int, 'original_type_name': str (for debug/future)}
+    hashed_and_sorted_enum_members = [] 
+    
+    # Keep track of all_enum_members for compatibility or other uses if needed
+    all_enum_members_compat_map = {} 
+
+    temp_enum_members_list = [] # Temporary list to gather before sorting
+
+    for enum_original_data in api_data.get('enums', []):
+        enum_type_name = enum_original_data.get('name') # e.g., lv_align_t
+        first_member_name = enum_original_data.get('members', [{}])[0].get('name')
+        
+        identifier_for_filtering = enum_type_name if enum_type_name else (first_member_name if first_member_name else None)
+
+        if _should_include(identifier_for_filtering, enum_includes, enum_excludes, enum_include_prefixes, enum_exclude_prefixes):
+            if enum_type_name: # Only process enums that have a type name for clarity
+                filtered_enums.append(enum_original_data) 
+            else:
+                # If no type name, we might still include its members if they match LV_ prefix etc.
+                # but they won't have an 'original_type_name' associated here.
+                # For simplicity, we will primarily focus on enums with type names for the new system.
+                # If an enum has no 'name' but its members are LV_ prefixed, they'll still be caught.
+                pass # Members will be processed below regardless of top-level enum name presence
+
+            for member in enum_original_data.get('members', []):
+                member_name = member.get('name')
+                if member_name:
+                    # Check if member itself should be included (e.g., starts with LV_)
+                    # This ensures we don't include internal _LV_ members if the enum type itself was included by a broader rule
+                    if not _should_include(member_name, [], [], enum_include_prefixes, enum_exclude_prefixes):
+                        continue
+
+                    try:
+                        value_str = member.get('value', '0')
+                        value = int(value_str, 0)
+                        
+                        all_enum_members_compat_map[member_name] = value # Populate old map
+
+                        member_hash = djb2_hash(member_name)
+                        temp_enum_members_list.append({
+                            'name': member_name,
+                            'value': value,
+                            'hash': member_hash,
+                            'original_type_name': enum_type_name if enum_type_name else "UNKNOWN_TYPE"
+                        })
+                    except ValueError:
+                        logger.warning(f"Could not parse enum value for {member_name}: {value_str}")
+    
+    # Sort the global list: primarily by hash, secondarily by name (for stable collision groups)
+    hashed_and_sorted_enum_members = sorted(temp_enum_members_list, key=lambda x: (x['hash'], x['name']))
 
     logger.info(f"Filtered {len(filtered_functions)} functions.")
-    logger.info(f"Filtered {len(filtered_enums)} enums ({len(all_enum_members)} total members).")
+    logger.info(f"Collected {len(hashed_and_sorted_enum_members)} enum members for hashed lookup.")
+    logger.info(f"Legacy enum_members map has {len(all_enum_members_compat_map)} entries.")
+
 
     return {
         "functions": filtered_functions,
-        "enums": filtered_enums,
-        "enum_members": all_enum_members, # Map of Name -> Value
+        "enums": filtered_enums, # Original filtered enum structures
+        "enum_members": all_enum_members_compat_map, # Legacy map for compatibility
+        
+        # New structure for optimized enum unmarshaling
+        "hashed_and_sorted_enum_members": hashed_and_sorted_enum_members,
+
         "typedefs": typedefs,
         "structs": structs,
         "variables": variables,
-        # Include original full data if needed by other modules
         "_full_api_data": api_data
     }
