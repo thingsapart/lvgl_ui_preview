@@ -23,6 +23,7 @@
       #width: 100%
       bg_color: '#00ff00'
       bg_opa: 255
+      width: LV_SIZE_CONTENT
       align: LV_ALIGN_CENTER
       text: Test-2
       radius: 0

@@ -169,7 +169,8 @@ def _should_include(name, include_list, exclude_list, include_prefixes, exclude_
 
 def parse_api(api_filepath,
               func_includes=None, func_excludes=None, func_include_prefixes=None, func_exclude_prefixes=None,
-              enum_includes=None, enum_excludes=None, enum_include_prefixes=None, enum_exclude_prefixes=None):
+              enum_includes=None, enum_excludes=None, enum_include_prefixes=None, enum_exclude_prefixes=None,
+              string_values_override=None):
     """Loads, parses, and filters the API definition."""
 
     func_includes = func_includes if func_includes is not None else DEFAULT_FUNCTION_INCLUDES
@@ -266,9 +267,20 @@ def parse_api(api_filepath,
                     try:
                         value_str = member.get('value', '0')
                         value = int(value_str, 0)
-                        
-                        all_enum_members_compat_map[member_name] = value # Populate old map
 
+                        # Override with value from string_values.json if present
+                        if string_values_override and member_name in string_values_override:
+                            try:
+                                override_val = string_values_override[member_name]
+                                if not isinstance(override_val, int):
+                                    raise ValueError(f"Value for '{member_name}' in string_values.json is not an integer ({type(override_val)}).")
+                                if value != override_val: # Log only if there's an actual change
+                                    logger.info(f"Overriding API enum/macro '{member_name}' value from {value} to {override_val} (from string_values.json)")
+                                value = override_val
+                            except ValueError as e_override:
+                                logger.warning(f"Could not use override for '{member_name}' from string_values.json: {e_override}. Using API JSON value.")
+
+                        all_enum_members_compat_map[member_name] = value # Populate old map
                         member_hash = djb2_hash(member_name)
                         temp_enum_members_list.append({
                             'name': member_name,
@@ -278,7 +290,67 @@ def parse_api(api_filepath,
                         })
                     except ValueError:
                         logger.warning(f"Could not parse enum value for {member_name}: {value_str}")
-    
+
+    # Add/override entries from string_values_override that were not part of any enum in API JSON
+    # or to ensure they are in the list if they are macros not listed in enums.
+    if string_values_override:
+        for name, value in string_values_override.items():
+            if name not in all_enum_members_compat_map: # If not already processed as an enum member and overridden
+                # Heuristic: only add if it looks like a typical LVGL macro.
+                # This also adds macros from string_values.json that might not be in any "enum" definition
+                # in the API json but are desired as named constants.
+                if name.startswith("LV_") or name.isupper():
+                    try:
+                        value_str = member.get('value', '0')
+                        value = int(value_str, 0)
+
+                        # Override with value from string_values.json if present
+                        if string_values_override and member_name in string_values_override:
+                            try:
+                                override_val = string_values_override[member_name]
+                                if not isinstance(override_val, int):
+                                    raise ValueError(f"Value for '{member_name}' in string_values.json is not an integer ({type(override_val)}).")
+                                if value != override_val: # Log only if there's an actual change
+                                    logger.info(f"Overriding API enum/macro '{member_name}' value from {value} to {override_val} (from string_values.json)")
+                                value = override_val
+                            except ValueError as e_override:
+                                logger.warning(f"Could not use override for '{member_name}' from string_values.json: {e_override}. Using API JSON value.")
+
+                        all_enum_members_compat_map[member_name] = value # Populate old map
+                        member_hash = djb2_hash(member_name)
+                        temp_enum_members_list.append({
+                            'name': member_name,
+                            'value': value,
+                            'hash': member_hash,
+                            'original_type_name': enum_type_name if enum_type_name else "UNKNOWN_TYPE"
+                        })
+                    except ValueError:
+                        logger.warning(f"Could not parse enum value for {member_name}: {value_str}")
+
+    # Add/override entries from string_values_override that were not part of any enum in API JSON
+    # or to ensure they are in the list if they are macros not listed in enums.
+    if string_values_override:
+        for name, value in string_values_override.items():
+            if name not in all_enum_members_compat_map: # If not already processed as an enum member and overridden
+                # Heuristic: only add if it looks like a typical LVGL macro.
+                # This also adds macros from string_values.json that might not be in any "enum" definition
+                # in the API json but are desired as named constants.
+                if name.startswith("LV_") or name.isupper():
+                    try:
+                        if not isinstance(value, int):
+                            raise ValueError(f"Value for '{name}' in string_values.json is not an integer ({type(value)}).")
+                        logger.info(f"Adding/Ensuring macro '{name}' with value {value} from string_values.json into constants list.")
+                        member_hash = djb2_hash(name)
+                        temp_enum_members_list.append({
+                            'name': name,
+                            'value': value,
+                            'hash': member_hash,
+                            'original_type_name': "MACRO_FROM_STRING_VALUES" # Special type designator
+                        })
+                        all_enum_members_compat_map[name] = value # Also ensure it's in the compat map
+                    except ValueError as e_add:
+                        logger.warning(f"Could not add macro '{name}' from string_values.json: {e_add}")
+
     # Sort the global list: primarily by hash, secondarily by name (for stable collision groups)
     hashed_and_sorted_enum_members = sorted(temp_enum_members_list, key=lambda x: (x['hash'], x['name']))
 

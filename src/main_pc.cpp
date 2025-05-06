@@ -67,6 +67,8 @@ void signal_handler(int interrupt) {
 // --- Helper Function: Load UI from File ---
 // (Copied from previous file-watching example, adapted logging)
 bool load_and_build_ui(const char *filepath) {
+    LOG_INFO("STRING VALUES: %s", lvgl_json_generate_values_json());
+
     LOG_INFO("Attempting to load UI from: %s", filepath);
 
     FILE *fp = fopen(filepath, "rb"); // Open in binary read mode

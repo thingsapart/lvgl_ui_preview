@@ -13,6 +13,24 @@ from code_gen import invocation, unmarshal, registry, renderer # Assuming these 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: [%(filename)s:%(lineno)d] %(message)s')
 logger = logging.getLogger(__name__)
 
+DEFAULT_MACRO_NAMES_TO_EXPORT = [
+    "LV_SIZE_CONTENT",
+    "LV_COORD_MAX",
+    "LV_COORD_MIN",
+    "LV_GRID_CONTENT",    # Often LV_COORD_MAX or a value derived from it
+    "LV_FLEX_CONTENT",    # Similar to LV_GRID_CONTENT
+    "LV_CHART_POINT_NONE", # Often LV_COORD_MIN
+    "LV_RADIUS_CIRCLE",   # E.g., 0x7FFF or similar large value
+    "LV_IMG_ZOOM_NONE",   # Typically 256
+    "LV_BTNMATRIX_BTN_ID_NONE", # Typically 0xFFFF
+    "LV_ANIM_REPEAT_INFINITE", # Typically 0xFFFF or 0xFFFFFFFF
+    "LV_ANIM_PLAYTIME_INFINITE", # Typically 0xFFFFFFFF
+    "LV_OPA_TRANSP", "LV_OPA_COVER", # Test filtering (likely enums)
+    "LV_ALIGN_DEFAULT", "LV_ALIGN_CENTER", "LV_ALIGN_OUT_TOP_LEFT", # Test filtering (likely enums)
+    "LV_STATE_DEFAULT", "LV_STATE_FOCUSED", "LV_STATE_ANY", # Test filtering (likely enums)
+    "LV_PART_MAIN", "LV_PART_ANY", # Test filtering (likely enums)
+]
+
 # --- C File Templates ---
 
 C_HEADER_TEMPLATE = """
@@ -123,6 +141,24 @@ void* lvgl_json_get_registered_ptr(const char *name);
  */
 void lvgl_json_registry_clear();
 
+/**
+ * @brief Generates a JSON string of predefined macro values.
+ *
+ * This function checks a list of known macro names (configured at generation time).
+ * For each name, if it's defined as a C macro AND it's not found in the
+ * generated enum table (i.e., it's a true macro, not an enum member),
+ * its name and value are added to the JSON string.
+ *
+ * The primary use case is to obtain values for constants like LV_SIZE_CONTENT,
+ * LV_COORD_MAX, etc., which are macros, not enums.
+ * The output JSON string can be copied and used to create a "string_values.json"
+ * file for tools that might need these mappings.
+ *
+ * @return A dynamically allocated JSON string. The caller MUST free this string
+ *         using `cJSON_free()`. Returns NULL or an error JSON string on failure.
+ */
+char* lvgl_json_generate_values_json(void);
+
 // --- Custom Managed Object Creator Prototypes ---
 {custom_creator_prototypes}
 
@@ -181,6 +217,9 @@ char* json_node_to_string(cJSON *node) {{
 // --- Enum Unmarshaling ---
 {enum_unmarshal_code}
 
+// --- Macro Values JSON Exporter ---
+{macro_values_exporter_code}
+
 // --- Primitive Unmarshalers ---
 {primitive_unmarshal_code}
 
@@ -214,12 +253,104 @@ static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void
 
 """
 
+def generate_macro_values_exporter_c_code(macro_names_list):
+    # This C code will rely on djb2_hash_c, compare_generated_enum_hash,
+    # g_generated_enum_table, and G_GENERATED_ENUM_TABLE_SIZE being defined earlier in the C file.
+
+    helper_is_enum_c_code = """
+// Helper to check if a name is a known generated enum member
+static bool is_name_an_enum(const char *name_to_check) {
+    if (!name_to_check) return false;
+    // Ensure djb2_hash_c and compare_generated_enum_hash are available (defined earlier as static)
+    uint32_t input_hash = djb2_hash_c(name_to_check);
+
+    if (G_GENERATED_ENUM_TABLE_SIZE == 0) return false; // No enums to check against
+
+    const generated_enum_entry_t *entry_ptr = (const generated_enum_entry_t *)bsearch(
+        &input_hash,
+        g_generated_enum_table,
+        G_GENERATED_ENUM_TABLE_SIZE,
+        sizeof(generated_enum_entry_t),
+        compare_generated_enum_hash);
+
+    if (!entry_ptr) return false; // No matching hash
+
+    // Hash matches, now check name. Collisions are contiguous.
+    // Go to the start of the hash collision block
+    while (entry_ptr > g_generated_enum_table && (entry_ptr - 1)->hash == input_hash) {
+        entry_ptr--;
+    }
+    // Iterate through all entries with the same hash
+    while (entry_ptr < (g_generated_enum_table + G_GENERATED_ENUM_TABLE_SIZE) && entry_ptr->hash == input_hash) {
+        if (strcmp(entry_ptr->original_name, name_to_check) == 0) {
+            return true; // Exact name match
+        }
+        entry_ptr++;
+    }
+    return false; // Hash matched, but no exact name match in collision group
+}
+"""
+
+    main_func_c_code_parts = [
+        helper_is_enum_c_code,
+        "\nchar* lvgl_json_generate_values_json(void) {",
+        "    cJSON *json_root = cJSON_CreateObject();",
+        "    if (!json_root) {",
+        "        LOG_ERR(\"Failed to create cJSON root for macro values.\");",
+        "        return NULL;",
+        "    }\n",
+    ]
+
+    for macro_name in macro_names_list:
+        # Ensure macro_name is a valid C identifier
+        if not all(c.isalnum() or c == '_' for c in macro_name) or not macro_name:
+            logger.warning(f"Skipping potentially invalid macro name for C code generation: '{macro_name}'")
+            continue
+        
+        main_func_c_code_parts.append(f"    #ifdef {macro_name}")
+        main_func_c_code_parts.append(f"    if (!is_name_an_enum(\"{macro_name}\")) {{")
+        # cJSON_AddNumberToObject takes a double.
+        # Casting the macro to double should handle most integer types correctly.
+        # Parentheses around ({macro_name}) are important for complex macro expressions.
+        main_func_c_code_parts.append(f"        cJSON_AddNumberToObject(json_root, \"{macro_name}\", (double)({macro_name}));")
+        main_func_c_code_parts.append(f"    }}")
+        main_func_c_code_parts.append(f"    #else")
+        main_func_c_code_parts.append(f"    // LOG_DEBUG(\"Macro {macro_name} not defined, skipped for JSON output.\");")
+        main_func_c_code_parts.append(f"    #endif // {macro_name}")
+        main_func_c_code_parts.append("") 
+
+    main_func_c_code_parts.extend([
+        "    char *json_string = cJSON_PrintUnformatted(json_root);",
+        "    cJSON_Delete(json_root);",
+        "",
+        "    if (!json_string) {",
+        "        LOG_ERR(\"Failed to print cJSON object for macro values.\");",
+        "        char *err_str = (char*)LV_MALLOC(30); // Use LV_MALLOC",
+        "        if(err_str) snprintf(err_str, 30, \"{{\\\"error\\\":\\\"print_failed\\\"}}\");",
+        "        else { /* Malloc failed, cannot report error string */ }",
+        "        return err_str; // Caller still uses cJSON_free or lv_free",
+        "    }",
+        "    return json_string; // Caller must cJSON_free() this (or lv_free if cJSON uses lv_mem).",
+        "}"
+    ])
+    return "\n".join(main_func_c_code_parts)
 
 def main():
     parser = argparse.ArgumentParser(description="LVGL JSON UI Renderer Library Generator")
     parser.add_argument("-a", "--api-json", required=True, help="Path to the LVGL API JSON definition file.")
     parser.add_argument("-o", "--output-dir", default="output", help="Directory to write the generated C library files.")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging macros in generated code.")
+    parser.add_argument("-m",
+        "--macro-names-list",
+        type=str,
+        default=None,
+        help="Comma-separated list of macro names to include in the generated values JSON string function. Overrides default list."
+    )
+    parser.add_argument("-s",
+        "--string-values-json",
+        default=None,
+        help="Path to a JSON file containing macro string-to-value mappings. These values will override or extend enums from the API definition for unmarshaling."
+    )
     # Add arguments for include/exclude lists here if needed
     args = parser.parse_args()
 
@@ -228,7 +359,19 @@ def main():
 
     logger.info(f"Parsing API definition from: {args.api_json}")
     # Pass include/exclude lists from args if implemented
-    api_info = api_parser.parse_api(args.api_json)
+    # api_info = api_parser.parse_api(args.api_json) # Old line
+
+    string_values_override = {}
+    if args.string_values_json:
+        try:
+            with open(args.string_values_json, 'r') as f_sv:
+                string_values_override = json.load(f_sv)
+            logger.info(f"Loaded {len(string_values_override)} string-value overrides from {args.string_values_json}")
+        except Exception as e:
+            logger.error(f"Failed to load string_values.json from {args.string_values_json}: {e}. Proceeding without overrides.")
+            string_values_override = {} # Ensure it's a dict
+
+    api_info = api_parser.parse_api(args.api_json, string_values_override=string_values_override)
     if not api_info:
         logger.critical("Failed to parse API information. Exiting.")
         return 1
@@ -243,7 +386,17 @@ def main():
         api_info['hashed_and_sorted_enum_members'],
         api_info['enum_members'] # The old map, can be used as a fallback or for type heuristics if needed
     )
-
+    
+    logger.info("Preparing macro names for JSON value exporter...")
+    macro_names_for_exporter = DEFAULT_MACRO_NAMES_TO_EXPORT
+    if args.macro_names_list:
+        macro_names_for_exporter = [name.strip() for name in args.macro_names_list.split(',') if name.strip()]
+        logger.info(f"Using custom list of {len(macro_names_for_exporter)} macros for JSON value exporter.")
+    else:
+        logger.info(f"Using default list of {len(macro_names_for_exporter)} macros for JSON value exporter.")
+    logger.info("Generating C code for macro values JSON exporter...")
+    macro_values_exporter_c = generate_macro_values_exporter_c_code(macro_names_for_exporter)
+    
     logger.info("Generating primitive unmarshalers...")
     primitive_unmarshal_c = unmarshal.generate_primitive_unmarshalers()
 
@@ -305,7 +458,8 @@ def main():
         find_function_code=find_function_c,
         main_unmarshaler_code=main_unmarshaler_c,
         custom_creators_code=custom_creators_c,
-        renderer_code=renderer_c
+        renderer_code=renderer_c,
+        macro_values_exporter_code=macro_values_exporter_c,
     )
 
     logger.info("Assembling C header file...")

@@ -213,11 +213,22 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x16ce98d5, "LV_STYLE_OUTLINE_OPA", 0x3a }, // Type: UNKNOWN_TYPE
     {0x16ce9b2a, "LV_STYLE_OUTLINE_PAD", 0x3b }, // Type: UNKNOWN_TYPE
     {0x174ac271, "LV_ALIGN_CENTER", 0x09 }, // Type: lv_align_t
+    {0x18592ec2, "LV_COORD_MAX", 0x1fffffff }, // Type: MACRO_FROM_STRING_VALUES
+    {0x18592fc0, "LV_COORD_MIN", -0x1fffffff }, // Type: MACRO_FROM_STRING_VALUES
     {0x1881fee0, "LV_STYLE_ANIM_DURATION", 0x67 }, // Type: UNKNOWN_TYPE
     {0x1999fc1b, "LV_STYLE_ANIM", 0x66 }, // Type: UNKNOWN_TYPE
+    {0x1b6d1aff, "LV_RADIUS_CIRCLE", 0x7fff }, // Type: MACRO_FROM_STRING_VALUES
     {0x1bc72f1b, "LV_STR_SYMBOL_BULLET", 0x00 }, // Type: UNKNOWN_TYPE
     {0x1d2b2abd, "LV_STR_SYMBOL_CHARGE", 0x2a }, // Type: UNKNOWN_TYPE
     {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: lv_gridnav_ctrl_t
+    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
+    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
+    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
+    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
+    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
+    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
+    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
+    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
     {0x1e46e344, "LV_STR_SYMBOL_SETTINGS", 0x07 }, // Type: UNKNOWN_TYPE
     {0x1e605647, "LV_BUTTONMATRIX_CTRL_NO_REPEAT", 0x20 }, // Type: lv_buttonmatrix_ctrl_t
     {0x1fe9ffc1, "LV_STYLE_ROTARY_SENSITIVITY", 0x76 }, // Type: UNKNOWN_TYPE
@@ -232,6 +243,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x2381bd4e, "LV_BUTTONMATRIX_CTRL_WIDTH_14", 0x0e }, // Type: lv_buttonmatrix_ctrl_t
     {0x2381bd4f, "LV_BUTTONMATRIX_CTRL_WIDTH_15", 0x0f }, // Type: lv_buttonmatrix_ctrl_t
     {0x243c2f5e, "LV_FLEX_FLOW_ROW_REVERSE", 0x08 }, // Type: lv_flex_flow_t
+    {0x2540e730, "LV_CHART_POINT_NONE", 0x7fffffff }, // Type: MACRO_FROM_STRING_VALUES
     {0x264290ca, "LV_STYLE_ARC_COLOR", 0x52 }, // Type: UNKNOWN_TYPE
     {0x2769a0dc, "LV_STYLE_BG_GRAD", 0x26 }, // Type: UNKNOWN_TYPE
     {0x27a90f2b, "LV_STYLE_ARC_WIDTH", 0x50 }, // Type: UNKNOWN_TYPE
@@ -333,6 +345,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x60cf07ef, "LV_SPAN_MODE_LAST", 0x03 }, // Type: lv_span_mode_t
     {0x60f97b87, "LV_SCALE_MODE_ROUND_OUTER", 0x05 }, // Type: lv_scale_mode_t
     {0x610409e0, "LV_ALIGN_TOP_RIGHT", 0x03 }, // Type: lv_align_t
+    {0x615a2cc6, "LV_GRID_CONTENT", 0x1fffff9a }, // Type: MACRO_FROM_STRING_VALUES
     {0x62f95584, "LV_OPA_COVER", 0xff }, // Type: lv_opa_enum_t
     {0x64461015, "LV_FLEX_ALIGN_END", 0x01 }, // Type: lv_flex_align_t
     {0x65ae0e92, "LV_STYLE_BORDER_COLOR", 0x31 }, // Type: UNKNOWN_TYPE
@@ -412,12 +425,15 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0xb1f2e319, "LV_PART_INDICATOR", 0x20000 }, // Type: lv_style_parts_t
     {0xb33769fc, "LV_BUTTONMATRIX_CTRL_CHECKABLE", 0x80 }, // Type: lv_buttonmatrix_ctrl_t
     {0xb447d83d, "LV_STYLE_GRID_ROW_ALIGN", 0x80 }, // Type: UNKNOWN_TYPE
+    {0xb54a61a0, "LV_ANIM_REPEAT_INFINITE", 0xffffffff }, // Type: MACRO_FROM_STRING_VALUES
+    {0xb5b0423b, "LV_SIZE_CONTENT", 0x3fffffff }, // Type: MACRO_FROM_STRING_VALUES
     {0xb6fa9e09, "LV_STR_SYMBOL_WARNING", 0x1d }, // Type: UNKNOWN_TYPE
     {0xb76c3356, "LV_STYLE_BG_IMAGE_RECOLOR", 0x2a }, // Type: UNKNOWN_TYPE
     {0xb7af8456, "LV_OPA_100", 0xff }, // Type: lv_opa_enum_t
     {0xb7b6b85d, "LV_STYLE_FLEX_TRACK_PLACE", 0x7d }, // Type: UNKNOWN_TYPE
     {0xb8232b50, "LV_STYLE_TRANSFORM_SCALE_X", 0x6e }, // Type: UNKNOWN_TYPE
     {0xb8232b51, "LV_STYLE_TRANSFORM_SCALE_Y", 0x6f }, // Type: UNKNOWN_TYPE
+    {0xb9280ba4, "LV_ANIM_PLAYTIME_INFINITE", 0xffffffff }, // Type: MACRO_FROM_STRING_VALUES
     {0xbc40e802, "LV_BUTTONMATRIX_CTRL_DISABLED", 0x40 }, // Type: lv_buttonmatrix_ctrl_t
     {0xc160013d, "LV_STYLE_LINE_OPA", 0x4d }, // Type: UNKNOWN_TYPE
     {0xc1b0f31a, "LV_STYLE_BG_GRAD_COLOR", 0x23 }, // Type: UNKNOWN_TYPE
@@ -601,6 +617,229 @@ static bool unmarshal_enum_value(cJSON *json_value, const char *expected_enum_ty
 }
 
 
+
+// --- Macro Values JSON Exporter ---
+
+// Helper to check if a name is a known generated enum member
+static bool is_name_an_enum(const char *name_to_check) {
+    if (!name_to_check) return false;
+    // Ensure djb2_hash_c and compare_generated_enum_hash are available (defined earlier as static)
+    uint32_t input_hash = djb2_hash_c(name_to_check);
+
+    if (G_GENERATED_ENUM_TABLE_SIZE == 0) return false; // No enums to check against
+
+    const generated_enum_entry_t *entry_ptr = (const generated_enum_entry_t *)bsearch(
+        &input_hash,
+        g_generated_enum_table,
+        G_GENERATED_ENUM_TABLE_SIZE,
+        sizeof(generated_enum_entry_t),
+        compare_generated_enum_hash);
+
+    if (!entry_ptr) return false; // No matching hash
+
+    // Hash matches, now check name. Collisions are contiguous.
+    // Go to the start of the hash collision block
+    while (entry_ptr > g_generated_enum_table && (entry_ptr - 1)->hash == input_hash) {
+        entry_ptr--;
+    }
+    // Iterate through all entries with the same hash
+    while (entry_ptr < (g_generated_enum_table + G_GENERATED_ENUM_TABLE_SIZE) && entry_ptr->hash == input_hash) {
+        if (strcmp(entry_ptr->original_name, name_to_check) == 0) {
+            return true; // Exact name match
+        }
+        entry_ptr++;
+    }
+    return false; // Hash matched, but no exact name match in collision group
+}
+
+
+char* lvgl_json_generate_values_json(void) {
+    cJSON *json_root = cJSON_CreateObject();
+    if (!json_root) {
+        LOG_ERR("Failed to create cJSON root for macro values.");
+        return NULL;
+    }
+
+    #ifdef LV_SIZE_CONTENT
+    if (!is_name_an_enum("LV_SIZE_CONTENT")) {
+        cJSON_AddNumberToObject(json_root, "LV_SIZE_CONTENT", (double)(LV_SIZE_CONTENT));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_SIZE_CONTENT not defined, skipped for JSON output.");
+    #endif // LV_SIZE_CONTENT
+
+    #ifdef LV_COORD_MAX
+    if (!is_name_an_enum("LV_COORD_MAX")) {
+        cJSON_AddNumberToObject(json_root, "LV_COORD_MAX", (double)(LV_COORD_MAX));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_COORD_MAX not defined, skipped for JSON output.");
+    #endif // LV_COORD_MAX
+
+    #ifdef LV_COORD_MIN
+    if (!is_name_an_enum("LV_COORD_MIN")) {
+        cJSON_AddNumberToObject(json_root, "LV_COORD_MIN", (double)(LV_COORD_MIN));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_COORD_MIN not defined, skipped for JSON output.");
+    #endif // LV_COORD_MIN
+
+    #ifdef LV_GRID_CONTENT
+    if (!is_name_an_enum("LV_GRID_CONTENT")) {
+        cJSON_AddNumberToObject(json_root, "LV_GRID_CONTENT", (double)(LV_GRID_CONTENT));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_GRID_CONTENT not defined, skipped for JSON output.");
+    #endif // LV_GRID_CONTENT
+
+    #ifdef LV_FLEX_CONTENT
+    if (!is_name_an_enum("LV_FLEX_CONTENT")) {
+        cJSON_AddNumberToObject(json_root, "LV_FLEX_CONTENT", (double)(LV_FLEX_CONTENT));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_FLEX_CONTENT not defined, skipped for JSON output.");
+    #endif // LV_FLEX_CONTENT
+
+    #ifdef LV_CHART_POINT_NONE
+    if (!is_name_an_enum("LV_CHART_POINT_NONE")) {
+        cJSON_AddNumberToObject(json_root, "LV_CHART_POINT_NONE", (double)(LV_CHART_POINT_NONE));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_CHART_POINT_NONE not defined, skipped for JSON output.");
+    #endif // LV_CHART_POINT_NONE
+
+    #ifdef LV_RADIUS_CIRCLE
+    if (!is_name_an_enum("LV_RADIUS_CIRCLE")) {
+        cJSON_AddNumberToObject(json_root, "LV_RADIUS_CIRCLE", (double)(LV_RADIUS_CIRCLE));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_RADIUS_CIRCLE not defined, skipped for JSON output.");
+    #endif // LV_RADIUS_CIRCLE
+
+    #ifdef LV_IMG_ZOOM_NONE
+    if (!is_name_an_enum("LV_IMG_ZOOM_NONE")) {
+        cJSON_AddNumberToObject(json_root, "LV_IMG_ZOOM_NONE", (double)(LV_IMG_ZOOM_NONE));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_IMG_ZOOM_NONE not defined, skipped for JSON output.");
+    #endif // LV_IMG_ZOOM_NONE
+
+    #ifdef LV_BTNMATRIX_BTN_ID_NONE
+    if (!is_name_an_enum("LV_BTNMATRIX_BTN_ID_NONE")) {
+        cJSON_AddNumberToObject(json_root, "LV_BTNMATRIX_BTN_ID_NONE", (double)(LV_BTNMATRIX_BTN_ID_NONE));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_BTNMATRIX_BTN_ID_NONE not defined, skipped for JSON output.");
+    #endif // LV_BTNMATRIX_BTN_ID_NONE
+
+    #ifdef LV_ANIM_REPEAT_INFINITE
+    if (!is_name_an_enum("LV_ANIM_REPEAT_INFINITE")) {
+        cJSON_AddNumberToObject(json_root, "LV_ANIM_REPEAT_INFINITE", (double)(LV_ANIM_REPEAT_INFINITE));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_ANIM_REPEAT_INFINITE not defined, skipped for JSON output.");
+    #endif // LV_ANIM_REPEAT_INFINITE
+
+    #ifdef LV_ANIM_PLAYTIME_INFINITE
+    if (!is_name_an_enum("LV_ANIM_PLAYTIME_INFINITE")) {
+        cJSON_AddNumberToObject(json_root, "LV_ANIM_PLAYTIME_INFINITE", (double)(LV_ANIM_PLAYTIME_INFINITE));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_ANIM_PLAYTIME_INFINITE not defined, skipped for JSON output.");
+    #endif // LV_ANIM_PLAYTIME_INFINITE
+
+    #ifdef LV_OPA_TRANSP
+    if (!is_name_an_enum("LV_OPA_TRANSP")) {
+        cJSON_AddNumberToObject(json_root, "LV_OPA_TRANSP", (double)(LV_OPA_TRANSP));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_OPA_TRANSP not defined, skipped for JSON output.");
+    #endif // LV_OPA_TRANSP
+
+    #ifdef LV_OPA_COVER
+    if (!is_name_an_enum("LV_OPA_COVER")) {
+        cJSON_AddNumberToObject(json_root, "LV_OPA_COVER", (double)(LV_OPA_COVER));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_OPA_COVER not defined, skipped for JSON output.");
+    #endif // LV_OPA_COVER
+
+    #ifdef LV_ALIGN_DEFAULT
+    if (!is_name_an_enum("LV_ALIGN_DEFAULT")) {
+        cJSON_AddNumberToObject(json_root, "LV_ALIGN_DEFAULT", (double)(LV_ALIGN_DEFAULT));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_ALIGN_DEFAULT not defined, skipped for JSON output.");
+    #endif // LV_ALIGN_DEFAULT
+
+    #ifdef LV_ALIGN_CENTER
+    if (!is_name_an_enum("LV_ALIGN_CENTER")) {
+        cJSON_AddNumberToObject(json_root, "LV_ALIGN_CENTER", (double)(LV_ALIGN_CENTER));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_ALIGN_CENTER not defined, skipped for JSON output.");
+    #endif // LV_ALIGN_CENTER
+
+    #ifdef LV_ALIGN_OUT_TOP_LEFT
+    if (!is_name_an_enum("LV_ALIGN_OUT_TOP_LEFT")) {
+        cJSON_AddNumberToObject(json_root, "LV_ALIGN_OUT_TOP_LEFT", (double)(LV_ALIGN_OUT_TOP_LEFT));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_ALIGN_OUT_TOP_LEFT not defined, skipped for JSON output.");
+    #endif // LV_ALIGN_OUT_TOP_LEFT
+
+    #ifdef LV_STATE_DEFAULT
+    if (!is_name_an_enum("LV_STATE_DEFAULT")) {
+        cJSON_AddNumberToObject(json_root, "LV_STATE_DEFAULT", (double)(LV_STATE_DEFAULT));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_STATE_DEFAULT not defined, skipped for JSON output.");
+    #endif // LV_STATE_DEFAULT
+
+    #ifdef LV_STATE_FOCUSED
+    if (!is_name_an_enum("LV_STATE_FOCUSED")) {
+        cJSON_AddNumberToObject(json_root, "LV_STATE_FOCUSED", (double)(LV_STATE_FOCUSED));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_STATE_FOCUSED not defined, skipped for JSON output.");
+    #endif // LV_STATE_FOCUSED
+
+    #ifdef LV_STATE_ANY
+    if (!is_name_an_enum("LV_STATE_ANY")) {
+        cJSON_AddNumberToObject(json_root, "LV_STATE_ANY", (double)(LV_STATE_ANY));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_STATE_ANY not defined, skipped for JSON output.");
+    #endif // LV_STATE_ANY
+
+    #ifdef LV_PART_MAIN
+    if (!is_name_an_enum("LV_PART_MAIN")) {
+        cJSON_AddNumberToObject(json_root, "LV_PART_MAIN", (double)(LV_PART_MAIN));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_PART_MAIN not defined, skipped for JSON output.");
+    #endif // LV_PART_MAIN
+
+    #ifdef LV_PART_ANY
+    if (!is_name_an_enum("LV_PART_ANY")) {
+        cJSON_AddNumberToObject(json_root, "LV_PART_ANY", (double)(LV_PART_ANY));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_PART_ANY not defined, skipped for JSON output.");
+    #endif // LV_PART_ANY
+
+    char *json_string = cJSON_PrintUnformatted(json_root);
+    cJSON_Delete(json_root);
+
+    if (!json_string) {
+        LOG_ERR("Failed to print cJSON object for macro values.");
+        char *err_str = (char*)LV_MALLOC(30); // Use LV_MALLOC
+        if(err_str) snprintf(err_str, 30, "{{\"error\":\"print_failed\"}}");
+        else { /* Malloc failed, cannot report error string */ }
+        return err_str; // Caller still uses cJSON_free or lv_free
+    }
+    return json_string; // Caller must cJSON_free() this (or lv_free if cJSON uses lv_mem).
+}
 
 // --- Primitive Unmarshalers ---
 // --- Primitive Unmarshalers ---
@@ -28027,7 +28266,8 @@ static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void
         // We need a reliable way to know if expected_c_type IS an enum.
         // For now, let's try enum unmarshal if it looks like lv_..._t or LV_..._T
         bool maybe_enum = (strncmp(expected_c_type, "lv_", 3) == 0 && strstr(expected_c_type, "_t")) || 
-                          (strncmp(expected_c_type, "LV_", 3) == 0 && strstr(expected_c_type, "_T")) || strcmp(expected_c_type, "uint32_t") == 0;
+                          (strncmp(expected_c_type, "LV_", 3) == 0 && strstr(expected_c_type, "_T")) || 
+                          (strcmp(expected_c_type, "int32_t") == 0) || (strcmp(expected_c_type, "uint32_t") == 0);
         if (maybe_enum && strcmp(expected_c_type, "lv_obj_t") != 0 && strcmp(expected_c_type, "lv_style_t") != 0 /* add other known non-enums */) {
             if (unmarshal_enum_value(json_value, expected_c_type, (int*)dest)) {
                  return true; // Successfully parsed as enum string

@@ -106,6 +106,24 @@ void* lvgl_json_get_registered_ptr(const char *name);
  */
 void lvgl_json_registry_clear();
 
+/**
+ * @brief Generates a JSON string of predefined macro values.
+ *
+ * This function checks a list of known macro names (configured at generation time).
+ * For each name, if it's defined as a C macro AND it's not found in the
+ * generated enum table (i.e., it's a true macro, not an enum member),
+ * its name and value are added to the JSON string.
+ *
+ * The primary use case is to obtain values for constants like LV_SIZE_CONTENT,
+ * LV_COORD_MAX, etc., which are macros, not enums.
+ * The output JSON string can be copied and used to create a "string_values.json"
+ * file for tools that might need these mappings.
+ *
+ * @return A dynamically allocated JSON string. The caller MUST free this string
+ *         using `cJSON_free()`. Returns NULL or an error JSON string on failure.
+ */
+char* lvgl_json_generate_values_json(void);
+
 // --- Custom Managed Object Creator Prototypes ---
 /** @brief Creates a managed lv_fs_drv_t identified by name. Allocates memory. */
 extern lv_fs_drv_t* lv_fs_drv_create_managed(const char *name);
