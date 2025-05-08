@@ -37,6 +37,19 @@ char* json_node_to_string(cJSON *node) {
 // --- Configuration ---
 // Add any compile-time configuration here if needed
 
+// --- Global Context ---
+
+static cJSON* g_current_render_context = NULL;
+
+static void set_current_context(cJSON* new_context) {
+    // LOG_DEBUG("Setting context from %p to %p", (void*)g_current_render_context, (void*)new_context);
+    g_current_render_context = new_context;
+}
+
+static cJSON* get_current_context(void) {
+    return g_current_render_context;
+}
+
 // --- Invocation Table ---
 // --- Invocation Table ---
 
@@ -54,6 +67,10 @@ typedef struct invoke_table_entry_s {
 } invoke_table_entry_t;
 
 
+
+// --- Forward declaration ---
+static const invoke_table_entry_t* find_invoke_entry(const char *name);
+static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest);
 
 // --- Pointer Registry Implementation ---
 // --- Pointer Registry ---
@@ -1149,11 +1166,43 @@ static bool unmarshal_registered_ptr(cJSON *node, const char *expected_ptr_type,
     return true;
 }
 
+// Context Value ($variable_name)
+static cJSON* get_current_context(void); // Forward declaration from renderer code
+// unmarshal_value is also forward declared later or should be available
+
+static bool unmarshal_context_value(cJSON *json_source_node, const char *expected_c_type, void *dest) {
+    if (!cJSON_IsString(json_source_node) || !json_source_node->valuestring || json_source_node->valuestring[0] != '$') {
+        LOG_ERR_JSON(json_source_node, "Context Unmarshal Error: Expected string starting with '$'");
+        return false;
+    }
+    const char *var_name = json_source_node->valuestring + 1; // Skip '$'
+    if (strlen(var_name) == 0) {
+        LOG_ERR_JSON(json_source_node, "Context Unmarshal Error: Empty variable name after '$'.");
+        return false;
+    }
+
+    cJSON *current_ctx = get_current_context();
+    if (!current_ctx) {
+        LOG_ERR_JSON(json_source_node, "Context Unmarshal Error: No context active for variable '%s'.", var_name);
+        return false;
+    }
+
+    cJSON *value_from_context = cJSON_GetObjectItemCaseSensitive(current_ctx, var_name);
+    if (!value_from_context) {
+        LOG_ERR_JSON(json_source_node, "Context Unmarshal Error: Variable '%s' not found in current context.", var_name);
+        return false;
+    }
+
+    // Recursively call unmarshal_value with the node found in the context
+    // This allows context values to be numbers, strings, booleans, or even other context/pointer refs.
+    if (!unmarshal_value(value_from_context, expected_c_type, dest)) {
+        LOG_ERR_JSON(json_source_node, "Context Unmarshal Error: Failed to unmarshal context variable '%s' as type '%s'.", var_name, expected_c_type);
+        return false;
+    }
+    return true;
+}
 
 
-// --- Forward declaration needed by invocation helpers ---
-static const invoke_table_entry_t* find_invoke_entry(const char *name);
-static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest);
 
 // --- Invocation Helper Functions ---
 // Forward declaration for the main unmarshaler
@@ -28287,6 +28336,7 @@ static bool unmarshal_enum_value(cJSON *json_value, const char *enum_type_name, 
 static bool unmarshal_color(cJSON *node, lv_color_t *dest);
 static bool unmarshal_coord(cJSON *node, lv_coord_t *dest);
 static bool unmarshal_registered_ptr(cJSON *node, const char* expected_ptr_type, void **dest);
+static bool unmarshal_context_value(cJSON *json_source_node, const char *expected_c_type, void *dest);
 static bool unmarshal_int(cJSON *node, int *dest);
 static bool unmarshal_int8(cJSON *node, int8_t *dest);
 static bool unmarshal_uint8(cJSON *node, uint8_t *dest);
@@ -28333,12 +28383,12 @@ static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void
         // Currently, we don't handle passing structs directly via JSON objects other than 'call'.
     }
 
-    // 2. Handle custom pre- and post-fixes in strings ('#', '@', '%')
+    // 2. Handle custom pre- and post-fixes in strings ('$', '#', '@', '%')
     // Also handle non-prefixed strings that might be enums or regular strings.
     if (cJSON_IsString(json_value) && json_value->valuestring) {
         char *str_val = json_value->valuestring;
         size_t len = strlen(str_val);
-        // Check for '#' color prefix
+        // Check for '$', '@', '%', '#' prefix
         if (len) {
             if (len > 2 && str_val[len - 1] == '%') {
                if (str_val[len - 2] != '%') {
@@ -28369,6 +28419,12 @@ static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void
                    LOG_ERR_JSON(json_value, "Unmarshal Error: Found registered pointer string '%s' but expected non-pointer type '%s'", str_val, expected_c_type);
                    //return false;
                }
+            }
+            // Check for '$' context variable prefix FIRST
+            if (str_val[0] == '$') {
+                if (str_val[len - 1] == '$') {
+                   str_val[--len] = '\0';
+                } else { return unmarshal_context_value(json_value, expected_c_type, dest); }
             }
         }
         // If no prefix, it could be an enum name or a regular string.
@@ -28553,6 +28609,7 @@ static const invoke_table_entry_t* find_invoke_entry(const char *name);
 static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest);
 extern void* lvgl_json_get_registered_ptr(const char *name, const char *expected_type_name);
 extern void lvgl_json_register_ptr(const char *name, const char *type_name, void *ptr);
+static void set_current_context(cJSON* new_context);
 extern lv_fs_drv_t* lv_fs_drv_create_managed(const char *name);
 extern lv_layer_t* lv_layer_create_managed(const char *name);
 extern lv_style_t* lv_style_create_managed(const char *name);
@@ -28564,66 +28621,104 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
     }
 
 
-    // --- Handle Component Definition and Usage ---
-    cJSON *type_item_comp_check = cJSON_GetObjectItemCaseSensitive(node, "type");
-    if (type_item_comp_check && cJSON_IsString(type_item_comp_check)) {
-        const char *type_str_comp_check_val = type_item_comp_check->valuestring;
+    // --- Context management: Save context active at the start of this node's processing ---
+    cJSON* original_context_for_this_node_call = get_current_context();
+    bool context_was_locally_changed_by_this_node = false;
 
-        if (strcmp(type_str_comp_check_val, "component") == 0) {
-            cJSON *id_item_comp = cJSON_GetObjectItemCaseSensitive(node, "id");
-            cJSON *root_item_comp = cJSON_GetObjectItemCaseSensitive(node, "root");
-            if (id_item_comp && cJSON_IsString(id_item_comp) && id_item_comp->valuestring && id_item_comp->valuestring[0] == '@' &&
-                root_item_comp && cJSON_IsObject(root_item_comp)) {
-                
-                const char *comp_id_str = id_item_comp->valuestring + 1; // Skip '@'
-                cJSON *duplicated_root = cJSON_Duplicate(root_item_comp, true);
-                if (duplicated_root) {
-                    lvgl_json_register_ptr(comp_id_str, "component_json_node", (void*)duplicated_root);
-                    // LOG_INFO("Registered component '%s'", comp_id_str); // Logged by register_ptr
-                    return true; // Component definition processed
-                } else {
-                    LOG_ERR_JSON(node, "Component Error: Failed to duplicate root for component '%s'", comp_id_str);
-                    return false;
-                }
-            } else {
-                LOG_ERR_JSON(node, "Component Error: Invalid 'component' definition. Requires 'id' (string starting with '@') and 'root' (object).");
-                return false;
-            }
-        } else if (strcmp(type_str_comp_check_val, "use-view") == 0) {
-            cJSON *id_item_use_view = cJSON_GetObjectItemCaseSensitive(node, "id");
-            if (id_item_use_view && cJSON_IsString(id_item_use_view) && id_item_use_view->valuestring && id_item_use_view->valuestring[0] == '@') {
-                const char *view_id_str = id_item_use_view->valuestring + 1; // Skip '@'
-                cJSON *component_root_node = (cJSON*)lvgl_json_get_registered_ptr(view_id_str, "component_json_node");
-
-                if (component_root_node) {
-                    LOG_INFO("Using view '%s'", view_id_str);
-                    return render_json_node(component_root_node, parent); // Render the component's root
-                } else {
-                    // lvgl_json_get_registered_ptr logs warning if not found or type mismatch
-                    LOG_WARN_JSON(node, "Use-View Error: Component '%s' not found or type error. Creating fallback label.", view_id_str);
-                    lv_obj_t *fallback_label = lv_label_create(parent);
-                    if(fallback_label) {
-                        char fallback_text[128];
-                        snprintf(fallback_text, sizeof(fallback_text), "Component '%s' not found/error", view_id_str);
-                        lv_label_set_text(fallback_label, fallback_text);
-                        lv_obj_align(fallback_label, LV_ALIGN_CENTER, 0, 0);
-                    }
-                    return true; // Fallback created (or attempted)
-                }
-            } else {
-                LOG_ERR_JSON(node, "Use-View Error: Invalid 'use-view' definition. Requires 'id' (string starting with '@').");
-                return false;
-            }
-        }
-    }
-    // --- End Component Handling ---
-
-    // 1. Determine Object Type and ID
+    // --- Handle special node types: component definition, use-view, context wrapper ---
     cJSON *type_item = cJSON_GetObjectItemCaseSensitive(node, "type");
     const char *type_str = "obj"; // Default type
     if (type_item && cJSON_IsString(type_item)) {
         type_str = type_item->valuestring;
     }
+
+    if (strcmp(type_str, "component") == 0) {
+        cJSON *id_item_comp = cJSON_GetObjectItemCaseSensitive(node, "id");
+        cJSON *root_item_comp = cJSON_GetObjectItemCaseSensitive(node, "root");
+        if (id_item_comp && cJSON_IsString(id_item_comp) && id_item_comp->valuestring && id_item_comp->valuestring[0] == '@' &&
+            root_item_comp && cJSON_IsObject(root_item_comp)) {
+            
+            const char *comp_id_str = id_item_comp->valuestring + 1; // Skip '@'
+            cJSON *duplicated_root = cJSON_Duplicate(root_item_comp, true);
+            if (duplicated_root) {
+                lvgl_json_register_ptr(comp_id_str, "component_json_node", (void*)duplicated_root);
+                return true; // Component definition processed
+            } else {
+                LOG_ERR_JSON(node, "Component Error: Failed to duplicate root for component '%s'", comp_id_str);
+                return false;
+            }
+        } else {
+            LOG_ERR_JSON(node, "Component Error: Invalid 'component' definition. Requires 'id' (string starting with '@') and 'root' (object).");
+            return false;
+        }
+    } else if (strcmp(type_str, "use-view") == 0) {
+        cJSON *id_item_use_view = cJSON_GetObjectItemCaseSensitive(node, "id");
+        if (id_item_use_view && cJSON_IsString(id_item_use_view) && id_item_use_view->valuestring && id_item_use_view->valuestring[0] == '@') {
+            const char *view_id_str = id_item_use_view->valuestring + 1; // Skip '@'
+            cJSON *component_root_node = (cJSON*)lvgl_json_get_registered_ptr(view_id_str, "component_json_node");
+
+            if (component_root_node) {
+                LOG_INFO("Using view '%s'", view_id_str);
+                // --- Context for use-view ---
+                cJSON* context_for_view_item = cJSON_GetObjectItemCaseSensitive(node, "context");
+                cJSON* previous_context_before_use_view = get_current_context(); // This is original_context_for_this_node_call
+                bool context_set_for_use_view = false;
+
+                if (context_for_view_item && cJSON_IsObject(context_for_view_item)) {
+                    set_current_context(context_for_view_item);
+                    context_set_for_use_view = true;
+                }
+                
+                bool render_success = render_json_node(component_root_node, parent);
+                
+                if (context_set_for_use_view) {
+                    set_current_context(previous_context_before_use_view); // Restore context
+                }
+                return render_success;
+            } else {
+                LOG_WARN_JSON(node, "Use-View Error: Component '%s' not found or type error. Creating fallback label.", view_id_str);
+                lv_obj_t *fallback_label = lv_label_create(parent);
+                if(fallback_label) {
+                    char fallback_text[128];
+                    snprintf(fallback_text, sizeof(fallback_text), "Component '%s' error", view_id_str);
+                    lv_label_set_text(fallback_label, fallback_text);
+                }
+                return true; 
+            }
+        } else {
+            LOG_ERR_JSON(node, "Use-View Error: Invalid 'use-view' definition. Requires 'id' (string starting with '@').");
+            return false;
+        }
+    } else if (strcmp(type_str, "context") == 0) {
+        cJSON *values_item = cJSON_GetObjectItemCaseSensitive(node, "values");
+        cJSON *for_item = cJSON_GetObjectItemCaseSensitive(node, "for");
+
+        if (values_item && cJSON_IsObject(values_item) && for_item && cJSON_IsObject(for_item)) {
+            // LOG_DEBUG("Processing 'context' type node.");
+            // original_context_for_this_node_call is already saved at the top
+            set_current_context(values_item); // Set new context from "values"
+            
+            bool render_success = render_json_node(for_item, parent); // Render the "for" block
+            
+            set_current_context(original_context_for_this_node_call); // Restore original context
+            return render_success; 
+        } else {
+            LOG_ERR_JSON(node, "'context' type node Error: Requires 'values' (object) and 'for' (object) properties.");
+            return false;
+        }
+    }
+
+    // --- If not a special type handled above, proceed with generic node processing ---
+    // --- Set node-specific context if provided for this generic node ---
+    cJSON* context_property_on_this_node = cJSON_GetObjectItemCaseSensitive(node, "context");
+    if (context_property_on_this_node && cJSON_IsObject(context_property_on_this_node)) {
+        // original_context_for_this_node_call is already saved
+        set_current_context(context_property_on_this_node);
+        context_was_locally_changed_by_this_node = true;
+    }
+    
+    // --- Continue with standard object/resource determination and creation ---
+    // 1. Determine Object Type and ID
     cJSON *id_item = cJSON_GetObjectItemCaseSensitive(node, "id");
     const char *id_str = NULL;
     if (id_item && cJSON_IsString(id_item)) {
@@ -28803,9 +28898,10 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
     for (prop = node->child; prop != NULL; prop = prop->next) {
         const char *prop_name = prop->string;
         if (!prop_name) continue;
-        // Skip known control properties OR grid-specific setup properties handled earlier
+        // Skip known control properties OR grid-specific OR context property setup properties handled earlier
         if (strcmp(prop_name, "type") == 0 || strcmp(prop_name, "id") == 0 || strcmp(prop_name, "children") == 0 || 
-            (strcmp(type_str, "grid") == 0 && (strcmp(prop_name, "cols") == 0 || strcmp(prop_name, "rows") == 0))) {
+            (strcmp(type_str, "grid") == 0 && (strcmp(prop_name, "cols") == 0 || strcmp(prop_name, "rows") == 0)) || 
+            (strcmp(prop_name, "context") == 0)) {
             continue;
         }
         // Property value must be an array of arguments
@@ -28894,6 +28990,11 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
             }
         }
     }
+    // --- Context management: Restore context if it was changed at this node's level ---
+    if (context_was_locally_changed_by_this_node) {
+        set_current_context(original_context_for_this_node_call);
+    }
+
     return true;
 }
 

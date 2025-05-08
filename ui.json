@@ -48,7 +48,7 @@
           "children": [
             {
               "type": "label",
-              "text": "FEED",
+              "text": "$label",
               "height": "LV_SIZE_CONTENT",
               "width": "100%",
               "text_font": "@font_kode_20"
@@ -71,7 +71,7 @@
               "children": [
                 {
                   "type": "label",
-                  "text": "F",
+                  "text": "$letter",
                   "text_font": "@font_kode_24",
                   "grid_cell": [
                     "LV_GRID_ALIGN_START",
@@ -155,12 +155,12 @@
           "children": [
             {
               "type": "label",
-              "text": "MM/MIN",
+              "text": "$unit",
               "text_font": "@font_kode_20"
             },
             {
               "type": "label",
-              "text": "Feed Ovr"
+              "text": "$ovr"
             },
             {
               "type": "label",
@@ -193,11 +193,23 @@
     "children": [
       {
         "type": "use-view",
-        "id": "@feed_rate_scale"
+        "id": "@feed_rate_scale",
+        "context": {
+          "unit": "MM/MIN",
+          "label": "FEED",
+          "letter": "F",
+          "ovr": "Feed Ovr"
+        }
       },
       {
         "type": "use-view",
-        "id": "@feed_rate_scale"
+        "id": "@feed_rate_scale",
+        "context": {
+          "unit": "/MIN",
+          "label": "SPEED",
+          "letter": "S",
+          "ovr": "Speed Ovr"
+        }
       }
     ]
   }

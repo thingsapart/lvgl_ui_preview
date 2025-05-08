@@ -220,8 +220,25 @@ char* json_node_to_string(cJSON *node) {{
 // --- Configuration ---
 // Add any compile-time configuration here if needed
 
+// --- Global Context ---
+
+static cJSON* g_current_render_context = NULL;
+
+static void set_current_context(cJSON* new_context) {{
+    // LOG_DEBUG("Setting context from %p to %p", (void*)g_current_render_context, (void*)new_context);
+    g_current_render_context = new_context;
+}}
+
+static cJSON* get_current_context(void) {{
+    return g_current_render_context;
+}}
+
 // --- Invocation Table ---
 {invocation_table_def}
+
+// --- Forward declaration ---
+static const invoke_table_entry_t* find_invoke_entry(const char *name);
+static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest);
 
 // --- Pointer Registry Implementation ---
 {registry_code}
@@ -240,10 +257,6 @@ char* json_node_to_string(cJSON *node) {{
 
 // --- Custom Unmarshalers (#color, @ptr) ---
 {custom_unmarshal_code}
-
-// --- Forward declaration needed by invocation helpers ---
-static const invoke_table_entry_t* find_invoke_entry(const char *name);
-static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest);
 
 // --- Invocation Helper Functions ---
 {invocation_helpers_code}

@@ -17,6 +17,7 @@ def generate_renderer(custom_creators_map):
     c_code += "static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest);\n"
     c_code += "extern void* lvgl_json_get_registered_ptr(const char *name, const char *expected_type_name);\n"
     c_code += "extern void lvgl_json_register_ptr(const char *name, const char *type_name, void *ptr);\n"
+    c_code += "static void set_current_context(cJSON* new_context);\n"
 
     # Include custom creator function prototypes
     for type_name, creator_func in custom_creators_map.items():
@@ -34,68 +35,111 @@ def generate_renderer(custom_creators_map):
     c_code += "    }\n\n"
 
     c_code += """
-    // --- Handle Component Definition and Usage ---
-    cJSON *type_item_comp_check = cJSON_GetObjectItemCaseSensitive(node, "type");
-    if (type_item_comp_check && cJSON_IsString(type_item_comp_check)) {
-        const char *type_str_comp_check_val = type_item_comp_check->valuestring;
+    // --- Context management: Save context active at the start of this node's processing ---
+    cJSON* original_context_for_this_node_call = get_current_context();
+    bool context_was_locally_changed_by_this_node = false;
 
-        if (strcmp(type_str_comp_check_val, "component") == 0) {
-            cJSON *id_item_comp = cJSON_GetObjectItemCaseSensitive(node, "id");
-            cJSON *root_item_comp = cJSON_GetObjectItemCaseSensitive(node, "root");
-            if (id_item_comp && cJSON_IsString(id_item_comp) && id_item_comp->valuestring && id_item_comp->valuestring[0] == '@' &&
-                root_item_comp && cJSON_IsObject(root_item_comp)) {
+    // --- Handle special node types: component definition, use-view, context wrapper ---
+    cJSON *type_item = cJSON_GetObjectItemCaseSensitive(node, "type");
+    const char *type_str = "obj"; // Default type
+    if (type_item && cJSON_IsString(type_item)) {
+        type_str = type_item->valuestring;
+    }
+
+    if (strcmp(type_str, "component") == 0) {
+        cJSON *id_item_comp = cJSON_GetObjectItemCaseSensitive(node, "id");
+        cJSON *root_item_comp = cJSON_GetObjectItemCaseSensitive(node, "root");
+        if (id_item_comp && cJSON_IsString(id_item_comp) && id_item_comp->valuestring && id_item_comp->valuestring[0] == '@' &&
+            root_item_comp && cJSON_IsObject(root_item_comp)) {
+            
+            const char *comp_id_str = id_item_comp->valuestring + 1; // Skip '@'
+            cJSON *duplicated_root = cJSON_Duplicate(root_item_comp, true);
+            if (duplicated_root) {
+                lvgl_json_register_ptr(comp_id_str, "component_json_node", (void*)duplicated_root);
+                return true; // Component definition processed
+            } else {
+                LOG_ERR_JSON(node, "Component Error: Failed to duplicate root for component '%s'", comp_id_str);
+                return false;
+            }
+        } else {
+            LOG_ERR_JSON(node, "Component Error: Invalid 'component' definition. Requires 'id' (string starting with '@') and 'root' (object).");
+            return false;
+        }
+    } else if (strcmp(type_str, "use-view") == 0) {
+        cJSON *id_item_use_view = cJSON_GetObjectItemCaseSensitive(node, "id");
+        if (id_item_use_view && cJSON_IsString(id_item_use_view) && id_item_use_view->valuestring && id_item_use_view->valuestring[0] == '@') {
+            const char *view_id_str = id_item_use_view->valuestring + 1; // Skip '@'
+            cJSON *component_root_node = (cJSON*)lvgl_json_get_registered_ptr(view_id_str, "component_json_node");
+
+            if (component_root_node) {
+                LOG_INFO("Using view '%s'", view_id_str);
+                // --- Context for use-view ---
+                cJSON* context_for_view_item = cJSON_GetObjectItemCaseSensitive(node, "context");
+                cJSON* previous_context_before_use_view = get_current_context(); // This is original_context_for_this_node_call
+                bool context_set_for_use_view = false;
+
+                if (context_for_view_item && cJSON_IsObject(context_for_view_item)) {
+                    set_current_context(context_for_view_item);
+                    context_set_for_use_view = true;
+                }
                 
-                const char *comp_id_str = id_item_comp->valuestring + 1; // Skip '@'
-                cJSON *duplicated_root = cJSON_Duplicate(root_item_comp, true);
-                if (duplicated_root) {
-                    lvgl_json_register_ptr(comp_id_str, "component_json_node", (void*)duplicated_root);
-                    // LOG_INFO("Registered component '%s'", comp_id_str); // Logged by register_ptr
-                    return true; // Component definition processed
-                } else {
-                    LOG_ERR_JSON(node, "Component Error: Failed to duplicate root for component '%s'", comp_id_str);
-                    return false;
+                bool render_success = render_json_node(component_root_node, parent);
+                
+                if (context_set_for_use_view) {
+                    set_current_context(previous_context_before_use_view); // Restore context
                 }
+                return render_success;
             } else {
-                LOG_ERR_JSON(node, "Component Error: Invalid 'component' definition. Requires 'id' (string starting with '@') and 'root' (object).");
-                return false;
+                LOG_WARN_JSON(node, "Use-View Error: Component '%s' not found or type error. Creating fallback label.", view_id_str);
+                lv_obj_t *fallback_label = lv_label_create(parent);
+                if(fallback_label) {
+                    char fallback_text[128];
+                    snprintf(fallback_text, sizeof(fallback_text), "Component '%s' error", view_id_str);
+                    lv_label_set_text(fallback_label, fallback_text);
+                }
+                return true; 
             }
-        } else if (strcmp(type_str_comp_check_val, "use-view") == 0) {
-            cJSON *id_item_use_view = cJSON_GetObjectItemCaseSensitive(node, "id");
-            if (id_item_use_view && cJSON_IsString(id_item_use_view) && id_item_use_view->valuestring && id_item_use_view->valuestring[0] == '@') {
-                const char *view_id_str = id_item_use_view->valuestring + 1; // Skip '@'
-                cJSON *component_root_node = (cJSON*)lvgl_json_get_registered_ptr(view_id_str, "component_json_node");
+        } else {
+            LOG_ERR_JSON(node, "Use-View Error: Invalid 'use-view' definition. Requires 'id' (string starting with '@').");
+            return false;
+        }
+    } else if (strcmp(type_str, "context") == 0) {
+        cJSON *values_item = cJSON_GetObjectItemCaseSensitive(node, "values");
+        cJSON *for_item = cJSON_GetObjectItemCaseSensitive(node, "for");
 
-                if (component_root_node) {
-                    LOG_INFO("Using view '%s'", view_id_str);
-                    return render_json_node(component_root_node, parent); // Render the component's root
-                } else {
-                    // lvgl_json_get_registered_ptr logs warning if not found or type mismatch
-                    LOG_WARN_JSON(node, "Use-View Error: Component '%s' not found or type error. Creating fallback label.", view_id_str);
-                    lv_obj_t *fallback_label = lv_label_create(parent);
-                    if(fallback_label) {
-                        char fallback_text[128];
-                        snprintf(fallback_text, sizeof(fallback_text), "Component '%s' not found/error", view_id_str);
-                        lv_label_set_text(fallback_label, fallback_text);
-                        lv_obj_align(fallback_label, LV_ALIGN_CENTER, 0, 0);
-                    }
-                    return true; // Fallback created (or attempted)
-                }
-            } else {
-                LOG_ERR_JSON(node, "Use-View Error: Invalid 'use-view' definition. Requires 'id' (string starting with '@').");
-                return false;
-            }
+        if (values_item && cJSON_IsObject(values_item) && for_item && cJSON_IsObject(for_item)) {
+            // LOG_DEBUG("Processing 'context' type node.");
+            // original_context_for_this_node_call is already saved at the top
+            set_current_context(values_item); // Set new context from "values"
+            
+            bool render_success = render_json_node(for_item, parent); // Render the "for" block
+            
+            set_current_context(original_context_for_this_node_call); // Restore original context
+            return render_success; 
+        } else {
+            LOG_ERR_JSON(node, "'context' type node Error: Requires 'values' (object) and 'for' (object) properties.");
+            return false;
         }
     }
-    // --- End Component Handling ---
 
+    // --- If not a special type handled above, proceed with generic node processing ---
+    // --- Set node-specific context if provided for this generic node ---
+    cJSON* context_property_on_this_node = cJSON_GetObjectItemCaseSensitive(node, "context");
+    if (context_property_on_this_node && cJSON_IsObject(context_property_on_this_node)) {
+        // original_context_for_this_node_call is already saved
+        set_current_context(context_property_on_this_node);
+        context_was_locally_changed_by_this_node = true;
+    }
+    
+    // --- Continue with standard object/resource determination and creation ---
 """
 
     c_code += "    // 1. Determine Object Type and ID\n"
-    c_code += "    cJSON *type_item = cJSON_GetObjectItemCaseSensitive(node, \"type\");\n"
-    c_code += "    const char *type_str = \"obj\"; // Default type\n"
-    c_code += "    if (type_item && cJSON_IsString(type_item)) {\n"
-    c_code += "        type_str = type_item->valuestring;\n"
-    c_code += "    }\n"
+    #c_code += "    cJSON *type_item = cJSON_GetObjectItemCaseSensitive(node, \"type\");\n"
+    #c_code += "    const char *type_str = \"obj\"; // Default type\n"
+    #c_code += "    if (type_item && cJSON_IsString(type_item)) {\n"
+    #c_code += "        type_str = type_item->valuestring;\n"
+    #c_code += "    }\n"
     c_code += "    cJSON *id_item = cJSON_GetObjectItemCaseSensitive(node, \"id\");\n"
     c_code += "    const char *id_str = NULL;\n"
     c_code += "    if (id_item && cJSON_IsString(id_item)) {\n"
@@ -267,9 +311,10 @@ def generate_renderer(custom_creators_map):
     c_code += "    for (prop = node->child; prop != NULL; prop = prop->next) {\n"
     c_code += "        const char *prop_name = prop->string;\n"
     c_code += "        if (!prop_name) continue;\n"
-    c_code += "        // Skip known control properties OR grid-specific setup properties handled earlier\n" # MODIFIED COMMENT
+    c_code += "        // Skip known control properties OR grid-specific OR context property setup properties handled earlier\n"
     c_code += "        if (strcmp(prop_name, \"type\") == 0 || strcmp(prop_name, \"id\") == 0 || strcmp(prop_name, \"children\") == 0 || \n"
-    c_code += "            (strcmp(type_str, \"grid\") == 0 && (strcmp(prop_name, \"cols\") == 0 || strcmp(prop_name, \"rows\") == 0))) {\n"
+    c_code += "            (strcmp(type_str, \"grid\") == 0 && (strcmp(prop_name, \"cols\") == 0 || strcmp(prop_name, \"rows\") == 0)) || \n"
+    c_code += "            (strcmp(prop_name, \"context\") == 0)) {\n"
     c_code += "            continue;\n"
     c_code += "        }\n"
     c_code += "        // Property value must be an array of arguments\n"
@@ -356,7 +401,10 @@ def generate_renderer(custom_creators_map):
     c_code += "            }\n"
     c_code += "        }\n"
     c_code += "    }\n"
-
+    c_code += "    // --- Context management: Restore context if it was changed at this node's level ---\n"
+    c_code += "    if (context_was_locally_changed_by_this_node) {\n"
+    c_code += "        set_current_context(original_context_for_this_node_call);\n"
+    c_code += "    }\n\n"
     c_code += "    return true;\n"
     c_code += "}\n\n"
 

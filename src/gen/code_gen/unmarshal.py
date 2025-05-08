@@ -410,6 +410,45 @@ def generate_custom_unmarshalers(api_info):
     code += f"    return true;\n"
     code += f"}}\n\n"
 
+    code += "// Context Value ($variable_name)\n"
+    code += "static cJSON* get_current_context(void); // Forward declaration from renderer code\n"
+    code += "// unmarshal_value is also forward declared later or should be available\n\n"
+    code += "static bool unmarshal_context_value(cJSON *json_source_node, const char *expected_c_type, void *dest) {\n"
+    code += "    if (!cJSON_IsString(json_source_node) || !json_source_node->valuestring || json_source_node->valuestring[0] != '$') {\n"
+    code += "        LOG_ERR_JSON(json_source_node, \"Context Unmarshal Error: Expected string starting with '$'\");\n"
+    code += "        return false;\n"
+    code += "    }\n"
+    code += "    const char *var_name = json_source_node->valuestring + 1; // Skip '$'\n"
+    code += "    if (strlen(var_name) == 0) {\n"
+    code += "        LOG_ERR_JSON(json_source_node, \"Context Unmarshal Error: Empty variable name after '$'.\");\n"
+    code += "        return false;\n"
+    code += "    }\n\n"
+    code += "    cJSON *current_ctx = get_current_context();\n"
+    code += "    if (!current_ctx) {\n"
+    code += "        LOG_ERR_JSON(json_source_node, \"Context Unmarshal Error: No context active for variable '%s'.\", var_name);\n"
+    code += "        return false;\n"
+    code += "    }\n\n"
+    code += "    cJSON *value_from_context = cJSON_GetObjectItemCaseSensitive(current_ctx, var_name);\n"
+    code += "    if (!value_from_context) {\n"
+    code += "        LOG_ERR_JSON(json_source_node, \"Context Unmarshal Error: Variable '%s' not found in current context.\", var_name);\n"
+    # Log the current context for debugging
+    # code += "        char* ctx_str = json_node_to_string(current_ctx);\n"
+    # code += "        LOG_DEBUG(\"Current context for failed lookup of '%s': %s\", var_name, ctx_str ? ctx_str : \"N/A\");\n"
+    # code += "        if (ctx_str) cJSON_free(ctx_str);\n"
+    code += "        return false;\n"
+    code += "    }\n\n"
+    code += "    // Recursively call unmarshal_value with the node found in the context\n"
+    code += "    // This allows context values to be numbers, strings, booleans, or even other context/pointer refs.\n"
+    code += "    if (!unmarshal_value(value_from_context, expected_c_type, dest)) {\n"
+    # unmarshal_value would have logged the specific error
+    code += "        LOG_ERR_JSON(json_source_node, \"Context Unmarshal Error: Failed to unmarshal context variable '%s' as type '%s'.\", var_name, expected_c_type);\n"
+    code += "        return false;\n"
+    code += "    }\n"
+    code += "    return true;\n"
+    code += "}\n\n"
+
+    return code
+
     return code
 
 def generate_main_unmarshaler():
@@ -421,6 +460,7 @@ def generate_main_unmarshaler():
     code += "static bool unmarshal_color(cJSON *node, lv_color_t *dest);\n"
     code += "static bool unmarshal_coord(cJSON *node, lv_coord_t *dest);\n" # Added forward decl
     code += "static bool unmarshal_registered_ptr(cJSON *node, const char* expected_ptr_type, void **dest);\n"
+    code += "static bool unmarshal_context_value(cJSON *json_source_node, const char *expected_c_type, void *dest);\n"
     # Add forwards for all primitive unmarshalers generated
     code += "static bool unmarshal_int(cJSON *node, int *dest);\n"
     code += "static bool unmarshal_int8(cJSON *node, int8_t *dest);\n"
@@ -470,12 +510,12 @@ def generate_main_unmarshaler():
     code += "        // Currently, we don't handle passing structs directly via JSON objects other than 'call'.\n"
     code += "    }\n\n"
 
-    code += "    // 2. Handle custom pre- and post-fixes in strings ('#', '@', '%')\n"
+    code += "    // 2. Handle custom pre- and post-fixes in strings ('$', '#', '@', '%')\n"
     code += "    // Also handle non-prefixed strings that might be enums or regular strings.\n"
     code += "    if (cJSON_IsString(json_value) && json_value->valuestring) {\n"
     code += "        char *str_val = json_value->valuestring;\n"
     code += "        size_t len = strlen(str_val);\n"
-    code += "        // Check for '#' color prefix\n"
+    code += "        // Check for '$', '@', '%', '#' prefix\n"
     code += "        if (len) {\n"
     code += "            if (len > 2 && str_val[len - 1] == '%') {\n"
     code += "               if (str_val[len - 2] != '%') {\n"
@@ -506,6 +546,12 @@ def generate_main_unmarshaler():
     code += "                   LOG_ERR_JSON(json_value, \"Unmarshal Error: Found registered pointer string '%s' but expected non-pointer type '%s'\", str_val, expected_c_type);\n"
     code += "                   //return false;\n"
     code += "               }\n"
+    code += "            }\n"
+    code += "            // Check for '$' context variable prefix FIRST\n"
+    code += "            if (str_val[0] == '$') {\n"
+    code += "                if (str_val[len - 1] == '$') {\n"
+    code += "                   str_val[--len] = '\\0';\n"
+    code += "                } else { return unmarshal_context_value(json_value, expected_c_type, dest); }\n"
     code += "            }\n"
     code += "        }\n"
 
