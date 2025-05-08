@@ -4,6 +4,14 @@ Define and preview LVGL UI layouts in YAML/JSON.
 
 Mostly vibe-coded because this was supposed to be a quick thing... but now it's somehow parsing the LVGL JSON API definition and auto-generating a ~30k loc C library from the API definition automatically... 🤷 
 
+Half-rudimentary but somewhat useful. A couple things to note:
+* C-pointers used in API calls need to be "registered" to make them known to the YAML,
+* "component"s (aka sub-views) can be defined and reused (todo: "context" or template values),
+* supports declaring `lv_style_t` styles (they are also automatically registered) as well as per-object local style,
+* pretty good support for many lvgl functions, as well as nested function calls in "setter" arguments,
+* property setters and methods are "resolved" from a shorthand (several prefixes are tried),
+* macro-defined values (like `LV_SIZE_CONTENT`) need to be passed as an additional json file to the generator.
+
 # Example
 
 ```
