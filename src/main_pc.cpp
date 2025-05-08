@@ -221,6 +221,12 @@ int main(int argc, char *argv[]) {
     // Setup signal handler (keep from target code)
     signal(SIGINT, signal_handler);
 
+    lvgl_json_register_ptr("font_kode_20", "lv_font_t", (void *) &font_kode_20);
+    lvgl_json_register_ptr("font_kode_24", "lv_font_t", (void *) &font_kode_24);
+    lvgl_json_register_ptr("lcd_7_segment_14", "lv_font_t", (void *) &lcd_7_segment_14);
+    lvgl_json_register_ptr("lcd_7_segment_18", "lv_font_t", (void *) &lcd_7_segment_18);
+    lvgl_json_register_ptr("lcd_7_segment_24", "lv_font_t", (void *) &lcd_7_segment_24);
+
     // --- Initial UI Load ---
     LOG_USER("Monitoring file: %s", monitored_filepath);
     struct stat initial_stat;
@@ -247,13 +253,7 @@ int main(int argc, char *argv[]) {
         }
         lv_obj_center(lbl);
     }
-
-    lvgl_json_register_ptr("font_kode_20", (void *) &font_kode_20);
-    lvgl_json_register_ptr("font_kode_24", (void *) &font_kode_24);
-    lvgl_json_register_ptr("lcd_7_segment_14", (void *) &lcd_7_segment_14);
-    lvgl_json_register_ptr("lcd_7_segment_18", (void *) &lcd_7_segment_18);
-    lvgl_json_register_ptr("lcd_7_segment_24", (void *) &lcd_7_segment_24);
-
+    
     // --- LVGL Main Loop ---
     LOG_USER("Starting LVGL main loop...");
     uint32_t lastTick = SDL_GetTicks(); // Initialize last tick time

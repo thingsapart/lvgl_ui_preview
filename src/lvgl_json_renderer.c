@@ -65,6 +65,7 @@ typedef struct invoke_table_entry_s {
 #define HASH_MAP_SIZE 256
 typedef struct registry_entry {
     char *name;
+    char *type_name; // Added for type safety
     void *ptr;
     struct registry_entry *next;
 } registry_entry_t;
@@ -78,14 +79,17 @@ static unsigned int hash(const char *str) {
     return hash % HASH_MAP_SIZE;
 }
 
-void lvgl_json_register_ptr(const char *name, void *ptr) {
-    if (!name || !ptr) return;
+void lvgl_json_register_ptr(const char *name, const char *type_name, void *ptr) {
+    if (!name || !type_name || !ptr) return;
     unsigned int index = hash(name);
     // Check if name already exists (update or handle error?)
     registry_entry_t *entry = g_registry_map[index];
     while(entry) {
         if(strcmp(entry->name, name) == 0) {
-             LOG_WARN("Registry Warning: Name '%s' already registered. Updating pointer.", name);
+             LOG_WARN("Registry Warning: Name '%s' already registered. Updating pointer and type.", name);
+             LV_FREE(entry->type_name); // Free old type_name
+             entry->type_name = lv_strdup(type_name); // Update type_name
+             if (!entry->type_name) { LOG_ERR("Registry Error: Failed to duplicate type_name for update"); /* What to do? Original ptr is kept */ return; }
              entry->ptr = ptr; // Update existing entry
              return;
         }
@@ -96,19 +100,52 @@ void lvgl_json_register_ptr(const char *name, void *ptr) {
     if (!new_entry) { LOG_ERR("Registry Error: Failed to allocate memory"); return; }
     new_entry->name = lv_strdup(name);
     if (!new_entry->name) { LV_FREE(new_entry); LOG_ERR("Registry Error: Failed to duplicate name"); return; }
+    new_entry->type_name = lv_strdup(type_name);
+    if (!new_entry->type_name) { LV_FREE(new_entry->name); LV_FREE(new_entry); LOG_ERR("Registry Error: Failed to duplicate type_name"); return; }
     new_entry->ptr = ptr;
     new_entry->next = g_registry_map[index];
     g_registry_map[index] = new_entry;
-     LOG_INFO("Registered pointer '%s'", name);
+     LOG_INFO("Registered pointer '%s' with type '%s'", name, type_name);
 }
 
-void* lvgl_json_get_registered_ptr(const char *name) {
+void* lvgl_json_get_registered_ptr(const char *name, const char *expected_type_name) {
     if (!name) return NULL;
     unsigned int index = hash(name);
     registry_entry_t *entry = g_registry_map[index];
     while (entry != NULL) {
         if (strcmp(entry->name, name) == 0) {
-            return entry->ptr;
+            // Type check
+            if (expected_type_name == NULL || entry->type_name == NULL) { // Wildcard or error in registration
+                 if(expected_type_name != NULL && entry->type_name == NULL) LOG_WARN("Registry: Entry '%s' has no type_name.", name);
+                 return entry->ptr; // No type check possible or requested
+            }
+            // Smart type comparison: if expected is 'type*', compare with 'type'
+            size_t expected_len = strlen(expected_type_name);
+            bool types_match = false;
+            if (expected_len > 0 && expected_type_name[expected_len - 1] == '*') {
+                 // Expected a pointer type like 'lv_style_t *', compare base 'lv_style_t'
+                 // Need to be careful with 'const char **' vs 'const char *'
+                 // Simple check: compare entry->type_name with expected_type_name minus the last '*'
+                 // This assumes stored type_name is always the base type (e.g., "lv_style_t")
+                 char base_expected_type[256]; // Assume type names are not excessively long
+                 if (expected_len -1 < sizeof(base_expected_type)) {
+                    strncpy(base_expected_type, expected_type_name, expected_len -1);
+                    base_expected_type[expected_len -1] = '\0';
+                    // Trim trailing space if it was 'lv_style_t *'
+                    if(expected_len > 1 && base_expected_type[expected_len - 2] == ' ') base_expected_type[expected_len - 2] = '\0';
+                    types_match = (strcmp(entry->type_name, base_expected_type) == 0);
+                 }
+            } else {
+                 // Expected a non-pointer type or already a base type, direct compare
+                 types_match = (strcmp(entry->type_name, expected_type_name) == 0);
+            }
+
+            if (types_match) {
+                 return entry->ptr;
+            } else {
+                 LOG_WARN("Registry: Found entry '%s', but type mismatch. Expected compatible with '%s', got '%s'.", name, expected_type_name, entry->type_name);
+                 return NULL; // Type mismatch for the found name
+            }
         }
         entry = entry->next;
     }
@@ -120,6 +157,7 @@ void lvgl_json_registry_clear() {
         registry_entry_t *entry = g_registry_map[i];
         while(entry) {
              registry_entry_t *next = entry->next;
+             LV_FREE(entry->type_name);
              LV_FREE(entry->name);
              LV_FREE(entry);
              entry = next;
@@ -1099,14 +1137,13 @@ static bool unmarshal_color(cJSON *node, lv_color_t *dest) {
 }
 
 // Forward declaration
-extern void* lvgl_json_get_registered_ptr(const char *name);
+extern void* lvgl_json_get_registered_ptr(const char *name, const char *expected_type_name);
 
-static bool unmarshal_registered_ptr(cJSON *node, void **dest) {
+static bool unmarshal_registered_ptr(cJSON *node, const char *expected_ptr_type, void **dest) {
     if (!cJSON_IsString(node) || !node->valuestring || node->valuestring[0] != '@') { LOG_ERR_JSON(node, "Expected pointer string starting with @"); return false; }
     const char *name = node->valuestring + 1;
-    *dest = lvgl_json_get_registered_ptr(name);
+    *dest = lvgl_json_get_registered_ptr(name, expected_ptr_type);
     if (!(*dest)) {
-       LOG_ERR_JSON(node, "Pointer Unmarshal Error: Registered pointer '@%s' not found.", name);
        return false;
     }
     return true;
@@ -28249,7 +28286,7 @@ static const invoke_table_entry_t* find_invoke_entry(const char *name);
 static bool unmarshal_enum_value(cJSON *json_value, const char *enum_type_name, int *dest);
 static bool unmarshal_color(cJSON *node, lv_color_t *dest);
 static bool unmarshal_coord(cJSON *node, lv_coord_t *dest);
-static bool unmarshal_registered_ptr(cJSON *node, void **dest);
+static bool unmarshal_registered_ptr(cJSON *node, const char* expected_ptr_type, void **dest);
 static bool unmarshal_int(cJSON *node, int *dest);
 static bool unmarshal_int8(cJSON *node, int8_t *dest);
 static bool unmarshal_uint8(cJSON *node, uint8_t *dest);
@@ -28325,9 +28362,9 @@ static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void
             }
             // Check for '@' pointer prefix
             if (str_val[0] == '@') {
-               // Ensure expected type is some kind of pointer
-               if (strchr(expected_c_type, '*')) {
-                    return unmarshal_registered_ptr(json_value, (void**)dest);
+               // Ensure expected type is some kind of pointer or a special component type
+               if (strchr(expected_c_type, '*') || strcmp(expected_c_type, "component_json_node") == 0) {
+                    return unmarshal_registered_ptr(json_value, expected_c_type, (void**)dest);
                } else {
                    LOG_ERR_JSON(json_value, "Unmarshal Error: Found registered pointer string '%s' but expected non-pointer type '%s'", str_val, expected_c_type);
                    //return false;
@@ -28447,7 +28484,7 @@ static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void
 #define LV_FREE free
 #endif
 
-extern void lvgl_json_register_ptr(const char *name, void *ptr);
+extern void lvgl_json_register_ptr(const char *name, const char *type_name, void *ptr);
 extern void lv_fs_drv_init(lv_fs_drv_t *);
 extern void lv_layer_init(lv_layer_t *);
 extern void lv_style_init(lv_style_t *);
@@ -28465,7 +28502,7 @@ lv_fs_drv_t* lv_fs_drv_create_managed(const char *name) {
         return NULL;
     }
     lv_fs_drv_init(new_obj);
-    lvgl_json_register_ptr(name, (void*)new_obj);
+    lvgl_json_register_ptr(name, "lv_fs_drv_t", (void*)new_obj);
     return new_obj;
 }
 
@@ -28482,7 +28519,7 @@ lv_layer_t* lv_layer_create_managed(const char *name) {
         return NULL;
     }
     lv_layer_init(new_obj);
-    lvgl_json_register_ptr(name, (void*)new_obj);
+    lvgl_json_register_ptr(name, "lv_layer_t", (void*)new_obj);
     return new_obj;
 }
 
@@ -28499,7 +28536,7 @@ lv_style_t* lv_style_create_managed(const char *name) {
         return NULL;
     }
     lv_style_init(new_obj);
-    lvgl_json_register_ptr(name, (void*)new_obj);
+    lvgl_json_register_ptr(name, "lv_style_t", (void*)new_obj);
     return new_obj;
 }
 
@@ -28514,8 +28551,8 @@ lv_style_t* lv_style_create_managed(const char *name) {
 static bool render_json_node(cJSON *node, lv_obj_t *parent);
 static const invoke_table_entry_t* find_invoke_entry(const char *name);
 static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest);
-extern void* lvgl_json_get_registered_ptr(const char *name);
-extern void lvgl_json_register_ptr(const char *name, void *ptr);
+extern void* lvgl_json_get_registered_ptr(const char *name, const char *expected_type_name);
+extern void lvgl_json_register_ptr(const char *name, const char *type_name, void *ptr);
 extern lv_fs_drv_t* lv_fs_drv_create_managed(const char *name);
 extern lv_layer_t* lv_layer_create_managed(const char *name);
 extern lv_style_t* lv_style_create_managed(const char *name);
@@ -28525,6 +28562,61 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
         LOG_ERR("Render Error: Expected JSON object for UI node.");
         return false;
     }
+
+
+    // --- Handle Component Definition and Usage ---
+    cJSON *type_item_comp_check = cJSON_GetObjectItemCaseSensitive(node, "type");
+    if (type_item_comp_check && cJSON_IsString(type_item_comp_check)) {
+        const char *type_str_comp_check_val = type_item_comp_check->valuestring;
+
+        if (strcmp(type_str_comp_check_val, "component") == 0) {
+            cJSON *id_item_comp = cJSON_GetObjectItemCaseSensitive(node, "id");
+            cJSON *root_item_comp = cJSON_GetObjectItemCaseSensitive(node, "root");
+            if (id_item_comp && cJSON_IsString(id_item_comp) && id_item_comp->valuestring && id_item_comp->valuestring[0] == '@' &&
+                root_item_comp && cJSON_IsObject(root_item_comp)) {
+                
+                const char *comp_id_str = id_item_comp->valuestring + 1; // Skip '@'
+                cJSON *duplicated_root = cJSON_Duplicate(root_item_comp, true);
+                if (duplicated_root) {
+                    lvgl_json_register_ptr(comp_id_str, "component_json_node", (void*)duplicated_root);
+                    // LOG_INFO("Registered component '%s'", comp_id_str); // Logged by register_ptr
+                    return true; // Component definition processed
+                } else {
+                    LOG_ERR_JSON(node, "Component Error: Failed to duplicate root for component '%s'", comp_id_str);
+                    return false;
+                }
+            } else {
+                LOG_ERR_JSON(node, "Component Error: Invalid 'component' definition. Requires 'id' (string starting with '@') and 'root' (object).");
+                return false;
+            }
+        } else if (strcmp(type_str_comp_check_val, "use-view") == 0) {
+            cJSON *id_item_use_view = cJSON_GetObjectItemCaseSensitive(node, "id");
+            if (id_item_use_view && cJSON_IsString(id_item_use_view) && id_item_use_view->valuestring && id_item_use_view->valuestring[0] == '@') {
+                const char *view_id_str = id_item_use_view->valuestring + 1; // Skip '@'
+                cJSON *component_root_node = (cJSON*)lvgl_json_get_registered_ptr(view_id_str, "component_json_node");
+
+                if (component_root_node) {
+                    LOG_INFO("Using view '%s'", view_id_str);
+                    return render_json_node(component_root_node, parent); // Render the component's root
+                } else {
+                    // lvgl_json_get_registered_ptr logs warning if not found or type mismatch
+                    LOG_WARN_JSON(node, "Use-View Error: Component '%s' not found or type error. Creating fallback label.", view_id_str);
+                    lv_obj_t *fallback_label = lv_label_create(parent);
+                    if(fallback_label) {
+                        char fallback_text[128];
+                        snprintf(fallback_text, sizeof(fallback_text), "Component '%s' not found/error", view_id_str);
+                        lv_label_set_text(fallback_label, fallback_text);
+                        lv_obj_align(fallback_label, LV_ALIGN_CENTER, 0, 0);
+                    }
+                    return true; // Fallback created (or attempted)
+                }
+            } else {
+                LOG_ERR_JSON(node, "Use-View Error: Invalid 'use-view' definition. Requires 'id' (string starting with '@').");
+                return false;
+            }
+        }
+    }
+    // --- End Component Handling ---
 
     // 1. Determine Object Type and ID
     cJSON *type_item = cJSON_GetObjectItemCaseSensitive(node, "type");
@@ -28622,7 +28714,13 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
 
         // Register if ID is provided and it wasn't a custom-created type
         if (id_str) {
-            lvgl_json_register_ptr(id_str, created_entity);
+            char entity_type_name_buf[64];
+            // For widgets, type_str_for_create holds the base type like "obj", "label"
+            // For custom created (e.g. styles), type_str holds "style"
+            // We need to construct the C type name like "lv_label_t", "lv_style_t"
+            const char* base_type_for_reg = is_widget ? type_str_for_create : type_str;
+            snprintf(entity_type_name_buf, sizeof(entity_type_name_buf), "lv_%s_t", base_type_for_reg);
+            lvgl_json_register_ptr(id_str, entity_type_name_buf, created_entity);
         }
     }
 
@@ -28686,10 +28784,10 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
             char temp_name_buf[64]; // For snprintf
 
             snprintf(temp_name_buf, sizeof(temp_name_buf), "grid_col_dsc_%p", (void*)grid_obj);
-            lvgl_json_register_ptr(temp_name_buf, (void*)col_dsc_array); // Registry will lv_strdup the name
+            lvgl_json_register_ptr(temp_name_buf, "lv_coord_array", (void*)col_dsc_array); // Registry will lv_strdup the name
 
             snprintf(temp_name_buf, sizeof(temp_name_buf), "grid_row_dsc_%p", (void*)grid_obj);
-            lvgl_json_register_ptr(temp_name_buf, (void*)row_dsc_array); // Registry will lv_strdup the name
+            lvgl_json_register_ptr(temp_name_buf, "lv_coord_array", (void*)row_dsc_array); // Registry will lv_strdup the name
             
             lv_obj_set_grid_dsc_array(grid_obj, col_dsc_array, row_dsc_array);
             // Note: Memory for col_dsc_array and row_dsc_array should ideally be freed on LV_EVENT_DELETE of grid_obj.

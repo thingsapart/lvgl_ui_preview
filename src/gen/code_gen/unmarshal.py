@@ -397,13 +397,14 @@ def generate_custom_unmarshalers(api_info):
 
     # Registered Pointer (@name)
     code += "// Forward declaration\n"
-    code += "extern void* lvgl_json_get_registered_ptr(const char *name);\n\n"
-    code += f"static bool unmarshal_registered_ptr(cJSON *node, void **dest) {{\n"
+    code += "extern void* lvgl_json_get_registered_ptr(const char *name, const char *expected_type_name);\n\n"
+    code += f"static bool unmarshal_registered_ptr(cJSON *node, const char *expected_ptr_type, void **dest) {{\n"
     code += f"    if (!cJSON_IsString(node) || !node->valuestring || node->valuestring[0] != '@') {{ LOG_ERR_JSON(node, \"Expected pointer string starting with @\"); return false; }}\n"
     code += f"    const char *name = node->valuestring + 1;\n"
-    code += f"    *dest = lvgl_json_get_registered_ptr(name);\n"
+    code += f"    *dest = lvgl_json_get_registered_ptr(name, expected_ptr_type);\n"
     code += f"    if (!(*dest)) {{\n"
-    code += f"       LOG_ERR_JSON(node, \"Pointer Unmarshal Error: Registered pointer '@%s' not found.\", name);\n"
+    # Error message is already logged by lvgl_json_get_registered_ptr if type mismatch or not found
+    # code += f"       LOG_ERR_JSON(node, \"Pointer Unmarshal Error: Registered pointer '@%s' (type %s) not found or type mismatch.\", name, expected_ptr_type ? expected_ptr_type : \"any\");\n"
     code += f"       return false;\n"
     code += f"    }}\n"
     code += f"    return true;\n"
@@ -419,7 +420,7 @@ def generate_main_unmarshaler():
     code += "static bool unmarshal_enum_value(cJSON *json_value, const char *enum_type_name, int *dest);\n"
     code += "static bool unmarshal_color(cJSON *node, lv_color_t *dest);\n"
     code += "static bool unmarshal_coord(cJSON *node, lv_coord_t *dest);\n" # Added forward decl
-    code += "static bool unmarshal_registered_ptr(cJSON *node, void **dest);\n"
+    code += "static bool unmarshal_registered_ptr(cJSON *node, const char* expected_ptr_type, void **dest);\n"
     # Add forwards for all primitive unmarshalers generated
     code += "static bool unmarshal_int(cJSON *node, int *dest);\n"
     code += "static bool unmarshal_int8(cJSON *node, int8_t *dest);\n"
@@ -498,9 +499,9 @@ def generate_main_unmarshaler():
     code += "            }\n"
     code += "            // Check for '@' pointer prefix\n"
     code += "            if (str_val[0] == '@') {\n"
-    code += "               // Ensure expected type is some kind of pointer\n"
-    code += "               if (strchr(expected_c_type, '*')) {\n"
-    code += "                    return unmarshal_registered_ptr(json_value, (void**)dest);\n"
+    code += "               // Ensure expected type is some kind of pointer or a special component type\n"
+    code += "               if (strchr(expected_c_type, '*') || strcmp(expected_c_type, \"component_json_node\") == 0) {\n"
+    code += "                    return unmarshal_registered_ptr(json_value, expected_c_type, (void**)dest);\n"
     code += "               } else {\n"
     code += "                   LOG_ERR_JSON(json_value, \"Unmarshal Error: Found registered pointer string '%s' but expected non-pointer type '%s'\", str_val, expected_c_type);\n"
     code += "                   //return false;\n"

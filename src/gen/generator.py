@@ -131,17 +131,21 @@ bool lvgl_json_render_ui(cJSON *root_json, lv_obj_t *implicit_root_parent);
  * @brief Registers a pointer with a given name. Used for referencing objects/styles by ID ('@name').
  *
  * @param name The name to register the pointer under (should not include '@').
+ * @param ptr_type_name The C type name of the pointer being registered (e.g., \"lv_style_t\", \"lv_obj_t\").
  * @param ptr The pointer to register.
  */
-void lvgl_json_register_ptr(const char *name, void *ptr);
+void lvgl_json_register_ptr(const char *name, const char *ptr_type_name, void *ptr);
 
 /**
  * @brief Retrieves a previously registered pointer by name.
  *
  * @param name The name of the pointer to retrieve (should not include '@').
+ * @param expected_ptr_type_name The expected C type name of the pointer (e.g., \"lv_style_t *\", \"lv_font_t *\").\n"
+ *                                 If a pointer type (ending with '*'), the base type will be checked against the registered base type.
+ *                                 Can be NULL to skip type checking (not recommended).
  * @return The registered pointer, or NULL if not found.
  */
-void* lvgl_json_get_registered_ptr(const char *name);
+void* lvgl_json_get_registered_ptr(const char *name, const char *expected_ptr_type_name);
 
 /**
  * @brief Clears all entries from the pointer registry.

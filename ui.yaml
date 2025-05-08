@@ -15,85 +15,94 @@
   radius: 4
 
 # UI Tree
--
-  size: [100%, 100%]
+- type: component
+  id: '@feed_rate_scale'
+  root:
+    size: [100%, 100%]
+    add_style: ['@container', 0]
+    layout: LV_LAYOUT_FLEX
+    flex_flow: LV_FLEX_FLOW_ROW
+    height: LV_SIZE_CONTENT
+    children:
+      # Left Column
+      - layout: LV_LAYOUT_FLEX
+        add_style: ['@container', 0]
+        flex_flow: LV_FLEX_FLOW_COLUMN
+        width: 100%
+        height: LV_SIZE_CONTENT
+        flex_grow: 1
+        children:
+          - type: label
+            text: FEED
+            height: LV_SIZE_CONTENT
+            width: 100%
+            text_font: '@font_kode_20'
+          - type: grid
+            cols: [LV_GRID_CONTENT, LV_GRID_FR_1]
+            rows: [LV_GRID_CONTENT]
+            add_style: ['@container', 0]
+            width: 100%
+            height: LV_SIZE_CONTENT
+            children:
+              - type: label
+                text: F
+                text_font: '@font_kode_24'
+                grid_cell: [LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, 0, 1]
+                height: LV_SIZE_CONTENT
+                pad_left: 20
+              - type: label
+                grid_cell: [LV_GRID_ALIGN_END, 1, 1, LV_GRID_ALIGN_END, 0, 1]
+                text_font: '@font_kode_24'
+                height: LV_SIZE_CONTENT
+                text: '1000'
+                pad_right: 20
+          - layout: LV_LAYOUT_FLEX
+            flex_flow: LV_FLEX_FLOW_COLUMN
+            add_style: ['@container', 0]
+            width: 100%
+            height: LV_SIZE_CONTENT
+            children:
+              - type: bar
+                width: 100%
+                height: 20
+                margin_left: 15
+                margin_right: 15
+                add_style: ['@bar_indicator', LV_PART_MAIN]
+                add_style: ['@bar_indicator', LV_PART_INDICATOR]
+                value: [65, 0]
+                bg_color: '#5dd555'
+                bg_opa: 255
+              - type: scale
+                width: 100%
+                height: 20
+                margin_left: 15
+                margin_right: 15
+      # Right column
+      - layout: LV_LAYOUT_FLEX
+        add_style: ['@container', 0]
+        flex_flow: LV_FLEX_FLOW_COLUMN
+        width: LV_SIZE_CONTENT
+        pad_right: 20
+        children:
+          - type: label
+            text: MM/MIN
+            text_font: '@font_kode_20'
+          - type: label
+            text: Feed Ovr
+          - type: label
+            text: 100%%
+          - type: label
+            text: Power
+          - type: label
+            text: 65%%
+
+- layout: LV_LAYOUT_FLEX
+  flex_flow: LV_FLEX_FLOW_COLUMN
   add_style: ['@container', 0]
-  layout: LV_LAYOUT_FLEX
-  flex_flow: LV_FLEX_FLOW_ROW
-  height: LV_SIZE_CONTENT
+  size: [100%, 100%]
   children:
-    # Left Column
-    - layout: LV_LAYOUT_FLEX
-      add_style: ['@container', 0]
-      flex_flow: LV_FLEX_FLOW_COLUMN
-      width: 100%
-      height: LV_SIZE_CONTENT
-      flex_grow: 1
-      children:
-        - type: label
-          text: FEED
-          height: LV_SIZE_CONTENT
-          width: 100%
-          text_font: '@font_kode_20'
-        - type: grid
-          cols: [LV_GRID_CONTENT, LV_GRID_FR_1]
-          rows: [LV_GRID_CONTENT]
-          add_style: ['@container', 0]
-          width: 100%
-          height: LV_SIZE_CONTENT
-          children:
-            - type: label
-              text: F
-              text_font: '@font_kode_24'
-              grid_cell: [LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, 0, 1]
-              height: LV_SIZE_CONTENT
-              pad_left: 20
-            - type: label
-              grid_cell: [LV_GRID_ALIGN_END, 1, 1, LV_GRID_ALIGN_END, 0, 1]
-              text_font: '@font_kode_24'
-              height: LV_SIZE_CONTENT
-              text: '1000'
-              pad_right: 20
-        - layout: LV_LAYOUT_FLEX
-          flex_flow: LV_FLEX_FLOW_COLUMN
-          add_style: ['@container', 0]
-          width: 100%
-          height: LV_SIZE_CONTENT
-          children:
-            - type: bar
-              width: 100%
-              height: 20
-              margin_left: 15
-              margin_right: 15
-              add_style: ['@bar_indicator', LV_PART_MAIN]
-              add_style: ['@bar_indicator', LV_PART_INDICATOR]
-              value: [65, 0]
-              bg_color: '#5dd555'
-              bg_opa: 255
-            - type: scale
-              width: 100%
-              height: 20
-              margin_left: 15
-              margin_right: 15
-    # Right column
-    - layout: LV_LAYOUT_FLEX
-      add_style: ['@container', 0]
-      flex_flow: LV_FLEX_FLOW_COLUMN
-      width: LV_SIZE_CONTENT
-      pad_right: 20
-      children:
-        - type: label
-          text: MM/MIN
-          text_font: '@font_kode_20'
-        - type: label
-          text: Feed Ovr
-        - type: label
-          text: 100%%
-        - type: label
-          text: Power
-        - type: label
-          text: 65%%
-
-
-
+    - type: use-view
+      id: '@feed_rate_scale'
+    - type: use-view
+      id: '@feed_rate_scale'
 

@@ -15,8 +15,8 @@ def generate_renderer(custom_creators_map):
     c_code += "static bool render_json_node(cJSON *node, lv_obj_t *parent);\n"
     c_code += "static const invoke_table_entry_t* find_invoke_entry(const char *name);\n"
     c_code += "static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest);\n"
-    c_code += "extern void* lvgl_json_get_registered_ptr(const char *name);\n"
-    c_code += "extern void lvgl_json_register_ptr(const char *name, void *ptr);\n"
+    c_code += "extern void* lvgl_json_get_registered_ptr(const char *name, const char *expected_type_name);\n"
+    c_code += "extern void lvgl_json_register_ptr(const char *name, const char *type_name, void *ptr);\n"
 
     # Include custom creator function prototypes
     for type_name, creator_func in custom_creators_map.items():
@@ -32,6 +32,63 @@ def generate_renderer(custom_creators_map):
     c_code += "        LOG_ERR(\"Render Error: Expected JSON object for UI node.\");\n"
     c_code += "        return false;\n"
     c_code += "    }\n\n"
+
+    c_code += """
+    // --- Handle Component Definition and Usage ---
+    cJSON *type_item_comp_check = cJSON_GetObjectItemCaseSensitive(node, "type");
+    if (type_item_comp_check && cJSON_IsString(type_item_comp_check)) {
+        const char *type_str_comp_check_val = type_item_comp_check->valuestring;
+
+        if (strcmp(type_str_comp_check_val, "component") == 0) {
+            cJSON *id_item_comp = cJSON_GetObjectItemCaseSensitive(node, "id");
+            cJSON *root_item_comp = cJSON_GetObjectItemCaseSensitive(node, "root");
+            if (id_item_comp && cJSON_IsString(id_item_comp) && id_item_comp->valuestring && id_item_comp->valuestring[0] == '@' &&
+                root_item_comp && cJSON_IsObject(root_item_comp)) {
+                
+                const char *comp_id_str = id_item_comp->valuestring + 1; // Skip '@'
+                cJSON *duplicated_root = cJSON_Duplicate(root_item_comp, true);
+                if (duplicated_root) {
+                    lvgl_json_register_ptr(comp_id_str, "component_json_node", (void*)duplicated_root);
+                    // LOG_INFO("Registered component '%s'", comp_id_str); // Logged by register_ptr
+                    return true; // Component definition processed
+                } else {
+                    LOG_ERR_JSON(node, "Component Error: Failed to duplicate root for component '%s'", comp_id_str);
+                    return false;
+                }
+            } else {
+                LOG_ERR_JSON(node, "Component Error: Invalid 'component' definition. Requires 'id' (string starting with '@') and 'root' (object).");
+                return false;
+            }
+        } else if (strcmp(type_str_comp_check_val, "use-view") == 0) {
+            cJSON *id_item_use_view = cJSON_GetObjectItemCaseSensitive(node, "id");
+            if (id_item_use_view && cJSON_IsString(id_item_use_view) && id_item_use_view->valuestring && id_item_use_view->valuestring[0] == '@') {
+                const char *view_id_str = id_item_use_view->valuestring + 1; // Skip '@'
+                cJSON *component_root_node = (cJSON*)lvgl_json_get_registered_ptr(view_id_str, "component_json_node");
+
+                if (component_root_node) {
+                    LOG_INFO("Using view '%s'", view_id_str);
+                    return render_json_node(component_root_node, parent); // Render the component's root
+                } else {
+                    // lvgl_json_get_registered_ptr logs warning if not found or type mismatch
+                    LOG_WARN_JSON(node, "Use-View Error: Component '%s' not found or type error. Creating fallback label.", view_id_str);
+                    lv_obj_t *fallback_label = lv_label_create(parent);
+                    if(fallback_label) {
+                        char fallback_text[128];
+                        snprintf(fallback_text, sizeof(fallback_text), "Component '%s' not found/error", view_id_str);
+                        lv_label_set_text(fallback_label, fallback_text);
+                        lv_obj_align(fallback_label, LV_ALIGN_CENTER, 0, 0);
+                    }
+                    return true; // Fallback created (or attempted)
+                }
+            } else {
+                LOG_ERR_JSON(node, "Use-View Error: Invalid 'use-view' definition. Requires 'id' (string starting with '@').");
+                return false;
+            }
+        }
+    }
+    // --- End Component Handling ---
+
+"""
 
     c_code += "    // 1. Determine Object Type and ID\n"
     c_code += "    cJSON *type_item = cJSON_GetObjectItemCaseSensitive(node, \"type\");\n"
@@ -117,7 +174,13 @@ def generate_renderer(custom_creators_map):
     c_code += "        is_widget = true;\n\n"
     c_code += "        // Register if ID is provided and it wasn't a custom-created type\n"
     c_code += "        if (id_str) {\n"
-    c_code += "            lvgl_json_register_ptr(id_str, created_entity);\n"
+    c_code += "            char entity_type_name_buf[64];\n"
+    c_code += "            // For widgets, type_str_for_create holds the base type like \"obj\", \"label\"\n"
+    c_code += "            // For custom created (e.g. styles), type_str holds \"style\"\n"
+    c_code += "            // We need to construct the C type name like \"lv_label_t\", \"lv_style_t\"\n"
+    c_code += "            const char* base_type_for_reg = is_widget ? type_str_for_create : type_str;\n"
+    c_code += "            snprintf(entity_type_name_buf, sizeof(entity_type_name_buf), \"lv_%s_t\", base_type_for_reg);\n"
+    c_code += "            lvgl_json_register_ptr(id_str, entity_type_name_buf, created_entity);\n" # MODIFIED CALL
     c_code += "        }\n"
     c_code += "    }\n" # End of default widget creation block
     c_code += "\n"
@@ -182,10 +245,10 @@ def generate_renderer(custom_creators_map):
             char temp_name_buf[64]; // For snprintf
 
             snprintf(temp_name_buf, sizeof(temp_name_buf), "grid_col_dsc_%p", (void*)grid_obj);
-            lvgl_json_register_ptr(temp_name_buf, (void*)col_dsc_array); // Registry will lv_strdup the name
+            lvgl_json_register_ptr(temp_name_buf, "lv_coord_array", (void*)col_dsc_array); // Registry will lv_strdup the name
 
             snprintf(temp_name_buf, sizeof(temp_name_buf), "grid_row_dsc_%p", (void*)grid_obj);
-            lvgl_json_register_ptr(temp_name_buf, (void*)row_dsc_array); // Registry will lv_strdup the name
+            lvgl_json_register_ptr(temp_name_buf, "lv_coord_array", (void*)row_dsc_array); // Registry will lv_strdup the name
             
             lv_obj_set_grid_dsc_array(grid_obj, col_dsc_array, row_dsc_array);
             // Note: Memory for col_dsc_array and row_dsc_array should ideally be freed on LV_EVENT_DELETE of grid_obj.
