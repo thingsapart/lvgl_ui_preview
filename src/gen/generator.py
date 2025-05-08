@@ -29,6 +29,8 @@ DEFAULT_MACRO_NAMES_TO_EXPORT = [
     "LV_ALIGN_DEFAULT", "LV_ALIGN_CENTER", "LV_ALIGN_OUT_TOP_LEFT", # Test filtering (likely enums)
     "LV_STATE_DEFAULT", "LV_STATE_FOCUSED", "LV_STATE_ANY", # Test filtering (likely enums)
     "LV_PART_MAIN", "LV_PART_ANY", # Test filtering (likely enums)
+    "LV_GRID_TEMPLATE_LAST", "LV_GRID_FR_1", "LV_GRID_FR_2", "LV_GRID_FR_3", "LV_GRID_FR_4",
+    "LV_GRID_FR_5", "LV_GRID_FR_10"
 ]
 
 # --- C File Templates ---
@@ -86,6 +88,12 @@ char* json_node_to_string(cJSON *node); // Exposed for potential external use? M
 
 #define LV_MALLOC lv_malloc
 #define LV_FREE lv_free
+#define LV_GRID_FR_1 LV_GRID_FR(1)
+#define LV_GRID_FR_2 LV_GRID_FR(2)
+#define LV_GRID_FR_3 LV_GRID_FR(3)
+#define LV_GRID_FR_4 LV_GRID_FR(4)
+#define LV_GRID_FR_5 LV_GRID_FR(5)
+#define LV_GRID_FR_10 LV_GRID_FR(10)
 
 
 // --- Public API ---

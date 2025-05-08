@@ -51,6 +51,12 @@ char* json_node_to_string(cJSON *node); // Exposed for potential external use? M
 
 #define LV_MALLOC lv_malloc
 #define LV_FREE lv_free
+#define LV_GRID_FR_1 LV_GRID_FR(1)
+#define LV_GRID_FR_2 LV_GRID_FR(2)
+#define LV_GRID_FR_3 LV_GRID_FR(3)
+#define LV_GRID_FR_4 LV_GRID_FR(4)
+#define LV_GRID_FR_5 LV_GRID_FR(5)
+#define LV_GRID_FR_10 LV_GRID_FR(10)
 
 
 // --- Public API ---

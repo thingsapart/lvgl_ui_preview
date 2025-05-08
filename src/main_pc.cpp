@@ -172,6 +172,11 @@ extern lv_indev_t * lv_sdl_keyboard_create(void);
 extern void lv_sdl_window_set_zoom(lv_display_t * display, int zoom);
 extern void lv_log_print_g_cb(const char * buf); // Example log function
 
+LV_FONT_DECLARE(font_kode_20);
+LV_FONT_DECLARE(font_kode_24);
+LV_FONT_DECLARE(lcd_7_segment_24);
+LV_FONT_DECLARE(lcd_7_segment_18);
+LV_FONT_DECLARE(lcd_7_segment_14);
 
 int main(int argc, char *argv[]) {
 
@@ -243,6 +248,11 @@ int main(int argc, char *argv[]) {
         lv_obj_center(lbl);
     }
 
+    lvgl_json_register_ptr("font_kode_20", (void *) &font_kode_20);
+    lvgl_json_register_ptr("font_kode_24", (void *) &font_kode_24);
+    lvgl_json_register_ptr("lcd_7_segment_14", (void *) &lcd_7_segment_14);
+    lvgl_json_register_ptr("lcd_7_segment_18", (void *) &lcd_7_segment_18);
+    lvgl_json_register_ptr("lcd_7_segment_24", (void *) &lcd_7_segment_24);
 
     // --- LVGL Main Loop ---
     LOG_USER("Starting LVGL main loop...");

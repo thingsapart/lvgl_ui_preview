@@ -203,6 +203,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x0db371ba, "LV_BUTTONMATRIX_CTRL_NONE", 0x00 }, // Type: lv_buttonmatrix_ctrl_t
     {0x0ec31f5e, "LV_STYLE_RADIUS", 0x0c }, // Type: UNKNOWN_TYPE
     {0x0ed249cf, "LV_SCALE_MODE_HORIZONTAL_BOTTOM", 0x01 }, // Type: lv_scale_mode_t
+    {0x0f1e6bc3, "LV_GRID_FR_10", 0x1fffffa5 }, // Type: MACRO_FROM_STRING_VALUES
     {0x10b0ead1, "LV_STYLE_MARGIN_RIGHT", 0x1b }, // Type: UNKNOWN_TYPE
     {0x112d1946, "LV_STYLE_MARGIN_TOP", 0x18 }, // Type: UNKNOWN_TYPE
     {0x12434c36, "LV_GRID_ALIGN_CENTER", 0x01 }, // Type: lv_grid_align_t
@@ -221,6 +222,13 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x1bc72f1b, "LV_STR_SYMBOL_BULLET", 0x00 }, // Type: UNKNOWN_TYPE
     {0x1d2b2abd, "LV_STR_SYMBOL_CHARGE", 0x2a }, // Type: UNKNOWN_TYPE
     {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: lv_gridnav_ctrl_t
+    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
+    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
+    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
+    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
+    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
+    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
+    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
     {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
     {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
     {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
@@ -416,6 +424,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0xa4375777, "LV_ALIGN_OUT_RIGHT_TOP", 0x13 }, // Type: lv_align_t
     {0xa52c1366, "LV_ALIGN_OUT_BOTTOM_LEFT", 0x0d }, // Type: lv_align_t
     {0xa62f26af, "LV_BAR_ORIENTATION_HORIZONTAL", 0x01 }, // Type: lv_bar_orientation_t
+    {0xa7024a7a, "LV_GRID_TEMPLATE_LAST", 0x1fffffff }, // Type: MACRO_FROM_STRING_VALUES
     {0xaa3274d3, "LV_ALIGN_OUT_TOP_MID", 0x0b }, // Type: lv_align_t
     {0xaa85609e, "LV_BAR_ORIENTATION_AUTO", 0x00 }, // Type: lv_bar_orientation_t
     {0xabe47739, "LV_SLIDER_MODE_RANGE", 0x02 }, // Type: lv_slider_mode_t
@@ -438,6 +447,11 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0xc160013d, "LV_STYLE_LINE_OPA", 0x4d }, // Type: UNKNOWN_TYPE
     {0xc1b0f31a, "LV_STYLE_BG_GRAD_COLOR", 0x23 }, // Type: UNKNOWN_TYPE
     {0xc1faeb3b, "LV_SPAN_MODE_EXPAND", 0x01 }, // Type: lv_span_mode_t
+    {0xc265c533, "LV_GRID_FR_1", 0x1fffff9c }, // Type: MACRO_FROM_STRING_VALUES
+    {0xc265c534, "LV_GRID_FR_2", 0x1fffff9d }, // Type: MACRO_FROM_STRING_VALUES
+    {0xc265c535, "LV_GRID_FR_3", 0x1fffff9e }, // Type: MACRO_FROM_STRING_VALUES
+    {0xc265c536, "LV_GRID_FR_4", 0x1fffff9f }, // Type: MACRO_FROM_STRING_VALUES
+    {0xc265c537, "LV_GRID_FR_5", 0x1fffffa0 }, // Type: MACRO_FROM_STRING_VALUES
     {0xc361cb40, "LV_STYLE_BG_IMAGE_OPA", 0x29 }, // Type: UNKNOWN_TYPE
     {0xc361dc88, "LV_STYLE_BG_IMAGE_SRC", 0x28 }, // Type: UNKNOWN_TYPE
     {0xc3ee6bcc, "LV_SLIDER_ORIENTATION_AUTO", 0x00 }, // Type: lv_slider_orientation_t
@@ -828,6 +842,62 @@ char* lvgl_json_generate_values_json(void) {
     // LOG_DEBUG("Macro LV_PART_ANY not defined, skipped for JSON output.");
     #endif // LV_PART_ANY
 
+    #ifdef LV_GRID_TEMPLATE_LAST
+    if (!is_name_an_enum("LV_GRID_TEMPLATE_LAST")) {
+        cJSON_AddNumberToObject(json_root, "LV_GRID_TEMPLATE_LAST", (double)(LV_GRID_TEMPLATE_LAST));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_GRID_TEMPLATE_LAST not defined, skipped for JSON output.");
+    #endif // LV_GRID_TEMPLATE_LAST
+
+    #ifdef LV_GRID_FR_1
+    if (!is_name_an_enum("LV_GRID_FR_1")) {
+        cJSON_AddNumberToObject(json_root, "LV_GRID_FR_1", (double)(LV_GRID_FR_1));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_GRID_FR_1 not defined, skipped for JSON output.");
+    #endif // LV_GRID_FR_1
+
+    #ifdef LV_GRID_FR_2
+    if (!is_name_an_enum("LV_GRID_FR_2")) {
+        cJSON_AddNumberToObject(json_root, "LV_GRID_FR_2", (double)(LV_GRID_FR_2));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_GRID_FR_2 not defined, skipped for JSON output.");
+    #endif // LV_GRID_FR_2
+
+    #ifdef LV_GRID_FR_3
+    if (!is_name_an_enum("LV_GRID_FR_3")) {
+        cJSON_AddNumberToObject(json_root, "LV_GRID_FR_3", (double)(LV_GRID_FR_3));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_GRID_FR_3 not defined, skipped for JSON output.");
+    #endif // LV_GRID_FR_3
+
+    #ifdef LV_GRID_FR_4
+    if (!is_name_an_enum("LV_GRID_FR_4")) {
+        cJSON_AddNumberToObject(json_root, "LV_GRID_FR_4", (double)(LV_GRID_FR_4));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_GRID_FR_4 not defined, skipped for JSON output.");
+    #endif // LV_GRID_FR_4
+
+    #ifdef LV_GRID_FR_5
+    if (!is_name_an_enum("LV_GRID_FR_5")) {
+        cJSON_AddNumberToObject(json_root, "LV_GRID_FR_5", (double)(LV_GRID_FR_5));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_GRID_FR_5 not defined, skipped for JSON output.");
+    #endif // LV_GRID_FR_5
+
+    #ifdef LV_GRID_FR_10
+    if (!is_name_an_enum("LV_GRID_FR_10")) {
+        cJSON_AddNumberToObject(json_root, "LV_GRID_FR_10", (double)(LV_GRID_FR_10));
+    }
+    #else
+    // LOG_DEBUG("Macro LV_GRID_FR_10 not defined, skipped for JSON output.");
+    #endif // LV_GRID_FR_10
+
     char *json_string = cJSON_PrintUnformatted(json_root);
     cJSON_Delete(json_root);
 
@@ -974,7 +1044,7 @@ static bool unmarshal_coord(cJSON *node, lv_coord_t *dest) {
     if (cJSON_IsString(node) && node->valuestring) {
         const char *str = node->valuestring;
         size_t len = strlen(str);
-        if (len > 1 && str[len - 1] == '%') {
+        if (len > 2 && str[len - 1] == '%') {
             // Found '%', try parsing the number part
             // Create a temporary null-terminated string for the number part
             char num_part[32]; // Should be large enough for typical percentages
@@ -28229,16 +28299,20 @@ static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void
     // 2. Handle custom pre- and post-fixes in strings ('#', '@', '%')
     // Also handle non-prefixed strings that might be enums or regular strings.
     if (cJSON_IsString(json_value) && json_value->valuestring) {
-        const char *str_val = json_value->valuestring;
-        const size_t len = strlen(str_val);
+        char *str_val = json_value->valuestring;
+        size_t len = strlen(str_val);
         // Check for '#' color prefix
         if (len) {
-            if (str_val[len - 1] == '%') {
-               if (strcmp(expected_c_type, "lv_coord_t") == 0 || strcmp(expected_c_type, "int32_t") == 0) {
-                   return unmarshal_coord(json_value, (lv_coord_t *)dest);
+            if (len > 2 && str_val[len - 1] == '%') {
+               if (str_val[len - 2] != '%') {
+                 if (strcmp(expected_c_type, "lv_coord_t") == 0 || strcmp(expected_c_type, "int32_t") == 0) {
+                     return unmarshal_coord(json_value, (lv_coord_t *)dest);
+                 } else {
+                     LOG_ERR_JSON(json_value, "Unmarshal Error: Found percent string '%s' but expected type '%s'", str_val, expected_c_type);
+                     //return false;
+                 }
                } else {
-                   LOG_ERR_JSON(json_value, "Unmarshal Error: Found percent string '%s' but expected type '%s'", str_val, expected_c_type);
-                   return false;
+                 str_val[--len] = '\0';
                }
             }
             if (str_val[0] == '#') {
@@ -28246,7 +28320,7 @@ static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void
                    return unmarshal_color(json_value, (lv_color_t*)dest);
                } else {
                    LOG_ERR_JSON(json_value, "Unmarshal Error: Found color string '%s' but expected type '%s'", str_val, expected_c_type);
-                   return false;
+                   //return false;
                }
             }
             // Check for '@' pointer prefix
@@ -28256,7 +28330,7 @@ static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void
                     return unmarshal_registered_ptr(json_value, (void**)dest);
                } else {
                    LOG_ERR_JSON(json_value, "Unmarshal Error: Found registered pointer string '%s' but expected non-pointer type '%s'", str_val, expected_c_type);
-                   return false;
+                   //return false;
                }
             }
         }
@@ -28267,7 +28341,7 @@ static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void
         // For now, let's try enum unmarshal if it looks like lv_..._t or LV_..._T
         bool maybe_enum = (strncmp(expected_c_type, "lv_", 3) == 0 && strstr(expected_c_type, "_t")) || 
                           (strncmp(expected_c_type, "LV_", 3) == 0 && strstr(expected_c_type, "_T")) || 
-                          (strcmp(expected_c_type, "int32_t") == 0) || (strcmp(expected_c_type, "uint32_t") == 0);
+                          (strncmp(expected_c_type, "int", 3) == 0) || (strncmp(expected_c_type, "uint", 4) == 0);
         if (maybe_enum && strcmp(expected_c_type, "lv_obj_t") != 0 && strcmp(expected_c_type, "lv_style_t") != 0 /* add other known non-enums */) {
             if (unmarshal_enum_value(json_value, expected_c_type, (int*)dest)) {
                  return true; // Successfully parsed as enum string
@@ -28472,6 +28546,12 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
     // 2. Create the LVGL Object / Resource
     void *created_entity = NULL; // Can be lv_obj_t* or lv_style_t* etc.
     bool is_widget = true; // Is it an lv_obj_t based widget?
+    const char *type_str_for_create = type_str;
+
+    if (strcmp(type_str, "grid") == 0) {
+        type_str_for_create = "obj"; // A 'grid' is a generic obj with grid layout
+        LOG_INFO("Encountered 'grid' type, will create as 'lv_obj' and apply grid layout.");
+    }
 
     // Check for custom creators (e.g., for styles)
     if (strcmp(type_str, "fs_drv") == 0) {
@@ -28507,7 +28587,7 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
     else {
         // Default: Assume it's a widget type (lv_obj_t based)
         char create_func_name[64];
-        snprintf(create_func_name, sizeof(create_func_name), "lv_%s_create", type_str);
+        snprintf(create_func_name, sizeof(create_func_name), "lv_%s_create", type_str_for_create);
         const invoke_table_entry_t* create_entry = find_invoke_entry(create_func_name);
         if (!create_entry) {
             LOG_ERR_JSON(node, "Render Error: Create function '%s' not found.", create_func_name);
@@ -28546,13 +28626,88 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
         }
     }
 
+
+    // Special handling for "grid" type to set up column and row descriptors
+    if (created_entity && is_widget && strcmp(type_str, "grid") == 0) { // type_str is original JSON type
+        lv_obj_t* grid_obj = (lv_obj_t*)created_entity;
+        cJSON *cols_item_json = cJSON_GetObjectItemCaseSensitive(node, "cols");
+        cJSON *rows_item_json = cJSON_GetObjectItemCaseSensitive(node, "rows");
+
+        int32_t* col_dsc_array = NULL;
+        int32_t* row_dsc_array = NULL;
+        bool grid_setup_ok = true;
+
+        if (cols_item_json && cJSON_IsArray(cols_item_json)) {
+            int num_cols = cJSON_GetArraySize(cols_item_json);
+            col_dsc_array = (int32_t*)LV_MALLOC(sizeof(int32_t) * (num_cols + 1));
+            if (col_dsc_array) {
+                for (int i = 0; i < num_cols; i++) {
+                    cJSON *val_item = cJSON_GetArrayItem(cols_item_json, i);
+                    if (!unmarshal_value(val_item, "int32_t", &col_dsc_array[i])) { // Use unmarshal_value
+                        LOG_ERR_JSON(val_item, "Grid Error: Failed to parse 'cols' array item %d as int32_t.", i);
+                        LV_FREE(col_dsc_array); col_dsc_array = NULL; grid_setup_ok = false;
+                        break;
+                    }
+                }
+                if (col_dsc_array) col_dsc_array[num_cols] = LV_GRID_TEMPLATE_LAST;
+            } else {
+                LOG_ERR("Grid Error: Failed to allocate memory for column descriptors.");
+                grid_setup_ok = false;
+            }
+        } else {
+            LOG_ERR_JSON(node, "Grid Error: 'cols' array is missing or not an array for grid type.");
+            grid_setup_ok = false;
+        }
+
+        // Only proceed with rows if cols were OK and rows_item_json is valid
+        if (grid_setup_ok && rows_item_json && cJSON_IsArray(rows_item_json)) {
+            int num_rows = cJSON_GetArraySize(rows_item_json);
+            row_dsc_array = (int32_t*)LV_MALLOC(sizeof(int32_t) * (num_rows + 1));
+            if (row_dsc_array) {
+                for (int i = 0; i < num_rows; i++) {
+                    cJSON *val_item = cJSON_GetArrayItem(rows_item_json, i);
+                    if (!unmarshal_value(val_item, "int32_t", &row_dsc_array[i])) { // Use unmarshal_value
+                        LOG_ERR_JSON(val_item, "Grid Error: Failed to parse 'rows' array item %d as int32_t.", i);
+                        LV_FREE(row_dsc_array); row_dsc_array = NULL; grid_setup_ok = false;
+                        break;
+                    }
+                }
+                if (row_dsc_array) row_dsc_array[num_rows] = LV_GRID_TEMPLATE_LAST;
+            } else {
+                LOG_ERR("Grid Error: Failed to allocate memory for row descriptors.");
+                grid_setup_ok = false;
+            }
+        } else if (grid_setup_ok) { // This implies rows_item_json was missing/invalid
+             LOG_ERR_JSON(node, "Grid Error: 'rows' array is missing or not an array for grid type.");
+             grid_setup_ok = false;
+        }
+
+        if (grid_setup_ok && col_dsc_array && row_dsc_array) {
+            char temp_name_buf[64]; // For snprintf
+
+            snprintf(temp_name_buf, sizeof(temp_name_buf), "grid_col_dsc_%p", (void*)grid_obj);
+            lvgl_json_register_ptr(temp_name_buf, (void*)col_dsc_array); // Registry will lv_strdup the name
+
+            snprintf(temp_name_buf, sizeof(temp_name_buf), "grid_row_dsc_%p", (void*)grid_obj);
+            lvgl_json_register_ptr(temp_name_buf, (void*)row_dsc_array); // Registry will lv_strdup the name
+            
+            lv_obj_set_grid_dsc_array(grid_obj, col_dsc_array, row_dsc_array);
+            // Note: Memory for col_dsc_array and row_dsc_array should ideally be freed on LV_EVENT_DELETE of grid_obj.
+            // This is not added here to keep changes minimal as per request.
+        } else {
+            if (col_dsc_array) { LV_FREE(col_dsc_array); } // Free if allocated but not used
+            if (row_dsc_array) { LV_FREE(row_dsc_array); } // Free if allocated but not used
+            LOG_ERR_JSON(node, "Grid Error: Failed to set up complete grid descriptors. Grid layout will not apply.");
+        }
+    }
     // 3. Set Properties
     cJSON *prop = NULL;
     for (prop = node->child; prop != NULL; prop = prop->next) {
         const char *prop_name = prop->string;
         if (!prop_name) continue;
-        // Skip known control properties
-        if (strcmp(prop_name, "type") == 0 || strcmp(prop_name, "id") == 0 || strcmp(prop_name, "children") == 0) {
+        // Skip known control properties OR grid-specific setup properties handled earlier
+        if (strcmp(prop_name, "type") == 0 || strcmp(prop_name, "id") == 0 || strcmp(prop_name, "children") == 0 || 
+            (strcmp(type_str, "grid") == 0 && (strcmp(prop_name, "cols") == 0 || strcmp(prop_name, "rows") == 0))) {
             continue;
         }
         // Property value must be an array of arguments
@@ -28573,17 +28728,15 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
            setter_entry = find_invoke_entry(setter_name);
         }
 
-        // Try widget style-setter (e.g., lv_obj_style_set_...)
-        if (!setter_entry && is_widget) {
-            snprintf(setter_name, sizeof(setter_name), "lv_obj_set_style_%s", prop_name);
-            setter_entry = find_invoke_entry(setter_name);
-            if (!setter_entry) { LOG_ERR_JSON(node, "no style setter for %s\n", setter_name); }
-            if (setter_entry && cJSON_GetArraySize(prop) == 1) { cJSON_AddItemToArray(prop, cJSON_CreateNumber(0)); }
-        }
-
         // Try generic lv_obj setter if specific not found or not applicable
         if (!setter_entry && is_widget) { // Only widgets have generic obj setters
             snprintf(setter_name, sizeof(setter_name), "lv_obj_set_%s", prop_name);
+            setter_entry = find_invoke_entry(setter_name);
+        }
+
+        // Try generic lv_obj method if not found or not applicable
+        if (!setter_entry && is_widget) { // Only widgets have generic obj setters
+            snprintf(setter_name, sizeof(setter_name), "lv_obj_%s", prop_name);
             setter_entry = find_invoke_entry(setter_name);
         }
 
@@ -28591,6 +28744,21 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
         if (!setter_entry && is_widget) { // Only widgets have generic obj setters
             snprintf(setter_name, sizeof(setter_name), "lv_obj_set_style_%s", prop_name);
             setter_entry = find_invoke_entry(setter_name);
+            if (setter_entry && cJSON_GetArraySize(prop) == 1) { cJSON_AddItemToArray(prop, cJSON_CreateNumber(0)); }
+        }
+
+        // Try style-setter (e.g., lv_style_set_...)
+        if (!setter_entry) {
+            snprintf(setter_name, sizeof(setter_name), "lv_style_set_%s", prop_name);
+            setter_entry = find_invoke_entry(setter_name);
+            //if (!setter_entry) { LOG_ERR_JSON(node, "no style setter for %s\n", setter_name); }
+        }
+
+        // Try style-method (e.g., lv_style_...)
+        if (!setter_entry) {
+            snprintf(setter_name, sizeof(setter_name), "lv_style_%s", prop_name);
+            setter_entry = find_invoke_entry(setter_name);
+            //if (!setter_entry) { LOG_ERR_JSON(node, "no style setter for %s\n", setter_name); }
         }
 
         if (!setter_entry) {
