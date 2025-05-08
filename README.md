@@ -2,9 +2,9 @@
 
 Define and preview LVGL UI layouts in YAML/JSON.
 
+Mostly vibe-coded because this was supposed to be a quick thing... but now it's somehow parsing the LVGL JSON API definition and auto-generating a ~30k loc C library from the API definition automatically... 🤷 
+
 # Example
-
-
 
 ```
 # Styles
