@@ -124,4 +124,9 @@ Half-rudimentary but somewhat useful. A couple things to note:
       id: '@feed_rate_scale'
 ```
 
-Formerly: A simple way to preview LVGL UIs quickly to play with layouts/widgets/UI designs.
+# Convert your YAML to JSON
+
+* `yq -o=json eval ui.yaml > ui.json`
+
+# Formerly
+A simple way to preview LVGL UIs quickly to play with layouts/widgets/UI designs.
