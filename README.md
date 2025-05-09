@@ -247,7 +247,8 @@ An example layout: CNC status interface:
             unit: MM/MIN
             label: JOG
             letter: J
-            ovr: Jog Ovr```
+            ovr: Jog Ovr
+```
 
 # Convert your YAML to JSON
 
