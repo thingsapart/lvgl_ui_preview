@@ -100,27 +100,27 @@
           "children": [
             {
               "type": "label",
-              "text_font": "@font_kode_18",
+              "text_font": "@font_kode_14",
               "text": "$abs_pos",
               "flex_grow": 1,
               "text_align": "LV_TEXT_ALIGN_RIGHT"
             },
             {
               "type": "label",
-              "text_font": "@font_montserrat_24",
+              "text_font": "@font_montserrat_14",
               "text": "",
               "width": 14
             },
             {
               "type": "label",
-              "text_font": "@font_kode_18",
+              "text_font": "@font_kode_14",
               "text": "$delta_pos",
               "text_align": "LV_TEXT_ALIGN_RIGHT",
               "flex_grow": 1
             },
             {
               "type": "label",
-              "text_font": "@font_montserrat_24",
+              "text_font": "@font_montserrat_14",
               "text": "",
               "width": 14
             }
@@ -295,11 +295,7 @@
     ],
     "size": [
       "100%",
-      "100%"
-    ],
-    "add_style": [
-      "@debug",
-      0
+      240
     ],
     "children": [
       {
@@ -311,6 +307,11 @@
         ],
         "height": "100%",
         "flex_grow": 60,
+        "border_side": "LV_BORDER_SIDE_RIGHT",
+        "border_width": 2,
+        "radius": 0,
+        "border_color": "#ffffff",
+        "border_opa": 90,
         "children": [
           {
             "type": "use-view",
@@ -372,10 +373,7 @@
               "label": "SPEED",
               "letter": "S",
               "ovr": "Speed Ovr"
-            }
-          },
-          {
-            "type": "use-view",
+            },
             "id": "@feed_rate_scale",
             "context": {
               "unit": "MM/MIN",

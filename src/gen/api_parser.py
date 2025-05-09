@@ -32,7 +32,8 @@ DEFAULT_ENUM_INCLUDES = ['lv_align_t', 'lv_opa_enum_t', 'lv_layout_t',
                          'lv_style_parts_t', 'lv_arc_mode_t', 'lv_bar_mode_t', 
                          'lv_bar_orientation_t', 'lv_buttonmatrix_ctrl_t', 'lv_scale_mode_t', 
                          'lv_slider_mode_t', 'lv_slider_orientation_t', 'lv_span_overflow_t', 
-                         'lv_span_mode_t', 'lv_table_cell_ctrl_t', 'lv_gridnav_ctrl_t', ]
+                         'lv_span_mode_t', 'lv_table_cell_ctrl_t', 'lv_gridnav_ctrl_t', 
+                         'lv_border_side_t', ]
 DEFAULT_ENUM_INCLUDE_PREFIXES = ["LV_"]
 DEFAULT_ENUM_EXCLUDES = []
 DEFAULT_ENUM_EXCLUDE_PREFIXES = ["_LV_"]

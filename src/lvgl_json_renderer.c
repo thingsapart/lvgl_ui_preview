@@ -317,6 +317,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x2a4f71fe, "LV_STYLE_PROP_ANY", 0xff }, // Type: UNKNOWN_TYPE
     {0x2a4f9403, "LV_STYLE_PROP_INV", 0x00 }, // Type: UNKNOWN_TYPE
     {0x2aa565ef, "LV_STYLE_BASE_DIR", 0x27 }, // Type: UNKNOWN_TYPE
+    {0x2ae7c8c5, "LV_BORDER_SIDE_RIGHT", 0x08 }, // Type: lv_border_side_t
     {0x2c90dc45, "LV_GRIDNAV_CTRL_HORIZONTAL_MOVE_ONLY", 0x04 }, // Type: lv_gridnav_ctrl_t
     {0x2dd3e235, "LV_TEXT_ALIGN_CENTER", 0x02 }, // Type: lv_text_align_t
     {0x2e9760f5, "LV_STYLE_BG_IMAGE_RECOLOR_OPA", 0x2b }, // Type: UNKNOWN_TYPE
@@ -390,6 +391,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x52d3fe19, "LV_ALIGN_OUT_RIGHT_BOTTOM", 0x15 }, // Type: lv_align_t
     {0x52d680d9, "LV_STYLE_GRID_CELL_COLUMN_SPAN", 0x84 }, // Type: UNKNOWN_TYPE
     {0x538bfef3, "LV_STYLE_BORDER_OPA", 0x32 }, // Type: UNKNOWN_TYPE
+    {0x544e84e4, "LV_BORDER_SIDE_INTERNAL", 0x10 }, // Type: lv_border_side_t
     {0x559e9e23, "LV_STYLE_GRID_CELL_ROW_SPAN", 0x87 }, // Type: UNKNOWN_TYPE
     {0x583355b0, "LV_STR_SYMBOL_VOLUME_MAX", 0x0e }, // Type: UNKNOWN_TYPE
     {0x583356a4, "LV_STR_SYMBOL_VOLUME_MID", 0x0d }, // Type: UNKNOWN_TYPE
@@ -404,12 +406,14 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x5eab8875, "LV_OPA_0", 0x00 }, // Type: lv_opa_enum_t
     {0x5f06e2a9, "LV_GRID_ALIGN_SPACE_AROUND", 0x05 }, // Type: lv_grid_align_t
     {0x5f754928, "LV_SCALE_MODE_VERTICAL_RIGHT", 0x03 }, // Type: lv_scale_mode_t
+    {0x606bea3a, "LV_BORDER_SIDE_TOP", 0x02 }, // Type: lv_border_side_t
     {0x6088f854, "LV_SCALE_MODE_ROUND_INNER", 0x04 }, // Type: lv_scale_mode_t
     {0x60cf07ef, "LV_SPAN_MODE_LAST", 0x03 }, // Type: lv_span_mode_t
     {0x60f97b87, "LV_SCALE_MODE_ROUND_OUTER", 0x05 }, // Type: lv_scale_mode_t
     {0x610409e0, "LV_ALIGN_TOP_RIGHT", 0x03 }, // Type: lv_align_t
     {0x615a2cc6, "LV_GRID_CONTENT", 0x1fffff9a }, // Type: MACRO_FROM_STRING_VALUES
     {0x62f95584, "LV_OPA_COVER", 0xff }, // Type: lv_opa_enum_t
+    {0x63023dfc, "LV_BORDER_SIDE_BOTTOM", 0x01 }, // Type: lv_border_side_t
     {0x64461015, "LV_FLEX_ALIGN_END", 0x01 }, // Type: lv_flex_align_t
     {0x65ae0e92, "LV_STYLE_BORDER_COLOR", 0x31 }, // Type: UNKNOWN_TYPE
     {0x67148cf3, "LV_STYLE_BORDER_WIDTH", 0x30 }, // Type: UNKNOWN_TYPE
@@ -420,6 +424,9 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x6b25fd61, "LV_STYLE_TRANSITION", 0x68 }, // Type: UNKNOWN_TYPE
     {0x6d18e635, "LV_BUTTONMATRIX_CTRL_CUSTOM_1", 0x4000 }, // Type: lv_buttonmatrix_ctrl_t
     {0x6d18e636, "LV_BUTTONMATRIX_CTRL_CUSTOM_2", 0x8000 }, // Type: lv_buttonmatrix_ctrl_t
+    {0x6de19d7a, "LV_BORDER_SIDE_FULL", 0x0f }, // Type: lv_border_side_t
+    {0x6de4a2f2, "LV_BORDER_SIDE_LEFT", 0x04 }, // Type: lv_border_side_t
+    {0x6de5e737, "LV_BORDER_SIDE_NONE", 0x00 }, // Type: lv_border_side_t
     {0x6df7bf6e, "LV_STYLE_LINE_ROUNDED", 0x4b }, // Type: UNKNOWN_TYPE
     {0x6ebbe45c, "LV_STYLE_FLEX_FLOW", 0x7a }, // Type: UNKNOWN_TYPE
     {0x6ebc8a43, "LV_STYLE_FLEX_GROW", 0x7e }, // Type: UNKNOWN_TYPE

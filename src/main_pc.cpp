@@ -172,6 +172,7 @@ extern lv_indev_t * lv_sdl_keyboard_create(void);
 extern void lv_sdl_window_set_zoom(lv_display_t * display, int zoom);
 extern void lv_log_print_g_cb(const char * buf); // Example log function
 
+LV_FONT_DECLARE(font_kode_14);
 LV_FONT_DECLARE(font_kode_20);
 LV_FONT_DECLARE(font_kode_24);
 LV_FONT_DECLARE(lcd_7_segment_24);
@@ -221,14 +222,15 @@ int main(int argc, char *argv[]) {
     // Setup signal handler (keep from target code)
     signal(SIGINT, signal_handler);
 
+    lvgl_json_register_ptr("font_kode_14", "lv_font_t", (void *) &font_kode_14);
     lvgl_json_register_ptr("font_kode_20", "lv_font_t", (void *) &font_kode_20);
     lvgl_json_register_ptr("font_kode_24", "lv_font_t", (void *) &font_kode_24);
     lvgl_json_register_ptr("lcd_7_segment_14", "lv_font_t", (void *) &lcd_7_segment_14);
     lvgl_json_register_ptr("lcd_7_segment_18", "lv_font_t", (void *) &lcd_7_segment_18);
     lvgl_json_register_ptr("lcd_7_segment_24", "lv_font_t", (void *) &lcd_7_segment_24);
     lvgl_json_register_ptr("font_montserrat_24", "lv_font_t", (void *) &lv_font_montserrat_24);
-    lvgl_json_register_ptr("font_montserrat_20", "lv_font_t", (void *) &lv_font_montserrat_20);
     lvgl_json_register_ptr("font_montserrat_14", "lv_font_t", (void *) &lv_font_montserrat_14);
+    lvgl_json_register_ptr("font_montserrat_12", "lv_font_t", (void *) &lv_font_montserrat_12);
 
     // --- Initial UI Load ---
     LOG_USER("Monitoring file: %s", monitored_filepath);
