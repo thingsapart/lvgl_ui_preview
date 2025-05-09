@@ -226,6 +226,9 @@ int main(int argc, char *argv[]) {
     lvgl_json_register_ptr("lcd_7_segment_14", "lv_font_t", (void *) &lcd_7_segment_14);
     lvgl_json_register_ptr("lcd_7_segment_18", "lv_font_t", (void *) &lcd_7_segment_18);
     lvgl_json_register_ptr("lcd_7_segment_24", "lv_font_t", (void *) &lcd_7_segment_24);
+    lvgl_json_register_ptr("font_montserrat_24", "lv_font_t", (void *) &lv_font_montserrat_24);
+    lvgl_json_register_ptr("font_montserrat_20", "lv_font_t", (void *) &lv_font_montserrat_20);
+    lvgl_json_register_ptr("font_montserrat_14", "lv_font_t", (void *) &lv_font_montserrat_14);
 
     // --- Initial UI Load ---
     LOG_USER("Monitoring file: %s", monitored_filepath);

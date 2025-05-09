@@ -1,20 +1,84 @@
 # Styles
 - type: style
   id: '@debug'
+  outline_width: 1
+  outline_color: '#ffeeff'
+  outline_opa: 150
   border_width: 1
   border_color: '#ffeeff'
-  border_opa: 100
+  border_opa: 150
   radius: 0
+
 - type: style
   id: '@container'
   pad_all: 0
   margin_all: 0
   border_width: 0
+  pad_row: 3
+  pad_column: 5
+
 - type: style
   id: '@bar_indicator'
   radius: 4
 
-# UI Tree
+- type: style
+  id: '@flex_x'
+  layout: LV_LAYOUT_FLEX
+  flex_flow: LV_FLEX_FLOW_ROW
+
+- type: style
+  id: '@flex_y'
+  layout: LV_LAYOUT_FLEX
+  flex_flow: LV_FLEX_FLOW_COLUMN
+
+# Components/Sub-Views
+- type: component
+  id: '@axis_pos_display'
+  root:
+    add_style: ['@flex_y', 0]
+    add_style: ['@container', 0]
+    size: [100%, LV_SIZE_CONTENT]
+    pad_all: 10
+    pad_bottom: 20
+    children:
+      -
+        add_style: ['@flex_x', 0]
+        add_style: ['@container', 0]
+        size: [100%, LV_SIZE_CONTENT]
+        children:
+          - type: 'label'
+            text_font: '@font_kode_24'
+            text: $axis
+            width: 50
+          - type: 'label'
+            text_font: '@font_kode_24'
+            text: $wcs_pos
+            flex_grow: 1
+            text_align: LV_TEXT_ALIGN_RIGHT
+      -
+        add_style: ['@flex_x', 0]
+        add_style: ['@container', 0]
+        size: [100%, LV_SIZE_CONTENT]
+        children:
+          - type: 'label'
+            text_font: '@font_kode_18'
+            text: $abs_pos
+            flex_grow: 1
+            text_align: LV_TEXT_ALIGN_RIGHT
+          - type: 'label'
+            text_font: '@font_montserrat_24'
+            text: "\uF124"
+            width: 14
+          - type: 'label'
+            text_font: '@font_kode_18'
+            text: $delta_pos
+            text_align: LV_TEXT_ALIGN_RIGHT
+            flex_grow: 1
+          - type: 'label'
+            text_font: '@font_montserrat_24'
+            text: "\uF051"
+            width: 14
+
 - type: component
   id: '@feed_rate_scale'
   root:
@@ -49,13 +113,13 @@
                 text_font: '@font_kode_24'
                 grid_cell: [LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, 0, 1]
                 height: LV_SIZE_CONTENT
-                pad_left: 20
+                pad_left: 10
               - type: label
                 grid_cell: [LV_GRID_ALIGN_END, 1, 1, LV_GRID_ALIGN_END, 0, 1]
                 text_font: '@font_kode_24'
                 height: LV_SIZE_CONTENT
                 text: '1000'
-                pad_right: 20
+                pad_right: 10
           - layout: LV_LAYOUT_FLEX
             flex_flow: LV_FLEX_FLOW_COLUMN
             add_style: ['@container', 0]
@@ -77,12 +141,14 @@
                 height: 20
                 margin_left: 15
                 margin_right: 15
+
       # Right column
       - layout: LV_LAYOUT_FLEX
         add_style: ['@container', 0]
         flex_flow: LV_FLEX_FLOW_COLUMN
         width: LV_SIZE_CONTENT
-        pad_right: 20
+        height: LV_SIZE_CONTENT
+        pad_right: 0
         children:
           - type: label
             text: $unit
@@ -92,27 +158,69 @@
           - type: label
             text: 100%%
           - type: label
-            text: Power
-          - type: label
             text: 65%%
 
+# Main UI Layout
 - layout: LV_LAYOUT_FLEX
-  flex_flow: LV_FLEX_FLOW_COLUMN
+  flex_flow: LV_FLEX_FLOW_ROW
   add_style: ['@container', 0]
   size: [100%, 100%]
+  add_style: ['@debug', 0]
   children:
-    - type: use-view
-      id: '@feed_rate_scale'
-      context:
-        unit: MM/MIN
-        label: FEED
-        letter: F
-        ovr: Feed Ovr
-    - type: use-view
-      id: '@feed_rate_scale'
-      context:
-        unit: /MIN
-        label: SPEED
-        letter: S
-        ovr: Speed Ovr
+    # Left main column (axis positions)
+    - layout: LV_LAYOUT_FLEX
+      flex_flow: LV_FLEX_FLOW_COLUMN
+      add_style: ['@container', 0]
+      height: 100%
+      flex_grow: 60
+      children:
+        - type: use-view
+          id: '@axis_pos_display'
+          context:
+            axis: X
+            wcs_pos: '11.000'
+            abs_pos: '51.000'
+            delta_pos: '2.125'
+        - type: use-view
+          id: '@axis_pos_display'
+          context:
+            axis: Y
+            wcs_pos: '22.000'
+            abs_pos: '72.000'
+            delta_pos: '-12.125'
+        - type: use-view
+          id: '@axis_pos_display'
+          context:
+            axis: Z
+            wcs_pos: '1.000'
+            abs_pos: '1.000'
+            delta_pos: '0.125'
 
+    # Right main column (Feeds & Speeds)
+    - layout: LV_LAYOUT_FLEX
+      flex_flow: LV_FLEX_FLOW_COLUMN
+      add_style: ['@container', 0]
+      height: 100%
+      flex_grow: 45
+      children:
+        - type: use-view
+          id: '@feed_rate_scale'
+          context:
+            unit: MM/MIN
+            label: FEED
+            letter: F
+            ovr: Feed Ovr
+        - type: use-view
+          id: '@feed_rate_scale'
+          context:
+            unit: /MIN
+            label: SPEED
+            letter: S
+            ovr: Speed Ovr
+        - type: use-view
+          id: '@feed_rate_scale'
+          context:
+            unit: MM/MIN
+            label: JOG
+            letter: J
+            ovr: Jog Ovr
