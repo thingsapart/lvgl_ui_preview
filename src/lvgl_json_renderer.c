@@ -292,6 +292,8 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
     {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
     {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
+    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
+    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
     {0x1e46e344, "LV_STR_SYMBOL_SETTINGS", 0x07 }, // Type: UNKNOWN_TYPE
     {0x1e605647, "LV_BUTTONMATRIX_CTRL_NO_REPEAT", 0x20 }, // Type: lv_buttonmatrix_ctrl_t
     {0x1fe9ffc1, "LV_STYLE_ROTARY_SENSITIVITY", 0x76 }, // Type: UNKNOWN_TYPE
@@ -349,6 +351,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x3a1253e0, "LV_STR_SYMBOL_BATTERY_FULL", 0x31 }, // Type: UNKNOWN_TYPE
     {0x3d727e82, "LV_ALIGN_BOTTOM_RIGHT", 0x06 }, // Type: lv_align_t
     {0x3da6341b, "LV_STYLE_MAX_WIDTH", 0x05 }, // Type: UNKNOWN_TYPE
+    {0x3e20f98e, "LV_BORDER_SIDE_TOP_BOTTOM", 0x03 }, // Type: MACRO_FROM_STRING_VALUES
     {0x3e327fc4, "LV_PART_ANY", 0xf0000 }, // Type: lv_style_parts_t
     {0x3e950be2, "LV_STR_SYMBOL_REFRESH", 0x0b }, // Type: UNKNOWN_TYPE
     {0x40a7aa63, "LV_STYLE_GRID_CELL_ROW_POS", 0x86 }, // Type: UNKNOWN_TYPE
@@ -376,6 +379,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x48f1f330, "LV_STR_SYMBOL_BACKSPACE", 0x3a }, // Type: UNKNOWN_TYPE
     {0x4a11507f, "LV_FLEX_ALIGN_CENTER", 0x02 }, // Type: lv_flex_align_t
     {0x4b1d47b9, "LV_ALIGN_OUT_BOTTOM_RIGHT", 0x0f }, // Type: lv_align_t
+    {0x4b72bccf, "LV_BORDER_SIDE_LEFT_RIGHT", 0x0c }, // Type: MACRO_FROM_STRING_VALUES
     {0x4be33b98, "LV_TABLE_CELL_CTRL_TEXT_CROP", 0x02 }, // Type: lv_table_cell_ctrl_t
     {0x4cd86641, "LV_STYLE_ALIGN", 0x0a }, // Type: UNKNOWN_TYPE
     {0x4d0261b5, "LV_ALIGN_DEFAULT", 0x00 }, // Type: lv_align_t

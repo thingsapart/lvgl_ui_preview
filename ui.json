@@ -37,6 +37,120 @@
     "flex_flow": "LV_FLEX_FLOW_COLUMN"
   },
   {
+    "type": "style",
+    "id": "@indicator_green",
+    "text_color": "#44ee44"
+  },
+  {
+    "type": "style",
+    "id": "@indicator_yellow",
+    "text_color": "#ffff55"
+  },
+  {
+    "type": "style",
+    "id": "@jog_btn",
+    "pad_all": 5,
+    "pad_bottom": 10,
+    "pad_top": 10,
+    "margin_all": 0,
+    "radius": 2
+  },
+  {
+    "type": "style",
+    "id": "@border_top_btm",
+    "border_width": 1,
+    "border_color": "#ffffff",
+    "border_opa": 50,
+    "border_side": "LV_BORDER_SIDE_TOP_BOTTOM"
+  },
+  {
+    "type": "style",
+    "id": "@border_right",
+    "border_width": 1,
+    "border_color": "#ffffff",
+    "border_opa": 50,
+    "border_side": "LV_BORDER_SIDE_RIGHT"
+  },
+  {
+    "type": "component",
+    "id": "@axis_jog_speed_adjust",
+    "root": {
+      "add_style": [
+        "@flex_x",
+        0
+      ],
+      "add_style": [
+        "@container",
+        0
+      ],
+      "size": [
+        "100%",
+        "LV_SIZE_CONTENT"
+      ],
+      "pad_all": 10,
+      "pad_bottom": 20,
+      "children": [
+        {
+          "type": "label",
+          "text": "$label",
+          "width": 20
+        },
+        {
+          "type": "button",
+          "add_style": [
+            "@jog_btn",
+            0
+          ],
+          "children": [
+            {
+              "type": "label",
+              "text": "$dist_0"
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "add_style": [
+            "@jog_btn",
+            0
+          ],
+          "children": [
+            {
+              "type": "label",
+              "text": "$dist_1"
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "add_style": [
+            "@jog_btn",
+            0
+          ],
+          "children": [
+            {
+              "type": "label",
+              "text": "$dist_2"
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "add_style": [
+            "@jog_btn",
+            0
+          ],
+          "children": [
+            {
+              "type": "label",
+              "text": "$dist_3"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
     "type": "component",
     "id": "@axis_pos_display",
     "root": {
@@ -80,6 +194,10 @@
               "text_font": "@font_kode_24",
               "text": "$wcs_pos",
               "flex_grow": 1,
+              "add_style": [
+                "@indicator_green",
+                0
+              ],
               "text_align": "LV_TEXT_ALIGN_RIGHT"
             }
           ]
@@ -103,7 +221,11 @@
               "text_font": "@font_kode_14",
               "text": "$abs_pos",
               "flex_grow": 1,
-              "text_align": "LV_TEXT_ALIGN_RIGHT"
+              "text_align": "LV_TEXT_ALIGN_RIGHT",
+              "add_style": [
+                "@indicator_yellow",
+                0
+              ]
             },
             {
               "type": "label",
@@ -116,6 +238,10 @@
               "text_font": "@font_kode_14",
               "text": "$delta_pos",
               "text_align": "LV_TEXT_ALIGN_RIGHT",
+              "add_style": [
+                "@indicator_yellow",
+                0
+              ],
               "flex_grow": 1
             },
             {
@@ -144,6 +270,7 @@
       "layout": "LV_LAYOUT_FLEX",
       "flex_flow": "LV_FLEX_FLOW_ROW",
       "height": "LV_SIZE_CONTENT",
+      "pad_column": 0,
       "children": [
         {
           "layout": "LV_LAYOUT_FLEX",
@@ -161,7 +288,11 @@
               "text": "$label",
               "height": "LV_SIZE_CONTENT",
               "width": "100%",
-              "text_font": "@font_kode_20"
+              "text_font": "@font_kode_20",
+              "add_style": [
+                "@border_top_btm",
+                0
+              ]
             },
             {
               "type": "grid",
@@ -263,11 +394,20 @@
           "width": "LV_SIZE_CONTENT",
           "height": "LV_SIZE_CONTENT",
           "pad_right": 0,
+          "flex_align": [
+            "LV_FLEX_ALIGN_CENTER",
+            "LV_FLEX_ALIGN_SPACE_AROUND",
+            "LV_FLEX_ALIGN_CENTER"
+          ],
           "children": [
             {
               "type": "label",
               "text": "$unit",
-              "text_font": "@font_kode_20"
+              "text_font": "@font_kode_20",
+              "add_style": [
+                "@border_top_btm",
+                0
+              ]
             },
             {
               "type": "label",
@@ -287,6 +427,170 @@
     }
   },
   {
+    "type": "component",
+    "id": "@jog_feed",
+    "root": {
+      "size": [
+        "100%",
+        "100%"
+      ],
+      "add_style": [
+        "@container",
+        0
+      ],
+      "layout": "LV_LAYOUT_FLEX",
+      "flex_flow": "LV_FLEX_FLOW_ROW",
+      "height": "LV_SIZE_CONTENT",
+      "pad_column": 0,
+      "children": [
+        {
+          "layout": "LV_LAYOUT_FLEX",
+          "add_style": [
+            "@container",
+            0
+          ],
+          "flex_flow": "LV_FLEX_FLOW_COLUMN",
+          "width": "100%",
+          "height": "LV_SIZE_CONTENT",
+          "flex_grow": 1,
+          "children": [
+            {
+              "type": "label",
+              "text": "$label",
+              "height": "LV_SIZE_CONTENT",
+              "width": "100%",
+              "text_font": "@font_kode_20",
+              "add_style": [
+                "@border_top_btm",
+                0
+              ]
+            },
+            {
+              "type": "grid",
+              "cols": [
+                35,
+                45,
+                20,
+                40
+              ],
+              "rows": [
+                "LV_GRID_CONTENT"
+              ],
+              "add_style": [
+                "@container",
+                0
+              ],
+              "width": "100%",
+              "height": "LV_SIZE_CONTENT",
+              "pad_left": 10,
+              "children": [
+                {
+                  "type": "label",
+                  "text": "XY",
+                  "text_font": "@font_kode_20",
+                  "grid_cell": [
+                    "LV_GRID_ALIGN_START",
+                    0,
+                    1,
+                    "LV_GRID_ALIGN_START",
+                    0,
+                    1
+                  ],
+                  "height": "LV_SIZE_CONTENT"
+                },
+                {
+                  "type": "label",
+                  "grid_cell": [
+                    "LV_GRID_ALIGN_START",
+                    1,
+                    1,
+                    "LV_GRID_ALIGN_START",
+                    0,
+                    1
+                  ],
+                  "text_font": "@font_kode_20",
+                  "height": "LV_SIZE_CONTENT",
+                  "text": "10",
+                  "pad_right": 15,
+                  "add_style": [
+                    "@border_right",
+                    0
+                  ],
+                  "add_style": [
+                    "@indicator_yellow",
+                    0
+                  ]
+                },
+                {
+                  "type": "label",
+                  "text": "Z",
+                  "text_font": "@font_kode_20",
+                  "grid_cell": [
+                    "LV_GRID_ALIGN_START",
+                    2,
+                    1,
+                    "LV_GRID_ALIGN_START",
+                    0,
+                    1
+                  ],
+                  "height": "LV_SIZE_CONTENT"
+                },
+                {
+                  "type": "label",
+                  "grid_cell": [
+                    "LV_GRID_ALIGN_START",
+                    3,
+                    1,
+                    "LV_GRID_ALIGN_START",
+                    0,
+                    1
+                  ],
+                  "text_font": "@font_kode_20",
+                  "height": "LV_SIZE_CONTENT",
+                  "text": "5",
+                  "add_style": [
+                    "@indicator_yellow",
+                    0
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "layout": "LV_LAYOUT_FLEX",
+          "add_style": [
+            "@container",
+            0
+          ],
+          "flex_flow": "LV_FLEX_FLOW_COLUMN",
+          "width": "LV_SIZE_CONTENT",
+          "height": "LV_SIZE_CONTENT",
+          "pad_right": 0,
+          "children": [
+            {
+              "type": "label",
+              "text": "$unit",
+              "text_font": "@font_kode_20",
+              "add_style": [
+                "@border_top_btm",
+                0
+              ]
+            },
+            {
+              "type": "label",
+              "text": "$ovr"
+            },
+            {
+              "type": "label",
+              "text": "100%%"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
     "layout": "LV_LAYOUT_FLEX",
     "flex_flow": "LV_FLEX_FLOW_ROW",
     "add_style": [
@@ -295,7 +599,7 @@
     ],
     "size": [
       "100%",
-      240
+      320
     ],
     "children": [
       {
@@ -341,6 +645,22 @@
               "wcs_pos": "1.000",
               "abs_pos": "1.000",
               "delta_pos": "0.125"
+            },
+            "id": "@axis_jog_speed_adjust",
+            "context": {
+              "label": "X/Y",
+              "dist_0": "0.05mm",
+              "dist_1": "0.1mm",
+              "dist_2": "1.0mm",
+              "dist_3": "10mm"
+            },
+            "id": "@axis_jog_speed_adjust",
+            "context": {
+              "label": "Z",
+              "dist_0": "0.05mm",
+              "dist_1": "0.1mm",
+              "dist_2": "1.0mm",
+              "dist_3": "5.0mm"
             }
           }
         ]
@@ -354,6 +674,7 @@
         ],
         "height": "100%",
         "flex_grow": 45,
+        "pad_top": 5,
         "children": [
           {
             "type": "use-view",
@@ -373,12 +694,14 @@
               "label": "SPEED",
               "letter": "S",
               "ovr": "Speed Ovr"
-            },
-            "id": "@feed_rate_scale",
+            }
+          },
+          {
+            "type": "use-view",
+            "id": "@jog_feed",
             "context": {
-              "unit": "MM/MIN",
+              "unit": "MM",
               "label": "JOG",
-              "letter": "J",
               "ovr": "Jog Ovr"
             }
           }
