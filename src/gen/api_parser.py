@@ -5,7 +5,7 @@ import logging
 # Default lists (can be overridden by command-line args)
 DEFAULT_FUNCTION_INCLUDES = [
     "lv_obj_create", "lv_style_init", "lv_color_hex", "lv_color_mix", "lv_pct",
-    "lv_obj_set_grid_dsc_array", "lv_obj_set_grid_cell"
+    "lv_obj_set_grid_dsc_array", "lv_obj_set_grid_cell", "lv_obj_align",
 ]
 DEFAULT_FUNCTION_INCLUDE_PREFIXES = ["lv_obj_set_", "lv_style_set_", "lv_"] # Broad lv_ prefix, more specific setters
 DEFAULT_FUNCTION_EXCLUDE_PREFIXES = ["_lv_", "lv_obj_class", "lv_group_",
@@ -33,7 +33,7 @@ DEFAULT_ENUM_INCLUDES = ['lv_align_t', 'lv_opa_enum_t', 'lv_layout_t',
                          'lv_bar_orientation_t', 'lv_buttonmatrix_ctrl_t', 'lv_scale_mode_t', 
                          'lv_slider_mode_t', 'lv_slider_orientation_t', 'lv_span_overflow_t', 
                          'lv_span_mode_t', 'lv_table_cell_ctrl_t', 'lv_gridnav_ctrl_t', 
-                         'lv_border_side_t', ]
+                         'lv_border_side_t', 'lv_grad_dir_t', 'lv_obj_flag_t', ]
 DEFAULT_ENUM_INCLUDE_PREFIXES = ["LV_"]
 DEFAULT_ENUM_EXCLUDES = []
 DEFAULT_ENUM_EXCLUDE_PREFIXES = ["_LV_"]

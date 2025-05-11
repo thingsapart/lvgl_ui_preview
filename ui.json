@@ -26,6 +26,14 @@
   },
   {
     "type": "style",
+    "id": "@bg_gradient",
+    "bg_opa": 255,
+    "bg_color": "#222222",
+    "bg_grad_color": "#444444",
+    "bg_grad_dir": "LV_GRAD_DIR_HOR"
+  },
+  {
+    "type": "style",
     "id": "@flex_x",
     "layout": "LV_LAYOUT_FLEX",
     "flex_flow": "LV_FLEX_FLOW_ROW"
@@ -70,6 +78,15 @@
     "border_color": "#ffffff",
     "border_opa": 50,
     "border_side": "LV_BORDER_SIDE_RIGHT"
+  },
+  {
+    "type": "style",
+    "id": "@indicator_light",
+    "border_width": 6,
+    "pad_left": 10,
+    "margin_left": 10,
+    "border_opa": 200,
+    "border_side": "LV_BORDER_SIDE_LEFT"
   },
   {
     "type": "component",
@@ -167,7 +184,10 @@
         "LV_SIZE_CONTENT"
       ],
       "pad_all": 10,
-      "pad_bottom": 20,
+      "pad_bottom": 18,
+      "border_color": "#ffffff",
+      "border_opa": 40,
+      "margin_all": 2,
       "children": [
         {
           "add_style": [
@@ -185,13 +205,18 @@
           "children": [
             {
               "type": "label",
-              "text_font": "@font_kode_24",
+              "text_font": "@font_kode_30",
               "text": "$axis",
-              "width": 50
+              "width": "LV_SIZE_CONTENT",
+              "add_style": [
+                "@indicator_light",
+                0
+              ],
+              "border_color": "#55ff55"
             },
             {
               "type": "label",
-              "text_font": "@font_kode_24",
+              "text_font": "@font_kode_30",
               "text": "$wcs_pos",
               "flex_grow": 1,
               "add_style": [
@@ -271,6 +296,7 @@
       "flex_flow": "LV_FLEX_FLOW_ROW",
       "height": "LV_SIZE_CONTENT",
       "pad_column": 0,
+      "pad_bottom": "$pad_bottom",
       "children": [
         {
           "layout": "LV_LAYOUT_FLEX",
@@ -313,7 +339,7 @@
                 {
                   "type": "label",
                   "text": "$letter",
-                  "text_font": "@font_kode_24",
+                  "text_font": "@font_kode_30",
                   "grid_cell": [
                     "LV_GRID_ALIGN_START",
                     0,
@@ -335,7 +361,7 @@
                     0,
                     1
                   ],
-                  "text_font": "@font_kode_24",
+                  "text_font": "@font_kode_30",
                   "height": "LV_SIZE_CONTENT",
                   "text": "1000",
                   "pad_right": 10
@@ -355,7 +381,7 @@
                 {
                   "type": "bar",
                   "width": "100%",
-                  "height": 20,
+                  "height": 15,
                   "margin_left": 15,
                   "margin_right": 15,
                   "add_style": [
@@ -376,9 +402,10 @@
                 {
                   "type": "scale",
                   "width": "100%",
-                  "height": 20,
+                  "height": 18,
                   "margin_left": 15,
-                  "margin_right": 15
+                  "margin_right": 15,
+                  "text_font": "@font_montserrat_12"
                 }
               ]
             }
@@ -442,6 +469,7 @@
       "flex_flow": "LV_FLEX_FLOW_ROW",
       "height": "LV_SIZE_CONTENT",
       "pad_column": 0,
+      "pad_bottom": "$pad_bottom",
       "children": [
         {
           "layout": "LV_LAYOUT_FLEX",
@@ -487,7 +515,7 @@
                 {
                   "type": "label",
                   "text": "XY",
-                  "text_font": "@font_kode_20",
+                  "text_font": "@font_kode_24",
                   "grid_cell": [
                     "LV_GRID_ALIGN_START",
                     0,
@@ -508,7 +536,7 @@
                     0,
                     1
                   ],
-                  "text_font": "@font_kode_20",
+                  "text_font": "@font_kode_24",
                   "height": "LV_SIZE_CONTENT",
                   "text": "10",
                   "pad_right": 15,
@@ -524,7 +552,7 @@
                 {
                   "type": "label",
                   "text": "Z",
-                  "text_font": "@font_kode_20",
+                  "text_font": "@font_kode_24",
                   "grid_cell": [
                     "LV_GRID_ALIGN_START",
                     2,
@@ -545,9 +573,9 @@
                     0,
                     1
                   ],
-                  "text_font": "@font_kode_20",
+                  "text_font": "@font_kode_24",
                   "height": "LV_SIZE_CONTENT",
-                  "text": "5",
+                  "text": " 5",
                   "add_style": [
                     "@indicator_yellow",
                     0
@@ -588,6 +616,46 @@
           ]
         }
       ]
+    }
+  },
+  {
+    "type": "component",
+    "id": "@nav_action_button",
+    "root": {
+      "type": "dropdown",
+      "options": " Jog\n Probe\n Status\n X\n y\n Z\n Off",
+      "lv_obj_align": [
+        "LV_ALIGN_BOTTOM_LEFT",
+        10,
+        -10
+      ],
+      "add_flag": "LV_OBJ_FLAG_FLOATING",
+      "radius": "LV_RADIUS_CIRCLE",
+      "move_foreground": [],
+      "lv_dropdown_set_text": "!",
+      "width": 40,
+      "bg_color": "#5555ff",
+      "symbol": null
+    }
+  },
+  {
+    "type": "component",
+    "id": "@jog_action_button",
+    "root": {
+      "type": "dropdown",
+      "options": " Home\n Zero\n G54\n G55\n G56\n G57\n G58",
+      "lv_obj_align": [
+        "LV_ALIGN_BOTTOM_LEFT",
+        90,
+        -10
+      ],
+      "add_flag": "LV_OBJ_FLAG_FLOATING",
+      "radius": "LV_RADIUS_CIRCLE",
+      "move_foreground": [],
+      "lv_dropdown_set_text": "!",
+      "width": 40,
+      "bg_color": "#5555ff",
+      "symbol": null
     }
   },
   {
@@ -683,7 +751,8 @@
               "unit": "MM/MIN",
               "label": "FEED",
               "letter": "F",
-              "ovr": "Feed Ovr"
+              "ovr": "Feed Ovr",
+              "pad_bottom": 12
             }
           },
           {
@@ -693,7 +762,8 @@
               "unit": "/MIN",
               "label": "SPEED",
               "letter": "S",
-              "ovr": "Speed Ovr"
+              "ovr": "Speed Ovr",
+              "pad_bottom": 12
             }
           },
           {
@@ -702,11 +772,20 @@
             "context": {
               "unit": "MM",
               "label": "JOG",
-              "ovr": "Jog Ovr"
+              "ovr": "Jog Ovr",
+              "pad_bottom": 0
             }
           }
         ]
       }
     ]
+  },
+  {
+    "type": "use-view",
+    "id": "@nav_action_button"
+  },
+  {
+    "type": "use-view",
+    "id": "@jog_action_button"
   }
 ]

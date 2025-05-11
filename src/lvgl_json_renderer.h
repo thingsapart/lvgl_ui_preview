@@ -90,6 +90,12 @@ void lvgl_json_clear_user_enum_mappings(void);
  */
 bool lvgl_json_render_ui(cJSON *root_json, lv_obj_t *implicit_root_parent);
 
+
+char *lvgl_json_register_str(const char *name);
+void lvgl_json_register_str_clear();
+
+void lvgl_json_register_clear();
+
 /**
  * @brief Registers a pointer with a given name. Used for referencing objects/styles by ID ('@name').
  *

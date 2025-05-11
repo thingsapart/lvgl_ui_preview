@@ -78,12 +78,44 @@ static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void
 #include <string.h>
 #include <stdlib.h>
 
+#define MAX_STATIC_STRS 32
+static char * g_static_strs[MAX_STATIC_STRS];
+static int g_static_strs_count = 0;
+
+// Simple Static Array Registry
+char *lvgl_json_register_str(const char *name) {
+    if (!name) return NULL;
+    // Check if name already exists (update)
+    for (int i = 0; i < g_static_strs_count; ++i) {
+        if (g_static_strs[i] && strcmp(g_static_strs[i], name) == 0) {
+            return g_static_strs[i];
+        }
+    }
+    // Add new entry if space available
+    if (g_static_strs_count < MAX_STATIC_STRS) {
+        g_static_strs[g_static_strs_count] = strdup(name);
+        LOG_INFO("Registered static str '%s'", name);
+        return g_static_strs[g_static_strs_count++];
+    } else {
+        LOG_ERR("Registry Error: Maximum number of static strings (%d) exceeded.", MAX_STATIC_STRS);
+        return NULL;
+    }
+}
+
+void lvgl_json_register_str_clear() {
+    for (int i = 0; i < g_static_strs_count; ++i) {
+        free(g_static_strs[i]);
+    }
+    g_static_strs_count = 0;
+}
+
 // Basic Hash Map Registry (Placeholder - requires implementation)
 #define HASH_MAP_SIZE 256
 typedef struct registry_entry {
     char *name;
     char *type_name; // Added for type safety
     void *ptr;
+    bool auto_free;
     struct registry_entry *next;
 } registry_entry_t;
 
@@ -104,9 +136,10 @@ void lvgl_json_register_ptr(const char *name, const char *type_name, void *ptr) 
     while(entry) {
         if(strcmp(entry->name, name) == 0) {
              LOG_WARN("Registry Warning: Name '%s' already registered. Updating pointer and type.", name);
-             LV_FREE(entry->type_name); // Free old type_name
-             entry->type_name = lv_strdup(type_name); // Update type_name
+             free(entry->type_name); // Free old type_name
+             entry->type_name = lv_strdup(type_name);
              if (!entry->type_name) { LOG_ERR("Registry Error: Failed to duplicate type_name for update"); /* What to do? Original ptr is kept */ return; }
+             if (entry->auto_free) { lv_free(entry->ptr); }
              entry->ptr = ptr; // Update existing entry
              return;
         }
@@ -244,12 +277,14 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x03fea8f4, "LV_STYLE_OUTLINE_COLOR", 0x39 }, // Type: UNKNOWN_TYPE
     {0x041f5906, "LV_SCROLLBAR_MODE_AUTO", 0x03 }, // Type: lv_scrollbar_mode_t
     {0x043dbc47, "LV_ALIGN_RIGHT_MID", 0x08 }, // Type: lv_align_t
+    {0x0452b6da, "LV_OBJ_FLAG_IGNORE_LAYOUT", 0x20000 }, // Type: lv_obj_flag_t
     {0x0487f306, "LV_PART_KNOB", 0x30000 }, // Type: lv_style_parts_t
     {0x0488d3c1, "LV_PART_MAIN", 0x00 }, // Type: lv_style_parts_t
     {0x04fb2cb1, "LV_STYLE_TEXT_FONT", 0x5a }, // Type: UNKNOWN_TYPE
     {0x05652755, "LV_STYLE_OUTLINE_WIDTH", 0x38 }, // Type: UNKNOWN_TYPE
     {0x0567548a, "LV_STYLE_GRID_ROW_DSC_ARRAY", 0x81 }, // Type: UNKNOWN_TYPE
     {0x069ea8b4, "LV_STYLE_LINE_DASH_GAP", 0x4a }, // Type: UNKNOWN_TYPE
+    {0x070d3696, "LV_OBJ_FLAG_SEND_DRAW_TASK_EVENTS", 0x80000 }, // Type: lv_obj_flag_t
     {0x0784fec8, "LV_STR_SYMBOL_DIRECTORY", 0x22 }, // Type: UNKNOWN_TYPE
     {0x07e8bb1a, "LV_STYLE_TEXT_OPA", 0x59 }, // Type: UNKNOWN_TYPE
     {0x082c6744, "LV_TREE_WALK_POST_ORDER", 0x01 }, // Type: UNKNOWN_TYPE
@@ -261,14 +296,17 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x0f1e6bc3, "LV_GRID_FR_10", 0x1fffffa5 }, // Type: MACRO_FROM_STRING_VALUES
     {0x10b0ead1, "LV_STYLE_MARGIN_RIGHT", 0x1b }, // Type: UNKNOWN_TYPE
     {0x112d1946, "LV_STYLE_MARGIN_TOP", 0x18 }, // Type: UNKNOWN_TYPE
+    {0x118e53bc, "LV_GRAD_DIR_LINEAR", 0x03 }, // Type: lv_grad_dir_t
     {0x12434c36, "LV_GRID_ALIGN_CENTER", 0x01 }, // Type: lv_grid_align_t
     {0x12fbf1da, "LV_STYLE_BG_GRAD_DIR", 0x20 }, // Type: UNKNOWN_TYPE
     {0x12fc217b, "LV_STYLE_BG_GRAD_OPA", 0x25 }, // Type: UNKNOWN_TYPE
     {0x1406fca7, "LV_STR_SYMBOL_EYE_OPEN", 0x1b }, // Type: UNKNOWN_TYPE
     {0x1453e5bd, "LV_STYLE_BG_COLOR", 0x1c }, // Type: UNKNOWN_TYPE
+    {0x16799639, "LV_OBJ_FLAG_SCROLL_MOMENTUM", 0x40 }, // Type: lv_obj_flag_t
     {0x16ce98d5, "LV_STYLE_OUTLINE_OPA", 0x3a }, // Type: UNKNOWN_TYPE
     {0x16ce9b2a, "LV_STYLE_OUTLINE_PAD", 0x3b }, // Type: UNKNOWN_TYPE
     {0x174ac271, "LV_ALIGN_CENTER", 0x09 }, // Type: lv_align_t
+    {0x17e2dd6b, "LV_OBJ_FLAG_CHECKABLE", 0x08 }, // Type: lv_obj_flag_t
     {0x18592ec2, "LV_COORD_MAX", 0x1fffffff }, // Type: MACRO_FROM_STRING_VALUES
     {0x18592fc0, "LV_COORD_MIN", -0x1fffffff }, // Type: MACRO_FROM_STRING_VALUES
     {0x1881fee0, "LV_STYLE_ANIM_DURATION", 0x67 }, // Type: UNKNOWN_TYPE
@@ -296,8 +334,10 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
     {0x1e46e344, "LV_STR_SYMBOL_SETTINGS", 0x07 }, // Type: UNKNOWN_TYPE
     {0x1e605647, "LV_BUTTONMATRIX_CTRL_NO_REPEAT", 0x20 }, // Type: lv_buttonmatrix_ctrl_t
+    {0x1ef718ae, "LV_GRAD_DIR_RADIAL", 0x04 }, // Type: lv_grad_dir_t
     {0x1fe9ffc1, "LV_STYLE_ROTARY_SENSITIVITY", 0x76 }, // Type: UNKNOWN_TYPE
     {0x201e5db5, "LV_SLIDER_MODE_NORMAL", 0x00 }, // Type: lv_slider_mode_t
+    {0x20a3dda6, "LV_OBJ_FLAG_EVENT_BUBBLE", 0x4000 }, // Type: lv_obj_flag_t
     {0x20c7dbc6, "LV_TEXT_DECOR_NONE", 0x00 }, // Type: lv_text_decor_t
     {0x20e1150f, "LV_ALIGN_BOTTOM_LEFT", 0x04 }, // Type: lv_align_t
     {0x23587712, "LV_STYLE_BG_IMAGE_TILED", 0x2c }, // Type: UNKNOWN_TYPE
@@ -356,6 +396,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x3e950be2, "LV_STR_SYMBOL_REFRESH", 0x0b }, // Type: UNKNOWN_TYPE
     {0x40a7aa63, "LV_STYLE_GRID_CELL_ROW_POS", 0x86 }, // Type: UNKNOWN_TYPE
     {0x41343214, "LV_GRIDNAV_CTRL_NONE", 0x00 }, // Type: lv_gridnav_ctrl_t
+    {0x41a7b4b8, "LV_OBJ_FLAG_ADV_HITTEST", 0x10000 }, // Type: lv_obj_flag_t
     {0x42287616, "LV_SLIDER_MODE_SYMMETRICAL", 0x01 }, // Type: lv_slider_mode_t
     {0x4475985c, "LV_STYLE_ARC_ROUNDED", 0x51 }, // Type: UNKNOWN_TYPE
     {0x44f9f359, "LV_STYLE_SHADOW_OFFSET_X", 0x40 }, // Type: UNKNOWN_TYPE
@@ -387,9 +428,12 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x4d3e9d7d, "LV_STYLE_PAD_TOP", 0x10 }, // Type: UNKNOWN_TYPE
     {0x4d8e66f2, "LV_GRID_ALIGN_STRETCH", 0x03 }, // Type: lv_grid_align_t
     {0x4e64c896, "LV_STYLE_WIDTH", 0x01 }, // Type: UNKNOWN_TYPE
+    {0x4eabba4d, "LV_OBJ_FLAG_FLOATING", 0x40000 }, // Type: lv_obj_flag_t
     {0x4ec6590b, "LV_STR_SYMBOL_DOWNLOAD", 0x09 }, // Type: UNKNOWN_TYPE
     {0x4ef51ff2, "LV_SPAN_OVERFLOW_CLIP", 0x00 }, // Type: lv_span_overflow_t
     {0x4ef9e1de, "LV_SPAN_OVERFLOW_LAST", 0x02 }, // Type: lv_span_overflow_t
+    {0x50a2bc12, "LV_OBJ_FLAG_SCROLL_CHAIN_HOR", 0x100 }, // Type: lv_obj_flag_t
+    {0x50a2f656, "LV_OBJ_FLAG_SCROLL_CHAIN_VER", 0x200 }, // Type: lv_obj_flag_t
     {0x50ba8fd4, "LV_ALIGN_LEFT_MID", 0x07 }, // Type: lv_align_t
     {0x50ed6c2a, "LV_STYLE_TRANSFORM_HEIGHT", 0x6b }, // Type: UNKNOWN_TYPE
     {0x52d3fe19, "LV_ALIGN_OUT_RIGHT_BOTTOM", 0x15 }, // Type: lv_align_t
@@ -422,6 +466,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x65ae0e92, "LV_STYLE_BORDER_COLOR", 0x31 }, // Type: UNKNOWN_TYPE
     {0x67148cf3, "LV_STYLE_BORDER_WIDTH", 0x30 }, // Type: UNKNOWN_TYPE
     {0x674c1132, "LV_STYLE_FLEX_CROSS_PLACE", 0x7c }, // Type: UNKNOWN_TYPE
+    {0x6810773a, "LV_OBJ_FLAG_OVERFLOW_VISIBLE", 0x100000 }, // Type: lv_obj_flag_t
     {0x689e4d73, "LV_GRID_ALIGN_SPACE_EVENLY", 0x04 }, // Type: lv_grid_align_t
     {0x6b00d3a2, "LV_STYLE_TRANSFORM_SKEW_X", 0x73 }, // Type: UNKNOWN_TYPE
     {0x6b00d3a3, "LV_STYLE_TRANSFORM_SKEW_Y", 0x74 }, // Type: UNKNOWN_TYPE
@@ -445,12 +490,15 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x799294fe, "LV_STR_SYMBOL_BATTERY_1", 0x34 }, // Type: UNKNOWN_TYPE
     {0x799294ff, "LV_STR_SYMBOL_BATTERY_2", 0x33 }, // Type: UNKNOWN_TYPE
     {0x79929500, "LV_STR_SYMBOL_BATTERY_3", 0x32 }, // Type: UNKNOWN_TYPE
+    {0x79c5c7cc, "LV_OBJ_FLAG_SCROLL_ELASTIC", 0x20 }, // Type: lv_obj_flag_t
     {0x7a042580, "LV_SPAN_MODE_BREAK", 0x02 }, // Type: lv_span_mode_t
     {0x7a47e96b, "LV_SPAN_MODE_FIXED", 0x00 }, // Type: lv_span_mode_t
     {0x7c4666bc, "LV_STR_SYMBOL_BATTERY_EMPTY", 0x35 }, // Type: UNKNOWN_TYPE
     {0x7d2d0ab7, "LV_STYLE_PAD_RADIAL", 0x0e }, // Type: UNKNOWN_TYPE
     {0x7e7d3e3a, "LV_STYLE_SHADOW_SPREAD", 0x42 }, // Type: UNKNOWN_TYPE
     {0x7f39389d, "LV_STYLE_GRID_CELL_Y_ALIGN", 0x88 }, // Type: UNKNOWN_TYPE
+    {0x804f63ca, "LV_GRAD_DIR_HOR", 0x02 }, // Type: lv_grad_dir_t
+    {0x804f9e0e, "LV_GRAD_DIR_VER", 0x01 }, // Type: lv_grad_dir_t
     {0x806f0d49, "LV_TEXT_DECOR_STRIKETHROUGH", 0x02 }, // Type: lv_text_decor_t
     {0x832b151c, "LV_PART_TEXTAREA_PLACEHOLDER", 0x80000 }, // Type: UNKNOWN_TYPE
     {0x83e3adb9, "LV_FLEX_FLOW_COLUMN", 0x01 }, // Type: lv_flex_flow_t
@@ -458,7 +506,9 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x8813eb49, "LV_SCROLLBAR_MODE_ACTIVE", 0x02 }, // Type: lv_scrollbar_mode_t
     {0x88c5d304, "LV_STR_SYMBOL_NEW_LINE", 0x3c }, // Type: UNKNOWN_TYPE
     {0x89729d85, "LV_SCALE_MODE_LAST", 0x06 }, // Type: lv_scale_mode_t
+    {0x8a3f2711, "LV_GRAD_DIR_NONE", 0x00 }, // Type: lv_grad_dir_t
     {0x8af639c3, "LV_STR_SYMBOL_SD_CARD", 0x3b }, // Type: UNKNOWN_TYPE
+    {0x8bc0f1ed, "LV_OBJ_FLAG_SCROLL_WITH_ARROW", 0x800 }, // Type: lv_obj_flag_t
     {0x8f00602d, "LV_STYLE_TEXT_LINE_SPACE", 0x5c }, // Type: UNKNOWN_TYPE
     {0x8f0b08cc, "LV_FLEX_ALIGN_START", 0x00 }, // Type: lv_flex_align_t
     {0x90ad9ada, "LV_BUTTONMATRIX_CTRL_RESERVED_1", 0x1000 }, // Type: lv_buttonmatrix_ctrl_t
@@ -474,10 +524,14 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x973458c8, "LV_STYLE_PAD_RIGHT", 0x13 }, // Type: UNKNOWN_TYPE
     {0x97946b21, "LV_STYLE_TRANSFORM_ROTATION", 0x70 }, // Type: UNKNOWN_TYPE
     {0x988bcb5c, "LV_STYLE_LINE_COLOR", 0x4c }, // Type: UNKNOWN_TYPE
+    {0x99320ff2, "LV_OBJ_FLAG_CLICK_FOCUSABLE", 0x04 }, // Type: lv_obj_flag_t
     {0x99f249bd, "LV_STYLE_LINE_WIDTH", 0x48 }, // Type: UNKNOWN_TYPE
+    {0x9c8dd45a, "LV_GRAD_DIR_CONICAL", 0x05 }, // Type: lv_grad_dir_t
     {0x9dee7b99, "LV_STYLE_MIN_WIDTH", 0x04 }, // Type: UNKNOWN_TYPE
     {0x9f3aa47c, "LV_FLEX_ALIGN_SPACE_EVENLY", 0x03 }, // Type: lv_flex_align_t
     {0x9f469945, "LV_BUTTONMATRIX_CTRL_CLICK_TRIG", 0x200 }, // Type: lv_buttonmatrix_ctrl_t
+    {0xa1c7c5e7, "LV_OBJ_FLAG_LAYOUT_1", 0x800000 }, // Type: lv_obj_flag_t
+    {0xa1c7c5e8, "LV_OBJ_FLAG_LAYOUT_2", 0x1000000 }, // Type: lv_obj_flag_t
     {0xa225ad25, "LV_STYLE_BITMAP_MASK_SRC", 0x75 }, // Type: UNKNOWN_TYPE
     {0xa280fe9f, "LV_STR_SYMBOL_CUT", 0x25 }, // Type: UNKNOWN_TYPE
     {0xa2810efd, "LV_STR_SYMBOL_GPS", 0x2e }, // Type: UNKNOWN_TYPE
@@ -494,10 +548,13 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0xaa3274d3, "LV_ALIGN_OUT_TOP_MID", 0x0b }, // Type: lv_align_t
     {0xaa85609e, "LV_BAR_ORIENTATION_AUTO", 0x00 }, // Type: lv_bar_orientation_t
     {0xabe47739, "LV_SLIDER_MODE_RANGE", 0x02 }, // Type: lv_slider_mode_t
+    {0xaca790bc, "LV_OBJ_FLAG_SCROLLABLE", 0x10 }, // Type: lv_obj_flag_t
     {0xacaa5bb2, "LV_FLEX_FLOW_COLUMN_WRAP", 0x05 }, // Type: lv_flex_flow_t
+    {0xacb83ba9, "LV_OBJ_FLAG_SCROLL_ONE", 0x80 }, // Type: lv_obj_flag_t
     {0xafdb2960, "LV_STYLE_GRID_COLUMN_DSC_ARRAY", 0x82 }, // Type: UNKNOWN_TYPE
     {0xb037867b, "LV_STYLE_OPA_LAYERED", 0x63 }, // Type: UNKNOWN_TYPE
     {0xb1f2e319, "LV_PART_INDICATOR", 0x20000 }, // Type: lv_style_parts_t
+    {0xb1fd5c65, "LV_OBJ_FLAG_HIDDEN", 0x01 }, // Type: lv_obj_flag_t
     {0xb33769fc, "LV_BUTTONMATRIX_CTRL_CHECKABLE", 0x80 }, // Type: lv_buttonmatrix_ctrl_t
     {0xb447d83d, "LV_STYLE_GRID_ROW_ALIGN", 0x80 }, // Type: UNKNOWN_TYPE
     {0xb54a61a0, "LV_ANIM_REPEAT_INFINITE", 0xffffffff }, // Type: MACRO_FROM_STRING_VALUES
@@ -509,6 +566,9 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0xb8232b50, "LV_STYLE_TRANSFORM_SCALE_X", 0x6e }, // Type: UNKNOWN_TYPE
     {0xb8232b51, "LV_STYLE_TRANSFORM_SCALE_Y", 0x6f }, // Type: UNKNOWN_TYPE
     {0xb9280ba4, "LV_ANIM_PLAYTIME_INFINITE", 0xffffffff }, // Type: MACRO_FROM_STRING_VALUES
+    {0xb9551103, "LV_OBJ_FLAG_GESTURE_BUBBLE", 0x8000 }, // Type: lv_obj_flag_t
+    {0xba15cc4e, "LV_OBJ_FLAG_PRESS_LOCK", 0x2000 }, // Type: lv_obj_flag_t
+    {0xbad9524a, "LV_OBJ_FLAG_SCROLL_CHAIN", 0x300 }, // Type: lv_obj_flag_t
     {0xbc40e802, "LV_BUTTONMATRIX_CTRL_DISABLED", 0x40 }, // Type: lv_buttonmatrix_ctrl_t
     {0xc160013d, "LV_STYLE_LINE_OPA", 0x4d }, // Type: UNKNOWN_TYPE
     {0xc1b0f31a, "LV_STYLE_BG_GRAD_COLOR", 0x23 }, // Type: UNKNOWN_TYPE
@@ -534,10 +594,16 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0xca01ebf9, "LV_STYLE_COLOR_FILTER_OPA", 0x65 }, // Type: UNKNOWN_TYPE
     {0xcb1c7aea, "LV_SCROLLBAR_MODE_ON", 0x01 }, // Type: lv_scrollbar_mode_t
     {0xcb713489, "LV_STR_SYMBOL_BLUETOOTH", 0x37 }, // Type: UNKNOWN_TYPE
+    {0xcc123b23, "LV_OBJ_FLAG_SCROLL_ON_FOCUS", 0x400 }, // Type: lv_obj_flag_t
     {0xcc9facad, "LV_ALIGN_TOP_LEFT", 0x01 }, // Type: lv_align_t
     {0xcef97b1a, "LV_GRIDNAV_CTRL_SCROLL_FIRST", 0x02 }, // Type: lv_gridnav_ctrl_t
     {0xcf297af4, "LV_STYLE_MAX_HEIGHT", 0x07 }, // Type: UNKNOWN_TYPE
     {0xd02778fb, "LV_STYLE_SHADOW_OPA", 0x3e }, // Type: UNKNOWN_TYPE
+    {0xd1062cc8, "LV_OBJ_FLAG_USER_1", 0x8000000 }, // Type: lv_obj_flag_t
+    {0xd1062cc9, "LV_OBJ_FLAG_USER_2", 0x10000000 }, // Type: lv_obj_flag_t
+    {0xd1062cca, "LV_OBJ_FLAG_USER_3", 0x20000000 }, // Type: lv_obj_flag_t
+    {0xd1062ccb, "LV_OBJ_FLAG_USER_4", 0x40000000 }, // Type: lv_obj_flag_t
+    {0xd3f9826f, "LV_OBJ_FLAG_SNAPPABLE", 0x1000 }, // Type: lv_obj_flag_t
     {0xd44fcf2c, "LV_GRID_ALIGN_END", 0x02 }, // Type: lv_grid_align_t
     {0xd59331fb, "LV_STYLE_TRANSLATE_X", 0x6c }, // Type: UNKNOWN_TYPE
     {0xd59331fc, "LV_STYLE_TRANSLATE_Y", 0x6d }, // Type: UNKNOWN_TYPE
@@ -546,6 +612,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0xd7637f89, "LV_LAYOUT_GRID", 0x02 }, // Type: lv_layout_t
     {0xd765f677, "LV_LAYOUT_LAST", 0x03 }, // Type: lv_layout_t
     {0xd7674a13, "LV_LAYOUT_NONE", 0x00 }, // Type: lv_layout_t
+    {0xd8242f9b, "LV_OBJ_FLAG_FLEX_IN_NEW_TRACK", 0x200000 }, // Type: lv_obj_flag_t
     {0xe012d8db, "LV_ARC_MODE_REVERSE", 0x02 }, // Type: lv_arc_mode_t
     {0xe0b1505a, "LV_STYLE_TRANSFORM_PIVOT_X", 0x71 }, // Type: UNKNOWN_TYPE
     {0xe0b1505b, "LV_STYLE_TRANSFORM_PIVOT_Y", 0x72 }, // Type: UNKNOWN_TYPE
@@ -612,7 +679,10 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0xf95181e2, "LV_BUTTONMATRIX_CTRL_WIDTH_9", 0x09 }, // Type: lv_buttonmatrix_ctrl_t
     {0xfc18831d, "LV_STYLE_PROP_CONST", 0xff }, // Type: UNKNOWN_TYPE
     {0xfc3394e8, "LV_STYLE_BG_MAIN_STOP", 0x21 }, // Type: UNKNOWN_TYPE
+    {0xfcd323f3, "LV_OBJ_FLAG_CLICKABLE", 0x02 }, // Type: lv_obj_flag_t
     {0xfdc4c29c, "LV_FLEX_FLOW_ROW_WRAP", 0x04 }, // Type: lv_flex_flow_t
+    {0xfed7f24d, "LV_OBJ_FLAG_WIDGET_1", 0x2000000 }, // Type: lv_obj_flag_t
+    {0xfed7f24e, "LV_OBJ_FLAG_WIDGET_2", 0x4000000 }, // Type: lv_obj_flag_t
     {0xff50a7f5, "LV_STYLE_TEXT_LETTER_SPACE", 0x5b }, // Type: UNKNOWN_TYPE
     {0xffeb5c5d, "LV_SLIDER_ORIENTATION_HORIZONTAL", 0x01 }, // Type: lv_slider_orientation_t
 };
@@ -28372,6 +28442,11 @@ static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void
         return false;
      }
 
+    if (cJSON_IsNull(json_value) && strcmp(expected_c_type, "void *") == 0) {
+      *((char **) dest) = NULL;
+      return true;
+    }
+
     // 1. Handle nested function calls { "call": "func_name", "args": [...] }
     if (cJSON_IsObject(json_value)) {
         cJSON *call_item = cJSON_GetObjectItemCaseSensitive(json_value, "call");
@@ -28394,7 +28469,7 @@ static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void
         // Currently, we don't handle passing structs directly via JSON objects other than 'call'.
     }
 
-    // 2. Handle custom pre- and post-fixes in strings ('$', '#', '@', '%')
+    // 2. Handle custom pre- and post-fixes in strings ('$', '#', '@', '%', '!')
     // Also handle non-prefixed strings that might be enums or regular strings.
     if (cJSON_IsString(json_value) && json_value->valuestring) {
         char *str_val = json_value->valuestring;
@@ -28423,13 +28498,29 @@ static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void
             }
             // Check for '@' pointer prefix
             if (str_val[0] == '@') {
-               // Ensure expected type is some kind of pointer or a special component type
-               if (strchr(expected_c_type, '*') || strcmp(expected_c_type, "component_json_node") == 0) {
-                    return unmarshal_registered_ptr(json_value, expected_c_type, (void**)dest);
-               } else {
-                   LOG_ERR_JSON(json_value, "Unmarshal Error: Found registered pointer string '%s' but expected non-pointer type '%s'", str_val, expected_c_type);
-                   //return false;
-               }
+               if (str_val[len - 1] != '@') {
+                 // Ensure expected type is some kind of pointer or a special component type
+                 if (strchr(expected_c_type, '*') || strcmp(expected_c_type, "component_json_node") == 0) {
+                      return unmarshal_registered_ptr(json_value, expected_c_type, (void**)dest);
+                 } else {
+                     LOG_ERR_JSON(json_value, "Unmarshal Error: Found registered pointer string '%s' but expected non-pointer type '%s'", str_val, expected_c_type);
+                     //return false;
+                 }
+               } else { str_val[--len] = '\0'; }
+            }
+            // Check for '!' (registered, static string) prefix
+            if (str_val[0] == '!') {
+               if (str_val[len - 1] != '!') {
+                 if (strcmp(expected_c_type, "const char *") == 0 || strcmp(expected_c_type, "char *") == 0) {
+                      const char *res = NULL; unmarshal_string_ptr(json_value, (const char **) &res);
+                      *((char **) dest) = lvgl_json_register_str(res + 1);
+                      LOG_INFO("Unmarshaled static string '%s'", res);
+                      return res;
+                 } else {
+                     LOG_ERR_JSON(json_value, "Unmarshal Error: Found registered static string '%s' but expected non-string type '%s'", str_val, expected_c_type);
+                     //return false;
+                 }
+               } else { str_val[--len] = '\0'; }
             }
             // Check for '$' context variable prefix FIRST
             if (str_val[0] == '$') {
@@ -28964,6 +29055,12 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
             snprintf(setter_name, sizeof(setter_name), "lv_style_%s", prop_name);
             setter_entry = find_invoke_entry(setter_name);
             //if (!setter_entry) { LOG_ERR_JSON(node, "no style setter for %s\n", setter_name); }
+        }
+
+        // Try verbatim 
+        if (!setter_entry) {
+            setter_entry = find_invoke_entry(prop_name);
+            //if (!setter_entry) { LOG_ERR_JSON(node, "no verbatim method for %s\n", setter_name); }
         }
 
         if (!setter_entry) {

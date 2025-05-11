@@ -6,12 +6,43 @@ logger = logging.getLogger(__name__)
 
 # Simple registry config
 MAX_REGISTRY_SIZE = 100 # For static array implementation
+MAX_STATIC_STRS = 32 # For static string array implementation
 
-def generate_registry(use_hash_map=False):
+def generate_registry(use_hash_map=True):
     """Generates the C code for the named pointer registry."""
     c_code = "// --- Pointer Registry ---\n\n"
     c_code += "#include <string.h>\n"
     c_code += "#include <stdlib.h>\n\n" # For malloc/free if needed
+
+  # Simple static array registry
+    c_code += f"#define MAX_STATIC_STRS {MAX_STATIC_STRS}\n"
+    c_code += "static char * g_static_strs[MAX_STATIC_STRS];\n"
+    c_code += "static int g_static_strs_count = 0;\n\n"
+    c_code += "// Simple Static Array Registry\n"
+    c_code += "char *lvgl_json_register_str(const char *name) {\n"
+    c_code += "    if (!name) return NULL;\n"
+    c_code += "    // Check if name already exists (update)\n"
+    c_code += "    for (int i = 0; i < g_static_strs_count; ++i) {\n"
+    c_code += "        if (g_static_strs[i] && strcmp(g_static_strs[i], name) == 0) {\n"
+    c_code += "            return g_static_strs[i];\n"
+    c_code += "        }\n"
+    c_code += "    }\n"
+    c_code += "    // Add new entry if space available\n"
+    c_code += f"    if (g_static_strs_count < MAX_STATIC_STRS) {{\n"
+    c_code += "        g_static_strs[g_static_strs_count] = strdup(name);\n"
+    c_code += "        LOG_INFO(\"Registered static str '%s'\", name);\n"
+    c_code += "        return g_static_strs[g_static_strs_count++];\n"
+    c_code += "    } else {\n"
+    c_code += "        LOG_ERR(\"Registry Error: Maximum number of static strings (%d) exceeded.\", MAX_STATIC_STRS);\n"
+    c_code += "        return NULL;\n"
+    c_code += "    }\n"
+    c_code += "}\n\n"
+    c_code += "void lvgl_json_register_str_clear() {\n"
+    c_code += "    for (int i = 0; i < g_static_strs_count; ++i) {\n"
+    c_code += "        free(g_static_strs[i]);\n"
+    c_code += "    }\n"
+    c_code += "    g_static_strs_count = 0;\n"
+    c_code += "}\n\n"
 
     if use_hash_map:
         # Basic hash map implementation needed here (or use external C lib)
@@ -19,8 +50,9 @@ def generate_registry(use_hash_map=False):
         c_code += "#define HASH_MAP_SIZE 256\n"
         c_code += "typedef struct registry_entry {\n"
         c_code += "    char *name;\n"
-        c_code += "    char *type_name; // Added for type safety\n" # ADDED LINE
+        c_code += "    char *type_name; // Added for type safety\n"
         c_code += "    void *ptr;\n"
+        c_code += "    bool auto_free;\n"
         c_code += "    struct registry_entry *next;\n"
         c_code += "} registry_entry_t;\n\n"
         c_code += "static registry_entry_t* g_registry_map[HASH_MAP_SIZE] = {0};\n\n"
@@ -31,16 +63,17 @@ def generate_registry(use_hash_map=False):
         c_code += "    return hash % HASH_MAP_SIZE;\n"
         c_code += "}\n\n"
         c_code += "void lvgl_json_register_ptr(const char *name, const char *type_name, void *ptr) {\n"
-        c_code += "    if (!name || !type_name || !ptr) return;\n" # MODIFIED CONDITION
+        c_code += "    if (!name || !type_name || !ptr) return;\n"
         c_code += "    unsigned int index = hash(name);\n"
         c_code += "    // Check if name already exists (update or handle error?)\n"
         c_code += "    registry_entry_t *entry = g_registry_map[index];\n"
         c_code += "    while(entry) {\n"
         c_code += "        if(strcmp(entry->name, name) == 0) {\n"
         c_code += "             LOG_WARN(\"Registry Warning: Name '%s' already registered. Updating pointer and type.\", name);\n"
-        c_code += "             LV_FREE(entry->type_name); // Free old type_name\n" # ADDED LINE
-        c_code += "             entry->type_name = lv_strdup(type_name); // Update type_name\n" # ADDED LINE
+        c_code += "             free(entry->type_name); // Free old type_name\n"
+        c_code += "             entry->type_name = lv_strdup(type_name);\n"
         c_code += "             if (!entry->type_name) { LOG_ERR(\"Registry Error: Failed to duplicate type_name for update\"); /* What to do? Original ptr is kept */ return; }\n" # ADDED LINE
+        c_code += "             if (entry->auto_free) { lv_free(entry->ptr); }\n"
         c_code += "             entry->ptr = ptr; // Update existing entry\n"
         c_code += "             return;\n"
         c_code += "        }\n"

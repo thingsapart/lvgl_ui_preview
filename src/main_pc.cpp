@@ -139,6 +139,9 @@ bool load_and_build_ui(const char *filepath) {
         return false;
     }
     free(file_content); // Free the buffer
+
+    lvgl_json_register_str_clear();
+
     lv_obj_t * scr = lv_screen_active();
     lv_obj_clean(scr);
     bool success = lvgl_json_render_ui(root, scr);
@@ -175,6 +178,8 @@ extern void lv_log_print_g_cb(const char * buf); // Example log function
 LV_FONT_DECLARE(font_kode_14);
 LV_FONT_DECLARE(font_kode_20);
 LV_FONT_DECLARE(font_kode_24);
+LV_FONT_DECLARE(font_kode_30);
+LV_FONT_DECLARE(font_kode_36);
 LV_FONT_DECLARE(lcd_7_segment_24);
 LV_FONT_DECLARE(lcd_7_segment_18);
 LV_FONT_DECLARE(lcd_7_segment_14);
@@ -225,6 +230,8 @@ int main(int argc, char *argv[]) {
     lvgl_json_register_ptr("font_kode_14", "lv_font_t", (void *) &font_kode_14);
     lvgl_json_register_ptr("font_kode_20", "lv_font_t", (void *) &font_kode_20);
     lvgl_json_register_ptr("font_kode_24", "lv_font_t", (void *) &font_kode_24);
+    lvgl_json_register_ptr("font_kode_30", "lv_font_t", (void *) &font_kode_30);
+    lvgl_json_register_ptr("font_kode_36", "lv_font_t", (void *) &font_kode_36);
     lvgl_json_register_ptr("lcd_7_segment_14", "lv_font_t", (void *) &lcd_7_segment_14);
     lvgl_json_register_ptr("lcd_7_segment_18", "lv_font_t", (void *) &lcd_7_segment_18);
     lvgl_json_register_ptr("lcd_7_segment_24", "lv_font_t", (void *) &lcd_7_segment_24);
