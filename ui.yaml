@@ -371,6 +371,10 @@
     lv_dropdown_set_text: "!\uF079"
     symbol: null
     move_foreground: []
+    with
+      obj: { call: 'lv_dropdown_get_list', args: [] }
+      do:
+        min_width: 200
 
 # Main UI Layout
 - layout: LV_LAYOUT_FLEX

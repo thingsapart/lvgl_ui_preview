@@ -676,7 +676,16 @@
       "add_flag": "LV_OBJ_FLAG_FLOATING",
       "lv_dropdown_set_text": "!",
       "symbol": null,
-      "move_foreground": []
+      "move_foreground": [],
+      "with": {
+        "obj": {
+          "call": "lv_dropdown_get_list",
+          "args": []
+        },
+        "do": {
+          "min_width": 200
+        }
+      }
     }
   },
   {
