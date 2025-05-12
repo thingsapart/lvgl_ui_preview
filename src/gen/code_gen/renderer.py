@@ -14,7 +14,7 @@ def generate_renderer(custom_creators_map):
     c_code += "// Forward declarations\n"
     c_code += "static bool render_json_node(cJSON *node, lv_obj_t *parent);\n"
     c_code += "static const invoke_table_entry_t* find_invoke_entry(const char *name);\n"
-    c_code += "static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest);\n"
+    c_code += "static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest, void *implicit_parent);\n"
     c_code += "extern void* lvgl_json_get_registered_ptr(const char *name, const char *expected_type_name);\n"
     c_code += "extern void lvgl_json_register_ptr(const char *name, const char *type_name, void *ptr);\n"
     c_code += "static void set_current_context(cJSON* new_context);\n"
@@ -179,6 +179,11 @@ def generate_renderer(custom_creators_map):
         c_code += f"    }}\n"
         first_creator = False
 
+    # For "with" blocks, don't create entity - use parent.
+    c_code += "    else if (strcmp(type_str, \"with\") == 0) {\n"
+    c_code += "        created_entity = parent;\n"
+    c_code += "    }\n"
+
     # Default: Create LVGL widget using lv_<type>_create(parent)
     c_code += f"    {'else ' if not first_creator else ''}{{\n" # Start of default widget creation block
     c_code += "        // Default: Assume it's a widget type (lv_obj_t based)\n"
@@ -246,7 +251,7 @@ def generate_renderer(custom_creators_map):
             if (col_dsc_array) {
                 for (int i = 0; i < num_cols; i++) {
                     cJSON *val_item = cJSON_GetArrayItem(cols_item_json, i);
-                    if (!unmarshal_value(val_item, "int32_t", &col_dsc_array[i])) { // Use unmarshal_value
+                    if (!unmarshal_value(val_item, "int32_t", &col_dsc_array[i], created_entity)) { // Use unmarshal_value
                         LOG_ERR_JSON(val_item, "Grid Error: Failed to parse 'cols' array item %d as int32_t.", i);
                         LV_FREE(col_dsc_array); col_dsc_array = NULL; grid_setup_ok = false;
                         break;
@@ -269,7 +274,7 @@ def generate_renderer(custom_creators_map):
             if (row_dsc_array) {
                 for (int i = 0; i < num_rows; i++) {
                     cJSON *val_item = cJSON_GetArrayItem(rows_item_json, i);
-                    if (!unmarshal_value(val_item, "int32_t", &row_dsc_array[i])) { // Use unmarshal_value
+                    if (!unmarshal_value(val_item, "int32_t", &row_dsc_array[i], created_entity)) { // Use unmarshal_value
                         LOG_ERR_JSON(val_item, "Grid Error: Failed to parse 'rows' array item %d as int32_t.", i);
                         LV_FREE(row_dsc_array); row_dsc_array = NULL; grid_setup_ok = false;
                         break;
@@ -322,6 +327,20 @@ def generate_renderer(custom_creators_map):
     c_code += "        if (!cJSON_IsArray(prop)) {\n"
     #c_code += "            LOG_WARN(\"Render Warning: Property '%s' value is not a JSON array. Skipping.\", prop_name);\n"
     #c_code += "            LOG_ERR_JSON(prop, \"Render Warning: Property '%s' value is not a JSON array. Skipping.\", prop_name);\n"
+    # Evaluate/parse "with: obj: do:" blocks, if present.
+    c_code += "            if (cJSON_IsObject(prop) && strcmp(prop_name, \"with\") == 0) {\n"
+    c_code += "                cJSON *obj = cJSON_GetObjectItemCaseSensitive(prop, \"obj\");\n"
+    c_code += "                if (!obj) { LOG_ERR_JSON(prop, \"Render Warning: with requires attributes 'obj' and 'do' - with '%s' obj value is missing. Skipping.\", prop_name); continue; } \n"
+    c_code += "                lv_obj_t *new_parent = NULL; unmarshal_value(obj, \"lv_obj_t *\", &new_parent, created_entity);\n"
+    c_code += "                cJSON *with = cJSON_GetObjectItemCaseSensitive(prop, \"do\");\n"
+    c_code += "                if (!cJSON_IsObject(with)) { LOG_ERR_JSON(prop, \"Render Warning: with requires attributes 'obj' and 'do' - do block must be Object. Skipping.\"); continue; } \n"
+    c_code += "                cJSON_AddItemToObject(with, \"type\", cJSON_CreateString(\"with\"));\n"
+    c_code += "                if (!render_json_node(with, (lv_obj_t*) new_parent)) {\n"
+    c_code += "                    LOG_ERR(\"Render Error: Failed to render with node. Skipping.\");\n"
+    c_code += "                }\n"
+    c_code += "                continue;\n"
+    c_code += "            }\n"
+    # Otherwise turn single value prop into array.
     c_code += "            old_prop = prop;\n"
     c_code += "            prop = cJSON_CreateArray();\n"
     c_code += "            cJSON_AddItemToArray(prop, cJSON_Duplicate(old_prop, true));\n" 

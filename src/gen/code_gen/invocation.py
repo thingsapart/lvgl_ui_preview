@@ -172,7 +172,7 @@ def _generate_generic_invoke_fn(signature_category, sig_c_name, function_list, a
         c_code += f"    if (!json_arg{i}) {{ LOG_ERR(\"Invoke Error: Failed to get JSON arg {i} for func '%s' ({sig_c_name})\", entry->name); return false; }}\n"
 
         # Generate the call to unmarshal_value using the specific type string retrieved *at runtime*
-        unmarshal_call = f"unmarshal_value(json_arg{i}, specific_type_str{c_arg_index}, (void*){buffer_ptr})"
+        unmarshal_call = f"unmarshal_value(json_arg{i}, specific_type_str{c_arg_index}, (void*){buffer_ptr}, target_obj_ptr)"
         c_code += f"    // Unmarshal JSON arg {i} into C arg buffer {c_arg_index} (using specific type found in entry->arg_types[{c_arg_index}])\n"
         c_code += f"    if (!({unmarshal_call})) {{\n"
         # Log the specific type string used during the failed unmarshal attempt
@@ -274,7 +274,7 @@ def _generate_generic_invoke_fn(signature_category, sig_c_name, function_list, a
         buffer_ptr = f"&arg_buf{c_arg_index}"
         c_code += f"    cJSON *json_arg{i} = cJSON_GetArrayItem(args_array, {i});\n"
         c_code += f"    if (!json_arg{i}) {{ LOG_ERR(\"Invoke Error: Failed to get JSON arg {i} for func '%s' ({sig_c_name})\", entry->name); return false; }}\n"
-        unmarshal_call = f"unmarshal_value(json_arg{i}, specific_type_str{c_arg_index}, (void*){buffer_ptr})"
+        unmarshal_call = f"unmarshal_value(json_arg{i}, specific_type_str{c_arg_index}, (void*){buffer_ptr}, target_obj_ptr)"
         c_code += f"    // Unmarshal JSON arg {i} into C arg buffer {c_arg_index} (using specific type 'specific_type_str{c_arg_index}')\n"
         c_code += f"    if (!({unmarshal_call})) {{\n"
         c_code += f"        LOG_ERR_JSON(json_arg{i}, \"Invoke Error: Failed to unmarshal JSON arg {i} as type '%s' for func '%s' ({sig_c_name})\", specific_type_str{c_arg_index}, entry->name);\n"
@@ -340,7 +340,7 @@ def generate_invocation_helpers(signatures, api_info):
 
     c_code = ""
     c_code += "// Forward declaration for the main unmarshaler\n"
-    c_code += "static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest);\n\n"
+    c_code += "static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest, void *implicit_parent);\n\n"
     # Forward declare the table struct type for the invoker signatures
     c_code += "struct invoke_table_entry_s;\n"
     c_code += "typedef struct invoke_table_entry_s invoke_table_entry_t;\n\n"

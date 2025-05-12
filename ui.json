@@ -539,7 +539,7 @@
                   "text_font": "@font_kode_24",
                   "height": "LV_SIZE_CONTENT",
                   "text": "10",
-                  "pad_right": 15,
+                  "pad_right": 10,
                   "add_style": [
                     "@border_right",
                     0
@@ -619,23 +619,43 @@
     }
   },
   {
+    "type": "style",
+    "id": "@action_button",
+    "size": [
+      45,
+      45
+    ],
+    "bg_color": "#1f95f6",
+    "radius": "LV_RADIUS_CIRCLE"
+  },
+  {
     "type": "component",
     "id": "@nav_action_button",
     "root": {
       "type": "dropdown",
+      "add_style": [
+        "@action_button",
+        0
+      ],
       "options": " Jog\n Probe\n Status\n X\n y\n Z\n Off",
       "lv_obj_align": [
         "LV_ALIGN_BOTTOM_LEFT",
-        10,
+        20,
         -10
       ],
       "add_flag": "LV_OBJ_FLAG_FLOATING",
-      "radius": "LV_RADIUS_CIRCLE",
-      "move_foreground": [],
       "lv_dropdown_set_text": "!",
-      "width": 40,
-      "bg_color": "#5555ff",
-      "symbol": null
+      "symbol": null,
+      "move_foreground": [],
+      "with": {
+        "obj": {
+          "call": "lv_dropdown_get_list",
+          "args": []
+        },
+        "do": {
+          "min_width": 200
+        }
+      }
     }
   },
   {
@@ -644,18 +664,19 @@
     "root": {
       "type": "dropdown",
       "options": " Home\n Zero\n G54\n G55\n G56\n G57\n G58",
+      "add_style": [
+        "@action_button",
+        0
+      ],
       "lv_obj_align": [
         "LV_ALIGN_BOTTOM_LEFT",
         90,
         -10
       ],
       "add_flag": "LV_OBJ_FLAG_FLOATING",
-      "radius": "LV_RADIUS_CIRCLE",
-      "move_foreground": [],
       "lv_dropdown_set_text": "!",
-      "width": 40,
-      "bg_color": "#5555ff",
-      "symbol": null
+      "symbol": null,
+      "move_foreground": []
     }
   },
   {

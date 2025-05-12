@@ -244,7 +244,7 @@ static cJSON* get_current_context(void) {{
 
 // --- Forward declaration ---
 static const invoke_table_entry_t* find_invoke_entry(const char *name);
-static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest);
+static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest, void *implicit_parent);
 
 // --- Pointer Registry Implementation ---
 {registry_code}

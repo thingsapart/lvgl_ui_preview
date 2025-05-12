@@ -70,7 +70,7 @@ typedef struct invoke_table_entry_s {
 
 // --- Forward declaration ---
 static const invoke_table_entry_t* find_invoke_entry(const char *name);
-static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest);
+static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest, void *implicit_parent);
 
 // --- Pointer Registry Implementation ---
 // --- Pointer Registry ---
@@ -289,6 +289,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x07e8bb1a, "LV_STYLE_TEXT_OPA", 0x59 }, // Type: UNKNOWN_TYPE
     {0x082c6744, "LV_TREE_WALK_POST_ORDER", 0x01 }, // Type: UNKNOWN_TYPE
     {0x087177a6, "LV_ALIGN_OUT_LEFT_BOTTOM", 0x12 }, // Type: lv_align_t
+    {0x097d9702, "LV_DIR_RIGHT", 0x02 }, // Type: lv_dir_t
     {0x0a84396d, "LV_STYLE_IMAGE_RECOLOR_OPA", 0x46 }, // Type: UNKNOWN_TYPE
     {0x0db371ba, "LV_BUTTONMATRIX_CTRL_NONE", 0x00 }, // Type: lv_buttonmatrix_ctrl_t
     {0x0ec31f5e, "LV_STYLE_RADIUS", 0x0c }, // Type: UNKNOWN_TYPE
@@ -301,6 +302,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x12fbf1da, "LV_STYLE_BG_GRAD_DIR", 0x20 }, // Type: UNKNOWN_TYPE
     {0x12fc217b, "LV_STYLE_BG_GRAD_OPA", 0x25 }, // Type: UNKNOWN_TYPE
     {0x1406fca7, "LV_STR_SYMBOL_EYE_OPEN", 0x1b }, // Type: UNKNOWN_TYPE
+    {0x1451d3d9, "LV_DIR_BOTTOM", 0x08 }, // Type: lv_dir_t
     {0x1453e5bd, "LV_STYLE_BG_COLOR", 0x1c }, // Type: UNKNOWN_TYPE
     {0x16799639, "LV_OBJ_FLAG_SCROLL_MOMENTUM", 0x40 }, // Type: lv_obj_flag_t
     {0x16ce98d5, "LV_STYLE_OUTLINE_OPA", 0x3a }, // Type: UNKNOWN_TYPE
@@ -445,6 +447,10 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x583356a4, "LV_STR_SYMBOL_VOLUME_MID", 0x0d }, // Type: UNKNOWN_TYPE
     {0x58e0ce5f, "LV_STYLE_PAD_BOTTOM", 0x11 }, // Type: UNKNOWN_TYPE
     {0x58ecc18b, "LV_STYLE_RECOLOR_OPA", 0x79 }, // Type: UNKNOWN_TYPE
+    {0x59ceb3fd, "LV_DIR_ALL", 0x0f }, // Type: lv_dir_t
+    {0x59ced22d, "LV_DIR_HOR", 0x03 }, // Type: lv_dir_t
+    {0x59cf0537, "LV_DIR_TOP", 0x04 }, // Type: lv_dir_t
+    {0x59cf0c71, "LV_DIR_VER", 0x0c }, // Type: lv_dir_t
     {0x5b19abb8, "LV_STYLE_IMAGE_OPA", 0x44 }, // Type: UNKNOWN_TYPE
     {0x5b3197f8, "LV_STYLE_PAD_COLUMN", 0x15 }, // Type: UNKNOWN_TYPE
     {0x5c044eed, "LV_SCALE_MODE_HORIZONTAL_TOP", 0x00 }, // Type: lv_scale_mode_t
@@ -516,6 +522,8 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x918d5ea8, "LV_ARC_MODE_NORMAL", 0x00 }, // Type: lv_arc_mode_t
     {0x93475002, "LV_STYLE_BG_MAIN_OPA", 0x24 }, // Type: UNKNOWN_TYPE
     {0x9397a0e0, "LV_STR_SYMBOL_SHUFFLE", 0x1e }, // Type: UNKNOWN_TYPE
+    {0x93ab1d8f, "LV_DIR_LEFT", 0x01 }, // Type: lv_dir_t
+    {0x93ac61d4, "LV_DIR_NONE", 0x00 }, // Type: lv_dir_t
     {0x940b656b, "LV_STR_SYMBOL_EYE_CLOSE", 0x1c }, // Type: UNKNOWN_TYPE
     {0x9463ee1e, "LV_ALIGN_BOTTOM_MID", 0x05 }, // Type: lv_align_t
     {0x9565443e, "LV_PART_ITEMS", 0x50000 }, // Type: lv_style_parts_t
@@ -1276,7 +1284,7 @@ static bool unmarshal_context_value(cJSON *json_source_node, const char *expecte
 
     // Recursively call unmarshal_value with the node found in the context
     // This allows context values to be numbers, strings, booleans, or even other context/pointer refs.
-    if (!unmarshal_value(value_from_context, expected_c_type, dest)) {
+    if (!unmarshal_value(value_from_context, expected_c_type, dest, NULL)) {
         LOG_ERR_JSON(json_source_node, "Context Unmarshal Error: Failed to unmarshal context variable '%s' as type '%s'.", var_name, expected_c_type);
         return false;
     }
@@ -1287,7 +1295,7 @@ static bool unmarshal_context_value(cJSON *json_source_node, const char *expecte
 
 // --- Invocation Helper Functions ---
 // Forward declaration for the main unmarshaler
-static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest);
+static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest, void *implicit_parent);
 
 struct invoke_table_entry_s;
 typedef struct invoke_table_entry_s invoke_table_entry_t;
@@ -1388,7 +1396,7 @@ static bool invoke_BOOL_INT(const invoke_table_entry_t *entry, void *target_obj_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_INT)", specific_type_str0, entry->name);
         return false;
     }
@@ -1442,7 +1450,7 @@ static bool invoke_BOOL_INT_INT(const invoke_table_entry_t *entry, void *target_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_INT_INT)", specific_type_str0, entry->name);
         return false;
     }
@@ -1451,7 +1459,7 @@ static bool invoke_BOOL_INT_INT(const invoke_table_entry_t *entry, void *target_
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_BOOL_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_BOOL_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -1507,7 +1515,7 @@ static bool invoke_BOOL_const_char_p_const_char_p(const invoke_table_entry_t *en
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_const_char_p_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_const_char_p_const_char_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -1609,7 +1617,7 @@ static bool invoke_BOOL_lv_array_t_p_INT(const invoke_table_entry_t *entry, void
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_lv_array_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_lv_array_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -1709,7 +1717,7 @@ static bool invoke_BOOL_lv_color_t_lv_color_t(const invoke_table_entry_t *entry,
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_lv_color_t_lv_color_t)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_lv_color_t_lv_color_t)", specific_type_str0, entry->name);
         return false;
     }
@@ -1718,7 +1726,7 @@ static bool invoke_BOOL_lv_color_t_lv_color_t(const invoke_table_entry_t *entry,
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_BOOL_lv_color_t_lv_color_t)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_BOOL_lv_color_t_lv_color_t)", specific_type_str1, entry->name);
         return false;
     }
@@ -1774,7 +1782,7 @@ static bool invoke_BOOL_lv_font_info_t_p_lv_font_info_t_p(const invoke_table_ent
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_lv_font_info_t_p_lv_font_info_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_lv_font_info_t_p_lv_font_info_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -1832,7 +1840,7 @@ static bool invoke_BOOL_lv_font_t_p_lv_font_glyph_dsc_t_p_INT_INT(const invoke_t
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_lv_font_t_p_lv_font_glyph_dsc_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_lv_font_t_p_lv_font_glyph_dsc_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -1841,7 +1849,7 @@ static bool invoke_BOOL_lv_font_t_p_lv_font_glyph_dsc_t_p_INT_INT(const invoke_t
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_BOOL_lv_font_t_p_lv_font_glyph_dsc_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_BOOL_lv_font_t_p_lv_font_glyph_dsc_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -1850,7 +1858,7 @@ static bool invoke_BOOL_lv_font_t_p_lv_font_glyph_dsc_t_p_INT_INT(const invoke_t
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_BOOL_lv_font_t_p_lv_font_glyph_dsc_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_BOOL_lv_font_t_p_lv_font_glyph_dsc_t_p_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -1998,7 +2006,7 @@ static bool invoke_BOOL_lv_obj_t_p_INT(const invoke_table_entry_t *entry, void *
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_lv_obj_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_lv_obj_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -2055,7 +2063,7 @@ static bool invoke_BOOL_lv_obj_t_p_INT_INT(const invoke_table_entry_t *entry, vo
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_lv_obj_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_lv_obj_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -2064,7 +2072,7 @@ static bool invoke_BOOL_lv_obj_t_p_INT_INT(const invoke_table_entry_t *entry, vo
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_BOOL_lv_obj_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_BOOL_lv_obj_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -2122,7 +2130,7 @@ static bool invoke_BOOL_lv_obj_t_p_INT_INT_INT(const invoke_table_entry_t *entry
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_lv_obj_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_lv_obj_t_p_INT_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -2131,7 +2139,7 @@ static bool invoke_BOOL_lv_obj_t_p_INT_INT_INT(const invoke_table_entry_t *entry
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_BOOL_lv_obj_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_BOOL_lv_obj_t_p_INT_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -2140,7 +2148,7 @@ static bool invoke_BOOL_lv_obj_t_p_INT_INT_INT(const invoke_table_entry_t *entry
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_BOOL_lv_obj_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_BOOL_lv_obj_t_p_INT_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -2197,7 +2205,7 @@ static bool invoke_BOOL_lv_obj_t_p_const_char_p_INT(const invoke_table_entry_t *
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_lv_obj_t_p_const_char_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_lv_obj_t_p_const_char_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -2206,7 +2214,7 @@ static bool invoke_BOOL_lv_obj_t_p_const_char_p_INT(const invoke_table_entry_t *
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_BOOL_lv_obj_t_p_const_char_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_BOOL_lv_obj_t_p_const_char_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -2262,7 +2270,7 @@ static bool invoke_BOOL_lv_obj_t_p_lv_area_t_p(const invoke_table_entry_t *entry
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_lv_obj_t_p_lv_area_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_lv_obj_t_p_lv_area_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -2318,7 +2326,7 @@ static bool invoke_BOOL_lv_obj_t_p_lv_event_dsc_t_p(const invoke_table_entry_t *
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_lv_obj_t_p_lv_event_dsc_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_lv_obj_t_p_lv_event_dsc_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -2374,7 +2382,7 @@ static bool invoke_BOOL_lv_obj_t_p_lv_obj_class_t_p(const invoke_table_entry_t *
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_lv_obj_t_p_lv_obj_class_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_lv_obj_t_p_lv_obj_class_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -2430,7 +2438,7 @@ static bool invoke_BOOL_lv_obj_t_p_lv_obj_t_p(const invoke_table_entry_t *entry,
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_lv_obj_t_p_lv_obj_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_lv_obj_t_p_lv_obj_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -2486,7 +2494,7 @@ static bool invoke_BOOL_lv_obj_t_p_lv_point_t_p(const invoke_table_entry_t *entr
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_lv_obj_t_p_lv_point_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_lv_obj_t_p_lv_point_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -2544,7 +2552,7 @@ static bool invoke_BOOL_lv_obj_t_p_lv_style_t_p_lv_style_t_p_INT(const invoke_ta
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_lv_obj_t_p_lv_style_t_p_lv_style_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_lv_obj_t_p_lv_style_t_p_lv_style_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -2553,7 +2561,7 @@ static bool invoke_BOOL_lv_obj_t_p_lv_style_t_p_lv_style_t_p_INT(const invoke_ta
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_BOOL_lv_obj_t_p_lv_style_t_p_lv_style_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_BOOL_lv_obj_t_p_lv_style_t_p_lv_style_t_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -2562,7 +2570,7 @@ static bool invoke_BOOL_lv_obj_t_p_lv_style_t_p_lv_style_t_p_INT(const invoke_ta
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_BOOL_lv_obj_t_p_lv_style_t_p_lv_style_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_BOOL_lv_obj_t_p_lv_style_t_p_lv_style_t_p_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -2619,7 +2627,7 @@ static bool invoke_BOOL_lv_rb_t_p_INT_INT(const invoke_table_entry_t *entry, voi
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_lv_rb_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_lv_rb_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -2628,7 +2636,7 @@ static bool invoke_BOOL_lv_rb_t_p_INT_INT(const invoke_table_entry_t *entry, voi
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_BOOL_lv_rb_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_BOOL_lv_rb_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -2684,7 +2692,7 @@ static bool invoke_BOOL_lv_rb_t_p_POINTER(const invoke_table_entry_t *entry, voi
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_lv_rb_t_p_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_lv_rb_t_p_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -2740,7 +2748,7 @@ static bool invoke_BOOL_lv_rb_t_p_lv_rb_node_t_p(const invoke_table_entry_t *ent
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_lv_rb_t_p_lv_rb_node_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_lv_rb_t_p_lv_rb_node_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -2842,7 +2850,7 @@ static bool invoke_BOOL_lv_style_t_p_INT(const invoke_table_entry_t *entry, void
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_lv_style_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_lv_style_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -2898,7 +2906,7 @@ static bool invoke_BOOL_lv_text_cmd_state_t_p_INT(const invoke_table_entry_t *en
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_lv_text_cmd_state_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_lv_text_cmd_state_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -2958,7 +2966,7 @@ static bool invoke_BOOL_lv_tree_node_t_p_INT_INT_INT_INT_POINTER(const invoke_ta
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_BOOL_lv_tree_node_t_p_INT_INT_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_BOOL_lv_tree_node_t_p_INT_INT_INT_INT_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -2967,7 +2975,7 @@ static bool invoke_BOOL_lv_tree_node_t_p_INT_INT_INT_INT_POINTER(const invoke_ta
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_BOOL_lv_tree_node_t_p_INT_INT_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_BOOL_lv_tree_node_t_p_INT_INT_INT_INT_POINTER)", specific_type_str2, entry->name);
         return false;
     }
@@ -2976,7 +2984,7 @@ static bool invoke_BOOL_lv_tree_node_t_p_INT_INT_INT_INT_POINTER(const invoke_ta
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_BOOL_lv_tree_node_t_p_INT_INT_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_BOOL_lv_tree_node_t_p_INT_INT_INT_INT_POINTER)", specific_type_str3, entry->name);
         return false;
     }
@@ -2985,7 +2993,7 @@ static bool invoke_BOOL_lv_tree_node_t_p_INT_INT_INT_INT_POINTER(const invoke_ta
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_BOOL_lv_tree_node_t_p_INT_INT_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 4 (using specific type 'specific_type_str4')
-    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_BOOL_lv_tree_node_t_p_INT_INT_INT_INT_POINTER)", specific_type_str4, entry->name);
         return false;
     }
@@ -2994,7 +3002,7 @@ static bool invoke_BOOL_lv_tree_node_t_p_INT_INT_INT_INT_POINTER(const invoke_ta
     cJSON *json_arg4 = cJSON_GetArrayItem(args_array, 4);
     if (!json_arg4) { LOG_ERR("Invoke Error: Failed to get JSON arg 4 for func '%s' (invoke_BOOL_lv_tree_node_t_p_INT_INT_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 4 into C arg buffer 5 (using specific type 'specific_type_str5')
-    if (!(unmarshal_value(json_arg4, specific_type_str5, (void*)&arg_buf5))) {
+    if (!(unmarshal_value(json_arg4, specific_type_str5, (void*)&arg_buf5, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg4, "Invoke Error: Failed to unmarshal JSON arg 4 as type '%s' for func '%s' (invoke_BOOL_lv_tree_node_t_p_INT_INT_INT_INT_POINTER)", specific_type_str5, entry->name);
         return false;
     }
@@ -3090,7 +3098,7 @@ static bool invoke_INT_INT(const invoke_table_entry_t *entry, void *target_obj_p
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_INT)", specific_type_str0, entry->name);
         return false;
     }
@@ -3144,7 +3152,7 @@ static bool invoke_INT_INT_INT(const invoke_table_entry_t *entry, void *target_o
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_INT_INT)", specific_type_str0, entry->name);
         return false;
     }
@@ -3153,7 +3161,7 @@ static bool invoke_INT_INT_INT(const invoke_table_entry_t *entry, void *target_o
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -3208,7 +3216,7 @@ static bool invoke_INT_INT_INT_INT(const invoke_table_entry_t *entry, void *targ
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_INT_INT_INT)", specific_type_str0, entry->name);
         return false;
     }
@@ -3217,7 +3225,7 @@ static bool invoke_INT_INT_INT_INT(const invoke_table_entry_t *entry, void *targ
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_INT_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -3226,7 +3234,7 @@ static bool invoke_INT_INT_INT_INT(const invoke_table_entry_t *entry, void *targ
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg2, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_INT_INT_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -3282,7 +3290,7 @@ static bool invoke_INT_INT_INT_INT_INT(const invoke_table_entry_t *entry, void *
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_INT_INT_INT_INT)", specific_type_str0, entry->name);
         return false;
     }
@@ -3291,7 +3299,7 @@ static bool invoke_INT_INT_INT_INT_INT(const invoke_table_entry_t *entry, void *
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_INT_INT_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -3300,7 +3308,7 @@ static bool invoke_INT_INT_INT_INT_INT(const invoke_table_entry_t *entry, void *
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_INT_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg2, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_INT_INT_INT_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -3309,7 +3317,7 @@ static bool invoke_INT_INT_INT_INT_INT(const invoke_table_entry_t *entry, void *
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_INT_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg3, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_INT_INT_INT_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -3366,7 +3374,7 @@ static bool invoke_INT_INT_INT_INT_INT_INT(const invoke_table_entry_t *entry, vo
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_INT_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_INT_INT_INT_INT_INT)", specific_type_str0, entry->name);
         return false;
     }
@@ -3375,7 +3383,7 @@ static bool invoke_INT_INT_INT_INT_INT_INT(const invoke_table_entry_t *entry, vo
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_INT_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_INT_INT_INT_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -3384,7 +3392,7 @@ static bool invoke_INT_INT_INT_INT_INT_INT(const invoke_table_entry_t *entry, vo
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_INT_INT_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg2, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_INT_INT_INT_INT_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -3393,7 +3401,7 @@ static bool invoke_INT_INT_INT_INT_INT_INT(const invoke_table_entry_t *entry, vo
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_INT_INT_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg3, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_INT_INT_INT_INT_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -3402,7 +3410,7 @@ static bool invoke_INT_INT_INT_INT_INT_INT(const invoke_table_entry_t *entry, vo
     cJSON *json_arg4 = cJSON_GetArrayItem(args_array, 4);
     if (!json_arg4) { LOG_ERR("Invoke Error: Failed to get JSON arg 4 for func '%s' (invoke_INT_INT_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 4 into C arg buffer 4 (using specific type 'specific_type_str4')
-    if (!(unmarshal_value(json_arg4, specific_type_str4, (void*)&arg_buf4))) {
+    if (!(unmarshal_value(json_arg4, specific_type_str4, (void*)&arg_buf4, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg4, "Invoke Error: Failed to unmarshal JSON arg 4 as type '%s' for func '%s' (invoke_INT_INT_INT_INT_INT_INT)", specific_type_str4, entry->name);
         return false;
     }
@@ -3456,7 +3464,7 @@ static bool invoke_INT_INT_POINTER(const invoke_table_entry_t *entry, void *targ
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_INT_POINTER)", specific_type_str0, entry->name);
         return false;
     }
@@ -3465,7 +3473,7 @@ static bool invoke_INT_INT_POINTER(const invoke_table_entry_t *entry, void *targ
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_INT_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -3567,7 +3575,7 @@ static bool invoke_INT_POINTER_INT(const invoke_table_entry_t *entry, void *targ
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_POINTER_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -3624,7 +3632,7 @@ static bool invoke_INT_POINTER_POINTER_INT(const invoke_table_entry_t *entry, vo
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_POINTER_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_POINTER_POINTER_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -3633,7 +3641,7 @@ static bool invoke_INT_POINTER_POINTER_INT(const invoke_table_entry_t *entry, vo
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_POINTER_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_POINTER_POINTER_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -3689,7 +3697,7 @@ static bool invoke_INT_POINTER_lv_image_header_t_p(const invoke_table_entry_t *e
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_POINTER_lv_image_header_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_POINTER_lv_image_header_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -3791,7 +3799,7 @@ static bool invoke_INT_const_char_p_INT(const invoke_table_entry_t *entry, void 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_const_char_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_const_char_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -3849,7 +3857,7 @@ static bool invoke_INT_const_char_p_INT_const_char_p_UNKNOWN(const invoke_table_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_const_char_p_INT_const_char_p_UNKNOWN)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_const_char_p_INT_const_char_p_UNKNOWN)", specific_type_str1, entry->name);
         return false;
     }
@@ -3858,7 +3866,7 @@ static bool invoke_INT_const_char_p_INT_const_char_p_UNKNOWN(const invoke_table_
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_const_char_p_INT_const_char_p_UNKNOWN)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_const_char_p_INT_const_char_p_UNKNOWN)", specific_type_str2, entry->name);
         return false;
     }
@@ -3867,7 +3875,7 @@ static bool invoke_INT_const_char_p_INT_const_char_p_UNKNOWN(const invoke_table_
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_INT_const_char_p_INT_const_char_p_UNKNOWN)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_INT_const_char_p_INT_const_char_p_UNKNOWN)", specific_type_str3, entry->name);
         return false;
     }
@@ -3925,7 +3933,7 @@ static bool invoke_INT_const_char_p_INT_lv_font_t_p_INT(const invoke_table_entry
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_const_char_p_INT_lv_font_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_const_char_p_INT_lv_font_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -3934,7 +3942,7 @@ static bool invoke_INT_const_char_p_INT_lv_font_t_p_INT(const invoke_table_entry
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_const_char_p_INT_lv_font_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_const_char_p_INT_lv_font_t_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -3943,7 +3951,7 @@ static bool invoke_INT_const_char_p_INT_lv_font_t_p_INT(const invoke_table_entry
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_INT_const_char_p_INT_lv_font_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_INT_const_char_p_INT_lv_font_t_p_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -4002,7 +4010,7 @@ static bool invoke_INT_const_char_p_INT_lv_font_t_p_INT_INT(const invoke_table_e
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_const_char_p_INT_lv_font_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_const_char_p_INT_lv_font_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -4011,7 +4019,7 @@ static bool invoke_INT_const_char_p_INT_lv_font_t_p_INT_INT(const invoke_table_e
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_const_char_p_INT_lv_font_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_const_char_p_INT_lv_font_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -4020,7 +4028,7 @@ static bool invoke_INT_const_char_p_INT_lv_font_t_p_INT_INT(const invoke_table_e
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_INT_const_char_p_INT_lv_font_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_INT_const_char_p_INT_lv_font_t_p_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -4029,7 +4037,7 @@ static bool invoke_INT_const_char_p_INT_lv_font_t_p_INT_INT(const invoke_table_e
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_INT_const_char_p_INT_lv_font_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 4 (using specific type 'specific_type_str4')
-    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_INT_const_char_p_INT_lv_font_t_p_INT_INT)", specific_type_str4, entry->name);
         return false;
     }
@@ -4085,7 +4093,7 @@ static bool invoke_INT_const_char_p_const_char_p(const invoke_table_entry_t *ent
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_const_char_p_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_const_char_p_const_char_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -4142,7 +4150,7 @@ static bool invoke_INT_const_char_p_const_char_p_INT(const invoke_table_entry_t 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_const_char_p_const_char_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_const_char_p_const_char_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -4151,7 +4159,7 @@ static bool invoke_INT_const_char_p_const_char_p_INT(const invoke_table_entry_t 
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_const_char_p_const_char_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_const_char_p_const_char_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -4299,7 +4307,7 @@ static bool invoke_INT_lv_array_t_p_INT(const invoke_table_entry_t *entry, void 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_array_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_array_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -4356,7 +4364,7 @@ static bool invoke_INT_lv_array_t_p_INT_INT(const invoke_table_entry_t *entry, v
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_array_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_array_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -4365,7 +4373,7 @@ static bool invoke_INT_lv_array_t_p_INT_INT(const invoke_table_entry_t *entry, v
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_lv_array_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_lv_array_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -4422,7 +4430,7 @@ static bool invoke_INT_lv_array_t_p_INT_POINTER(const invoke_table_entry_t *entr
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_array_t_p_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_array_t_p_INT_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -4431,7 +4439,7 @@ static bool invoke_INT_lv_array_t_p_INT_POINTER(const invoke_table_entry_t *entr
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_lv_array_t_p_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_lv_array_t_p_INT_POINTER)", specific_type_str2, entry->name);
         return false;
     }
@@ -4487,7 +4495,7 @@ static bool invoke_INT_lv_array_t_p_POINTER(const invoke_table_entry_t *entry, v
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_array_t_p_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_array_t_p_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -4543,7 +4551,7 @@ static bool invoke_INT_lv_array_t_p_lv_array_t_p(const invoke_table_entry_t *ent
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_array_t_p_lv_array_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_array_t_p_lv_array_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -4645,7 +4653,7 @@ static bool invoke_INT_lv_circle_buf_t_p_INT(const invoke_table_entry_t *entry, 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_circle_buf_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_circle_buf_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -4703,7 +4711,7 @@ static bool invoke_INT_lv_circle_buf_t_p_INT_INT_POINTER(const invoke_table_entr
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_circle_buf_t_p_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_circle_buf_t_p_INT_INT_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -4712,7 +4720,7 @@ static bool invoke_INT_lv_circle_buf_t_p_INT_INT_POINTER(const invoke_table_entr
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_lv_circle_buf_t_p_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_lv_circle_buf_t_p_INT_INT_POINTER)", specific_type_str2, entry->name);
         return false;
     }
@@ -4721,7 +4729,7 @@ static bool invoke_INT_lv_circle_buf_t_p_INT_INT_POINTER(const invoke_table_entr
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_INT_lv_circle_buf_t_p_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_INT_lv_circle_buf_t_p_INT_INT_POINTER)", specific_type_str3, entry->name);
         return false;
     }
@@ -4778,7 +4786,7 @@ static bool invoke_INT_lv_circle_buf_t_p_INT_POINTER(const invoke_table_entry_t 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_circle_buf_t_p_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_circle_buf_t_p_INT_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -4787,7 +4795,7 @@ static bool invoke_INT_lv_circle_buf_t_p_INT_POINTER(const invoke_table_entry_t 
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_lv_circle_buf_t_p_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_lv_circle_buf_t_p_INT_POINTER)", specific_type_str2, entry->name);
         return false;
     }
@@ -4843,7 +4851,7 @@ static bool invoke_INT_lv_circle_buf_t_p_POINTER(const invoke_table_entry_t *ent
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_circle_buf_t_p_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_circle_buf_t_p_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -4896,7 +4904,7 @@ static bool invoke_INT_lv_color_t(const invoke_table_entry_t *entry, void *targe
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_color_t)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_color_t)", specific_type_str0, entry->name);
         return false;
     }
@@ -4950,7 +4958,7 @@ static bool invoke_INT_lv_color_t_INT(const invoke_table_entry_t *entry, void *t
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_color_t_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_color_t_INT)", specific_type_str0, entry->name);
         return false;
     }
@@ -4959,7 +4967,7 @@ static bool invoke_INT_lv_color_t_INT(const invoke_table_entry_t *entry, void *t
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_lv_color_t_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_lv_color_t_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -5062,7 +5070,7 @@ static bool invoke_INT_lv_font_t_p_INT_INT(const invoke_table_entry_t *entry, vo
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_font_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_font_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -5071,7 +5079,7 @@ static bool invoke_INT_lv_font_t_p_INT_INT(const invoke_table_entry_t *entry, vo
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_lv_font_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_lv_font_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -5173,7 +5181,7 @@ static bool invoke_INT_lv_fs_dir_t_p_const_char_p(const invoke_table_entry_t *en
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_fs_dir_t_p_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_fs_dir_t_p_const_char_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -5230,7 +5238,7 @@ static bool invoke_INT_lv_fs_dir_t_p_const_char_p_INT(const invoke_table_entry_t
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_fs_dir_t_p_const_char_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_fs_dir_t_p_const_char_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -5239,7 +5247,7 @@ static bool invoke_INT_lv_fs_dir_t_p_const_char_p_INT(const invoke_table_entry_t
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_lv_fs_dir_t_p_const_char_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_lv_fs_dir_t_p_const_char_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -5342,7 +5350,7 @@ static bool invoke_INT_lv_fs_file_t_p_INT_INT(const invoke_table_entry_t *entry,
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_fs_file_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_fs_file_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -5351,7 +5359,7 @@ static bool invoke_INT_lv_fs_file_t_p_INT_INT(const invoke_table_entry_t *entry,
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_lv_fs_file_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_lv_fs_file_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -5407,7 +5415,7 @@ static bool invoke_INT_lv_fs_file_t_p_POINTER(const invoke_table_entry_t *entry,
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_fs_file_t_p_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_fs_file_t_p_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -5465,7 +5473,7 @@ static bool invoke_INT_lv_fs_file_t_p_POINTER_INT_POINTER(const invoke_table_ent
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_fs_file_t_p_POINTER_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_fs_file_t_p_POINTER_INT_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -5474,7 +5482,7 @@ static bool invoke_INT_lv_fs_file_t_p_POINTER_INT_POINTER(const invoke_table_ent
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_lv_fs_file_t_p_POINTER_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_lv_fs_file_t_p_POINTER_INT_POINTER)", specific_type_str2, entry->name);
         return false;
     }
@@ -5483,7 +5491,7 @@ static bool invoke_INT_lv_fs_file_t_p_POINTER_INT_POINTER(const invoke_table_ent
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_INT_lv_fs_file_t_p_POINTER_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_INT_lv_fs_file_t_p_POINTER_INT_POINTER)", specific_type_str3, entry->name);
         return false;
     }
@@ -5540,7 +5548,7 @@ static bool invoke_INT_lv_fs_file_t_p_const_char_p_INT(const invoke_table_entry_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_fs_file_t_p_const_char_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_fs_file_t_p_const_char_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -5549,7 +5557,7 @@ static bool invoke_INT_lv_fs_file_t_p_const_char_p_INT(const invoke_table_entry_
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_lv_fs_file_t_p_const_char_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_lv_fs_file_t_p_const_char_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -5606,7 +5614,7 @@ static bool invoke_INT_lv_image_decoder_dsc_t_p_POINTER_lv_image_decoder_args_t_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_image_decoder_dsc_t_p_POINTER_lv_image_decoder_args_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_image_decoder_dsc_t_p_POINTER_lv_image_decoder_args_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -5615,7 +5623,7 @@ static bool invoke_INT_lv_image_decoder_dsc_t_p_POINTER_lv_image_decoder_args_t_
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_lv_image_decoder_dsc_t_p_POINTER_lv_image_decoder_args_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_lv_image_decoder_dsc_t_p_POINTER_lv_image_decoder_args_t_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -5672,7 +5680,7 @@ static bool invoke_INT_lv_image_decoder_dsc_t_p_lv_area_t_p_lv_area_t_p(const in
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_image_decoder_dsc_t_p_lv_area_t_p_lv_area_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_image_decoder_dsc_t_p_lv_area_t_p_lv_area_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -5681,7 +5689,7 @@ static bool invoke_INT_lv_image_decoder_dsc_t_p_lv_area_t_p_lv_area_t_p(const in
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_lv_image_decoder_dsc_t_p_lv_area_t_p_lv_area_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_lv_image_decoder_dsc_t_p_lv_area_t_p_lv_area_t_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -5737,7 +5745,7 @@ static bool invoke_INT_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p(const invok
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -5795,7 +5803,7 @@ static bool invoke_INT_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p_lv_area_t_p
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p_lv_area_t_p_lv_area_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p_lv_area_t_p_lv_area_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -5804,7 +5812,7 @@ static bool invoke_INT_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p_lv_area_t_p
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p_lv_area_t_p_lv_area_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p_lv_area_t_p_lv_area_t_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -5813,7 +5821,7 @@ static bool invoke_INT_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p_lv_area_t_p
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_INT_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p_lv_area_t_p_lv_area_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_INT_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p_lv_area_t_p_lv_area_t_p)", specific_type_str3, entry->name);
         return false;
     }
@@ -5870,7 +5878,7 @@ static bool invoke_INT_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p_lv_image_he
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p_lv_image_header_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p_lv_image_header_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -5879,7 +5887,7 @@ static bool invoke_INT_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p_lv_image_he
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p_lv_image_header_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p_lv_image_header_t_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -5981,7 +5989,7 @@ static bool invoke_INT_lv_obj_class_t_p_lv_event_t_p(const invoke_table_entry_t 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_obj_class_t_p_lv_event_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_obj_class_t_p_lv_event_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -6083,7 +6091,7 @@ static bool invoke_INT_lv_obj_t_p_INT(const invoke_table_entry_t *entry, void *t
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_obj_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_obj_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -6140,7 +6148,7 @@ static bool invoke_INT_lv_obj_t_p_INT_INT(const invoke_table_entry_t *entry, voi
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_obj_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_obj_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -6149,7 +6157,7 @@ static bool invoke_INT_lv_obj_t_p_INT_INT(const invoke_table_entry_t *entry, voi
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_lv_obj_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_lv_obj_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -6206,7 +6214,7 @@ static bool invoke_INT_lv_obj_t_p_INT_POINTER(const invoke_table_entry_t *entry,
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_obj_t_p_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_obj_t_p_INT_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -6215,7 +6223,7 @@ static bool invoke_INT_lv_obj_t_p_INT_POINTER(const invoke_table_entry_t *entry,
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_lv_obj_t_p_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_lv_obj_t_p_INT_POINTER)", specific_type_str2, entry->name);
         return false;
     }
@@ -6272,7 +6280,7 @@ static bool invoke_INT_lv_obj_t_p_INT_const_char_p(const invoke_table_entry_t *e
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_obj_t_p_INT_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_obj_t_p_INT_const_char_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -6281,7 +6289,7 @@ static bool invoke_INT_lv_obj_t_p_INT_const_char_p(const invoke_table_entry_t *e
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_lv_obj_t_p_INT_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_lv_obj_t_p_INT_const_char_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -6339,7 +6347,7 @@ static bool invoke_INT_lv_obj_t_p_INT_lv_style_value_t_p_INT(const invoke_table_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_obj_t_p_INT_lv_style_value_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_obj_t_p_INT_lv_style_value_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -6348,7 +6356,7 @@ static bool invoke_INT_lv_obj_t_p_INT_lv_style_value_t_p_INT(const invoke_table_
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_lv_obj_t_p_INT_lv_style_value_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_lv_obj_t_p_INT_lv_style_value_t_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -6357,7 +6365,7 @@ static bool invoke_INT_lv_obj_t_p_INT_lv_style_value_t_p_INT(const invoke_table_
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_INT_lv_obj_t_p_INT_lv_style_value_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_INT_lv_obj_t_p_INT_lv_style_value_t_p_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -6413,7 +6421,7 @@ static bool invoke_INT_lv_obj_t_p_const_char_p(const invoke_table_entry_t *entry
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_obj_t_p_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_obj_t_p_const_char_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -6469,7 +6477,7 @@ static bool invoke_INT_lv_obj_t_p_lv_chart_cursor_t_p(const invoke_table_entry_t
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_obj_t_p_lv_chart_cursor_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_obj_t_p_lv_chart_cursor_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -6525,7 +6533,7 @@ static bool invoke_INT_lv_obj_t_p_lv_chart_series_t_p(const invoke_table_entry_t
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_obj_t_p_lv_chart_series_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_obj_t_p_lv_chart_series_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -6581,7 +6589,7 @@ static bool invoke_INT_lv_obj_t_p_lv_obj_class_t_p(const invoke_table_entry_t *e
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_obj_t_p_lv_obj_class_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_obj_t_p_lv_obj_class_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -6638,7 +6646,7 @@ static bool invoke_INT_lv_obj_t_p_lv_point_t_p_BOOL(const invoke_table_entry_t *
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_obj_t_p_lv_point_t_p_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_obj_t_p_lv_point_t_p_BOOL)", specific_type_str1, entry->name);
         return false;
     }
@@ -6647,7 +6655,7 @@ static bool invoke_INT_lv_obj_t_p_lv_point_t_p_BOOL(const invoke_table_entry_t *
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_lv_obj_t_p_lv_point_t_p_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_lv_obj_t_p_lv_point_t_p_BOOL)", specific_type_str2, entry->name);
         return false;
     }
@@ -6703,7 +6711,7 @@ static bool invoke_INT_lv_obj_t_p_lv_span_t_p(const invoke_table_entry_t *entry,
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_obj_t_p_lv_span_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_obj_t_p_lv_span_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -6852,7 +6860,7 @@ static bool invoke_INT_lv_style_t_p_INT_lv_style_value_t_p(const invoke_table_en
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_INT_lv_style_t_p_INT_lv_style_value_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_INT_lv_style_t_p_INT_lv_style_value_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -6861,7 +6869,7 @@ static bool invoke_INT_lv_style_t_p_INT_lv_style_value_t_p(const invoke_table_en
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_INT_lv_style_t_p_INT_lv_style_value_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_INT_lv_style_t_p_INT_lv_style_value_t_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -6960,7 +6968,7 @@ static bool invoke_POINTER_INT(const invoke_table_entry_t *entry, void *target_o
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_POINTER_INT)", specific_type_str0, entry->name);
         return false;
     }
@@ -7014,7 +7022,7 @@ static bool invoke_POINTER_INT_INT(const invoke_table_entry_t *entry, void *targ
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_POINTER_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_POINTER_INT_INT)", specific_type_str0, entry->name);
         return false;
     }
@@ -7023,7 +7031,7 @@ static bool invoke_POINTER_INT_INT(const invoke_table_entry_t *entry, void *targ
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_POINTER_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_POINTER_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -7079,7 +7087,7 @@ static bool invoke_POINTER_POINTER_INT(const invoke_table_entry_t *entry, void *
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_POINTER_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_POINTER_POINTER_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -7136,7 +7144,7 @@ static bool invoke_POINTER_POINTER_POINTER_INT(const invoke_table_entry_t *entry
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_POINTER_POINTER_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_POINTER_POINTER_POINTER_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -7145,7 +7153,7 @@ static bool invoke_POINTER_POINTER_POINTER_INT(const invoke_table_entry_t *entry
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_POINTER_POINTER_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_POINTER_POINTER_POINTER_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -7204,7 +7212,7 @@ static bool invoke_POINTER_POINTER_POINTER_INT_INT_INT(const invoke_table_entry_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_POINTER_POINTER_POINTER_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_POINTER_POINTER_POINTER_INT_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -7213,7 +7221,7 @@ static bool invoke_POINTER_POINTER_POINTER_INT_INT_INT(const invoke_table_entry_
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_POINTER_POINTER_POINTER_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_POINTER_POINTER_POINTER_INT_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -7222,7 +7230,7 @@ static bool invoke_POINTER_POINTER_POINTER_INT_INT_INT(const invoke_table_entry_
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_POINTER_POINTER_POINTER_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_POINTER_POINTER_POINTER_INT_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -7231,7 +7239,7 @@ static bool invoke_POINTER_POINTER_POINTER_INT_INT_INT(const invoke_table_entry_
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_POINTER_POINTER_POINTER_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 4 (using specific type 'specific_type_str4')
-    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_POINTER_POINTER_POINTER_INT_INT_INT)", specific_type_str4, entry->name);
         return false;
     }
@@ -7333,7 +7341,7 @@ static bool invoke_POINTER_lv_array_t_p_INT(const invoke_table_entry_t *entry, v
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_POINTER_lv_array_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_POINTER_lv_array_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -7435,7 +7443,7 @@ static bool invoke_POINTER_lv_font_glyph_dsc_t_p_lv_draw_buf_t_p(const invoke_ta
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_POINTER_lv_font_glyph_dsc_t_p_lv_draw_buf_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_POINTER_lv_font_glyph_dsc_t_p_lv_draw_buf_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -7537,7 +7545,7 @@ static bool invoke_POINTER_lv_ll_t_p_POINTER(const invoke_table_entry_t *entry, 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_POINTER_lv_ll_t_p_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_POINTER_lv_ll_t_p_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -7639,7 +7647,7 @@ static bool invoke_POINTER_lv_obj_t_p_INT(const invoke_table_entry_t *entry, voi
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_POINTER_lv_obj_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_POINTER_lv_obj_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -7696,7 +7704,7 @@ static bool invoke_POINTER_lv_obj_t_p_INT_INT(const invoke_table_entry_t *entry,
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_POINTER_lv_obj_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_POINTER_lv_obj_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -7705,7 +7713,7 @@ static bool invoke_POINTER_lv_obj_t_p_INT_INT(const invoke_table_entry_t *entry,
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_POINTER_lv_obj_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_POINTER_lv_obj_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -7761,7 +7769,7 @@ static bool invoke_POINTER_lv_obj_t_p_lv_chart_series_t_p(const invoke_table_ent
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_POINTER_lv_obj_t_p_lv_chart_series_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_POINTER_lv_obj_t_p_lv_chart_series_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -7863,7 +7871,7 @@ static bool invoke_POINTER_lv_rb_t_p_POINTER(const invoke_table_entry_t *entry, 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_POINTER_lv_rb_t_p_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_POINTER_lv_rb_t_p_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -7919,7 +7927,7 @@ static bool invoke_POINTER_lv_rb_t_p_lv_rb_node_t_p(const invoke_table_entry_t *
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_POINTER_lv_rb_t_p_lv_rb_node_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_POINTER_lv_rb_t_p_lv_rb_node_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -8110,7 +8118,7 @@ static bool invoke_const_char_p_const_char_p_INT(const invoke_table_entry_t *ent
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_const_char_p_const_char_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_const_char_p_const_char_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -8166,7 +8174,7 @@ static bool invoke_const_char_p_const_char_p_const_char_p(const invoke_table_ent
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_const_char_p_const_char_p_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_const_char_p_const_char_p_const_char_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -8223,7 +8231,7 @@ static bool invoke_const_char_p_const_char_p_const_char_p_INT(const invoke_table
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_const_char_p_const_char_p_const_char_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_const_char_p_const_char_p_const_char_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -8232,7 +8240,7 @@ static bool invoke_const_char_p_const_char_p_const_char_p_INT(const invoke_table
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_const_char_p_const_char_p_const_char_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_const_char_p_const_char_p_const_char_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -8334,7 +8342,7 @@ static bool invoke_const_char_p_lv_obj_t_p_INT(const invoke_table_entry_t *entry
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_const_char_p_lv_obj_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_const_char_p_lv_obj_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -8391,7 +8399,7 @@ static bool invoke_const_char_p_lv_obj_t_p_INT_INT(const invoke_table_entry_t *e
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_const_char_p_lv_obj_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_const_char_p_lv_obj_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -8400,7 +8408,7 @@ static bool invoke_const_char_p_lv_obj_t_p_INT_INT(const invoke_table_entry_t *e
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_const_char_p_lv_obj_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_const_char_p_lv_obj_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -8456,7 +8464,7 @@ static bool invoke_const_char_p_lv_obj_t_p_lv_obj_t_p(const invoke_table_entry_t
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_const_char_p_lv_obj_t_p_lv_obj_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_const_char_p_lv_obj_t_p_lv_obj_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -8604,7 +8612,7 @@ static bool invoke_lv_anim_t_p_lv_obj_t_p_INT(const invoke_table_entry_t *entry,
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_anim_t_p_lv_obj_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_anim_t_p_lv_obj_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -8662,7 +8670,7 @@ static bool invoke_lv_cache_entry_t_p_lv_image_decoder_t_p_lv_image_cache_data_t
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_cache_entry_t_p_lv_image_decoder_t_p_lv_image_cache_data_t_p_lv_draw_buf_t_p_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_cache_entry_t_p_lv_image_decoder_t_p_lv_image_cache_data_t_p_lv_draw_buf_t_p_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -8671,7 +8679,7 @@ static bool invoke_lv_cache_entry_t_p_lv_image_decoder_t_p_lv_image_cache_data_t
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_lv_cache_entry_t_p_lv_image_decoder_t_p_lv_image_cache_data_t_p_lv_draw_buf_t_p_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_lv_cache_entry_t_p_lv_image_decoder_t_p_lv_image_cache_data_t_p_lv_draw_buf_t_p_POINTER)", specific_type_str2, entry->name);
         return false;
     }
@@ -8680,7 +8688,7 @@ static bool invoke_lv_cache_entry_t_p_lv_image_decoder_t_p_lv_image_cache_data_t
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_lv_cache_entry_t_p_lv_image_decoder_t_p_lv_image_cache_data_t_p_lv_draw_buf_t_p_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_lv_cache_entry_t_p_lv_image_decoder_t_p_lv_image_cache_data_t_p_lv_draw_buf_t_p_POINTER)", specific_type_str3, entry->name);
         return false;
     }
@@ -8737,7 +8745,7 @@ static bool invoke_lv_chart_cursor_t_p_lv_obj_t_p_lv_color_t_INT(const invoke_ta
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_chart_cursor_t_p_lv_obj_t_p_lv_color_t_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_chart_cursor_t_p_lv_obj_t_p_lv_color_t_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -8746,7 +8754,7 @@ static bool invoke_lv_chart_cursor_t_p_lv_obj_t_p_lv_color_t_INT(const invoke_ta
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_lv_chart_cursor_t_p_lv_obj_t_p_lv_color_t_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_lv_chart_cursor_t_p_lv_obj_t_p_lv_color_t_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -8802,7 +8810,7 @@ static bool invoke_lv_chart_series_t_p_lv_obj_t_p_lv_chart_series_t_p(const invo
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_chart_series_t_p_lv_obj_t_p_lv_chart_series_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_chart_series_t_p_lv_obj_t_p_lv_chart_series_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -8859,7 +8867,7 @@ static bool invoke_lv_chart_series_t_p_lv_obj_t_p_lv_color_t_INT(const invoke_ta
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_chart_series_t_p_lv_obj_t_p_lv_color_t_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_chart_series_t_p_lv_obj_t_p_lv_color_t_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -8868,7 +8876,7 @@ static bool invoke_lv_chart_series_t_p_lv_obj_t_p_lv_color_t_INT(const invoke_ta
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_lv_chart_series_t_p_lv_obj_t_p_lv_color_t_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_lv_chart_series_t_p_lv_obj_t_p_lv_color_t_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -8922,7 +8930,7 @@ static bool invoke_lv_circle_buf_t_p_INT_INT(const invoke_table_entry_t *entry, 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_circle_buf_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_circle_buf_t_p_INT_INT)", specific_type_str0, entry->name);
         return false;
     }
@@ -8931,7 +8939,7 @@ static bool invoke_lv_circle_buf_t_p_INT_INT(const invoke_table_entry_t *entry, 
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_lv_circle_buf_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_lv_circle_buf_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -8988,7 +8996,7 @@ static bool invoke_lv_circle_buf_t_p_POINTER_INT_INT(const invoke_table_entry_t 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_circle_buf_t_p_POINTER_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_circle_buf_t_p_POINTER_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -8997,7 +9005,7 @@ static bool invoke_lv_circle_buf_t_p_POINTER_INT_INT(const invoke_table_entry_t 
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_lv_circle_buf_t_p_POINTER_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_lv_circle_buf_t_p_POINTER_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -9099,7 +9107,7 @@ static bool invoke_lv_color_filter_dsc_t_p_lv_obj_t_p_INT(const invoke_table_ent
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_color_filter_dsc_t_p_lv_obj_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_color_filter_dsc_t_p_lv_obj_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -9195,7 +9203,7 @@ static bool invoke_lv_color_t_INT(const invoke_table_entry_t *entry, void *targe
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_color_t_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_color_t_INT)", specific_type_str0, entry->name);
         return false;
     }
@@ -9249,7 +9257,7 @@ static bool invoke_lv_color_t_INT_INT(const invoke_table_entry_t *entry, void *t
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_color_t_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_color_t_INT_INT)", specific_type_str0, entry->name);
         return false;
     }
@@ -9258,7 +9266,7 @@ static bool invoke_lv_color_t_INT_INT(const invoke_table_entry_t *entry, void *t
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_lv_color_t_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_lv_color_t_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -9313,7 +9321,7 @@ static bool invoke_lv_color_t_INT_INT_INT(const invoke_table_entry_t *entry, voi
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_color_t_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_color_t_INT_INT_INT)", specific_type_str0, entry->name);
         return false;
     }
@@ -9322,7 +9330,7 @@ static bool invoke_lv_color_t_INT_INT_INT(const invoke_table_entry_t *entry, voi
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_lv_color_t_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_lv_color_t_INT_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -9331,7 +9339,7 @@ static bool invoke_lv_color_t_INT_INT_INT(const invoke_table_entry_t *entry, voi
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_lv_color_t_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg2, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_lv_color_t_INT_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -9385,7 +9393,7 @@ static bool invoke_lv_color_t_lv_color_t_INT(const invoke_table_entry_t *entry, 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_color_t_lv_color_t_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_color_t_lv_color_t_INT)", specific_type_str0, entry->name);
         return false;
     }
@@ -9394,7 +9402,7 @@ static bool invoke_lv_color_t_lv_color_t_INT(const invoke_table_entry_t *entry, 
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_lv_color_t_lv_color_t_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_lv_color_t_lv_color_t_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -9449,7 +9457,7 @@ static bool invoke_lv_color_t_lv_color_t_lv_color_t_INT(const invoke_table_entry
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_color_t_lv_color_t_lv_color_t_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_color_t_lv_color_t_lv_color_t_INT)", specific_type_str0, entry->name);
         return false;
     }
@@ -9458,7 +9466,7 @@ static bool invoke_lv_color_t_lv_color_t_lv_color_t_INT(const invoke_table_entry
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_lv_color_t_lv_color_t_lv_color_t_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_lv_color_t_lv_color_t_lv_color_t_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -9467,7 +9475,7 @@ static bool invoke_lv_color_t_lv_color_t_lv_color_t_INT(const invoke_table_entry
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_lv_color_t_lv_color_t_lv_color_t_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg2, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_lv_color_t_lv_color_t_lv_color_t_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -9523,7 +9531,7 @@ static bool invoke_lv_color_t_lv_obj_t_p_INT(const invoke_table_entry_t *entry, 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_color_t_lv_obj_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_color_t_lv_obj_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -9579,7 +9587,7 @@ static bool invoke_lv_color_t_lv_obj_t_p_lv_chart_series_t_p(const invoke_table_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_color_t_lv_obj_t_p_lv_chart_series_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_color_t_lv_obj_t_p_lv_chart_series_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -9727,7 +9735,7 @@ static bool invoke_lv_draw_buf_t_p_lv_image_decoder_dsc_t_p_lv_draw_buf_t_p(cons
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_draw_buf_t_p_lv_image_decoder_dsc_t_p_lv_draw_buf_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_draw_buf_t_p_lv_image_decoder_dsc_t_p_lv_draw_buf_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -9829,7 +9837,7 @@ static bool invoke_lv_event_dsc_t_p_lv_obj_t_p_INT(const invoke_table_entry_t *e
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_event_dsc_t_p_lv_obj_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_event_dsc_t_p_lv_obj_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -9887,7 +9895,7 @@ static bool invoke_lv_event_dsc_t_p_lv_obj_t_p_INT_INT_POINTER(const invoke_tabl
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_event_dsc_t_p_lv_obj_t_p_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_event_dsc_t_p_lv_obj_t_p_INT_INT_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -9896,7 +9904,7 @@ static bool invoke_lv_event_dsc_t_p_lv_obj_t_p_INT_INT_POINTER(const invoke_tabl
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_lv_event_dsc_t_p_lv_obj_t_p_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_lv_event_dsc_t_p_lv_obj_t_p_INT_INT_POINTER)", specific_type_str2, entry->name);
         return false;
     }
@@ -9905,7 +9913,7 @@ static bool invoke_lv_event_dsc_t_p_lv_obj_t_p_INT_INT_POINTER(const invoke_tabl
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_lv_event_dsc_t_p_lv_obj_t_p_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_lv_event_dsc_t_p_lv_obj_t_p_INT_INT_POINTER)", specific_type_str3, entry->name);
         return false;
     }
@@ -10050,7 +10058,7 @@ static bool invoke_lv_font_t_p_lv_obj_t_p_INT(const invoke_table_entry_t *entry,
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_font_t_p_lv_obj_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_font_t_p_lv_obj_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -10103,7 +10111,7 @@ static bool invoke_lv_fs_drv_t_p_INT(const invoke_table_entry_t *entry, void *ta
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_fs_drv_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_fs_drv_t_p_INT)", specific_type_str0, entry->name);
         return false;
     }
@@ -10159,7 +10167,7 @@ static bool invoke_lv_grad_dsc_t_p_lv_obj_t_p_INT(const invoke_table_entry_t *en
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_grad_dsc_t_p_lv_obj_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_grad_dsc_t_p_lv_obj_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -10620,7 +10628,7 @@ static bool invoke_lv_obj_t_p_lv_obj_t_p_INT(const invoke_table_entry_t *entry, 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -10678,7 +10686,7 @@ static bool invoke_lv_obj_t_p_lv_obj_t_p_INT_INT_INT(const invoke_table_entry_t 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_INT_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -10687,7 +10695,7 @@ static bool invoke_lv_obj_t_p_lv_obj_t_p_INT_INT_INT(const invoke_table_entry_t 
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_INT_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -10696,7 +10704,7 @@ static bool invoke_lv_obj_t_p_lv_obj_t_p_INT_INT_INT(const invoke_table_entry_t 
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_INT_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -10753,7 +10761,7 @@ static bool invoke_lv_obj_t_p_lv_obj_t_p_INT_lv_obj_class_t_p(const invoke_table
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_INT_lv_obj_class_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_INT_lv_obj_class_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -10762,7 +10770,7 @@ static bool invoke_lv_obj_t_p_lv_obj_t_p_INT_lv_obj_class_t_p(const invoke_table
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_INT_lv_obj_class_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_INT_lv_obj_class_t_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -10818,7 +10826,7 @@ static bool invoke_lv_obj_t_p_lv_obj_t_p_POINTER(const invoke_table_entry_t *ent
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -10875,7 +10883,7 @@ static bool invoke_lv_obj_t_p_lv_obj_t_p_POINTER_INT(const invoke_table_entry_t 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_POINTER_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -10884,7 +10892,7 @@ static bool invoke_lv_obj_t_p_lv_obj_t_p_POINTER_INT(const invoke_table_entry_t 
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_POINTER_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -10941,7 +10949,7 @@ static bool invoke_lv_obj_t_p_lv_obj_t_p_POINTER_const_char_p(const invoke_table
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_POINTER_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_POINTER_const_char_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -10950,7 +10958,7 @@ static bool invoke_lv_obj_t_p_lv_obj_t_p_POINTER_const_char_p(const invoke_table
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_POINTER_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_POINTER_const_char_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -11006,7 +11014,7 @@ static bool invoke_lv_obj_t_p_lv_obj_t_p_const_char_p(const invoke_table_entry_t
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_obj_t_p_lv_obj_t_p_const_char_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -11108,7 +11116,7 @@ static bool invoke_lv_observer_t_p_lv_obj_t_p_lv_subject_t_p(const invoke_table_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_observer_t_p_lv_obj_t_p_lv_subject_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_observer_t_p_lv_obj_t_p_lv_subject_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -11166,7 +11174,7 @@ static bool invoke_lv_observer_t_p_lv_obj_t_p_lv_subject_t_p_INT_INT(const invok
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_observer_t_p_lv_obj_t_p_lv_subject_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_observer_t_p_lv_obj_t_p_lv_subject_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -11175,7 +11183,7 @@ static bool invoke_lv_observer_t_p_lv_obj_t_p_lv_subject_t_p_INT_INT(const invok
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_lv_observer_t_p_lv_obj_t_p_lv_subject_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_lv_observer_t_p_lv_obj_t_p_lv_subject_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -11184,7 +11192,7 @@ static bool invoke_lv_observer_t_p_lv_obj_t_p_lv_subject_t_p_INT_INT(const invok
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_lv_observer_t_p_lv_obj_t_p_lv_subject_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_lv_observer_t_p_lv_obj_t_p_lv_subject_t_p_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -11241,7 +11249,7 @@ static bool invoke_lv_observer_t_p_lv_obj_t_p_lv_subject_t_p_const_char_p(const 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_observer_t_p_lv_obj_t_p_lv_subject_t_p_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_observer_t_p_lv_obj_t_p_lv_subject_t_p_const_char_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -11250,7 +11258,7 @@ static bool invoke_lv_observer_t_p_lv_obj_t_p_lv_subject_t_p_const_char_p(const 
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_lv_observer_t_p_lv_obj_t_p_lv_subject_t_p_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_lv_observer_t_p_lv_obj_t_p_lv_subject_t_p_const_char_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -11307,7 +11315,7 @@ static bool invoke_lv_observer_t_p_lv_subject_t_p_INT_POINTER(const invoke_table
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_observer_t_p_lv_subject_t_p_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_observer_t_p_lv_subject_t_p_INT_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -11316,7 +11324,7 @@ static bool invoke_lv_observer_t_p_lv_subject_t_p_INT_POINTER(const invoke_table
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_lv_observer_t_p_lv_subject_t_p_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_lv_observer_t_p_lv_subject_t_p_INT_POINTER)", specific_type_str2, entry->name);
         return false;
     }
@@ -11374,7 +11382,7 @@ static bool invoke_lv_observer_t_p_lv_subject_t_p_INT_POINTER_POINTER(const invo
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_observer_t_p_lv_subject_t_p_INT_POINTER_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_observer_t_p_lv_subject_t_p_INT_POINTER_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -11383,7 +11391,7 @@ static bool invoke_lv_observer_t_p_lv_subject_t_p_INT_POINTER_POINTER(const invo
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_lv_observer_t_p_lv_subject_t_p_INT_POINTER_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_lv_observer_t_p_lv_subject_t_p_INT_POINTER_POINTER)", specific_type_str2, entry->name);
         return false;
     }
@@ -11392,7 +11400,7 @@ static bool invoke_lv_observer_t_p_lv_subject_t_p_INT_POINTER_POINTER(const invo
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_lv_observer_t_p_lv_subject_t_p_INT_POINTER_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_lv_observer_t_p_lv_subject_t_p_INT_POINTER_POINTER)", specific_type_str3, entry->name);
         return false;
     }
@@ -11450,7 +11458,7 @@ static bool invoke_lv_observer_t_p_lv_subject_t_p_INT_lv_obj_t_p_POINTER(const i
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_observer_t_p_lv_subject_t_p_INT_lv_obj_t_p_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_observer_t_p_lv_subject_t_p_INT_lv_obj_t_p_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -11459,7 +11467,7 @@ static bool invoke_lv_observer_t_p_lv_subject_t_p_INT_lv_obj_t_p_POINTER(const i
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_lv_observer_t_p_lv_subject_t_p_INT_lv_obj_t_p_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_lv_observer_t_p_lv_subject_t_p_INT_lv_obj_t_p_POINTER)", specific_type_str2, entry->name);
         return false;
     }
@@ -11468,7 +11476,7 @@ static bool invoke_lv_observer_t_p_lv_subject_t_p_INT_lv_obj_t_p_POINTER(const i
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_lv_observer_t_p_lv_subject_t_p_INT_lv_obj_t_p_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_lv_observer_t_p_lv_subject_t_p_INT_lv_obj_t_p_POINTER)", specific_type_str3, entry->name);
         return false;
     }
@@ -11662,7 +11670,7 @@ static bool invoke_lv_rb_node_t_p_lv_rb_t_p_POINTER(const invoke_table_entry_t *
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_rb_node_t_p_lv_rb_t_p_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_rb_node_t_p_lv_rb_t_p_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -11810,7 +11818,7 @@ static bool invoke_lv_span_t_p_lv_obj_t_p_INT(const invoke_table_entry_t *entry,
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_span_t_p_lv_obj_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_span_t_p_lv_obj_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -11866,7 +11874,7 @@ static bool invoke_lv_span_t_p_lv_obj_t_p_lv_point_t_p(const invoke_table_entry_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_span_t_p_lv_obj_t_p_lv_point_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_span_t_p_lv_obj_t_p_lv_point_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -11968,7 +11976,7 @@ static bool invoke_lv_style_transition_dsc_t_p_lv_obj_t_p_INT(const invoke_table
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_style_transition_dsc_t_p_lv_obj_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_style_transition_dsc_t_p_lv_obj_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -12024,7 +12032,7 @@ static bool invoke_lv_subject_t_p_lv_subject_t_p_INT(const invoke_table_entry_t 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_subject_t_p_lv_subject_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_subject_t_p_lv_subject_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -12080,7 +12088,7 @@ static bool invoke_lv_tree_node_t_p_lv_tree_class_t_p_lv_tree_node_t_p(const inv
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_lv_tree_node_t_p_lv_tree_class_t_p_lv_tree_node_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_lv_tree_node_t_p_lv_tree_class_t_p_lv_tree_node_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -12160,7 +12168,7 @@ static bool invoke_void_BOOL(const invoke_table_entry_t *entry, void *target_obj
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_BOOL)", specific_type_str0, entry->name);
         return false;
     }
@@ -12198,7 +12206,7 @@ static bool invoke_void_INT(const invoke_table_entry_t *entry, void *target_obj_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_INT)", specific_type_str0, entry->name);
         return false;
     }
@@ -12237,7 +12245,7 @@ static bool invoke_void_INT_BOOL(const invoke_table_entry_t *entry, void *target
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_INT_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_INT_BOOL)", specific_type_str0, entry->name);
         return false;
     }
@@ -12246,7 +12254,7 @@ static bool invoke_void_INT_BOOL(const invoke_table_entry_t *entry, void *target
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_INT_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_INT_BOOL)", specific_type_str1, entry->name);
         return false;
     }
@@ -12286,7 +12294,7 @@ static bool invoke_void_INT_lv_sqrt_res_t_p_INT(const invoke_table_entry_t *entr
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_INT_lv_sqrt_res_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 0 (using specific type 'specific_type_str0')
-    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str0, (void*)&arg_buf0, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_INT_lv_sqrt_res_t_p_INT)", specific_type_str0, entry->name);
         return false;
     }
@@ -12295,7 +12303,7 @@ static bool invoke_void_INT_lv_sqrt_res_t_p_INT(const invoke_table_entry_t *entr
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_INT_lv_sqrt_res_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_INT_lv_sqrt_res_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -12304,7 +12312,7 @@ static bool invoke_void_INT_lv_sqrt_res_t_p_INT(const invoke_table_entry_t *entr
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_INT_lv_sqrt_res_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg2, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_INT_lv_sqrt_res_t_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -12376,7 +12384,7 @@ static bool invoke_void_POINTER_INT(const invoke_table_entry_t *entry, void *tar
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_POINTER_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -12418,7 +12426,7 @@ static bool invoke_void_POINTER_INT_INT(const invoke_table_entry_t *entry, void 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_POINTER_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_POINTER_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -12427,7 +12435,7 @@ static bool invoke_void_POINTER_INT_INT(const invoke_table_entry_t *entry, void 
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_POINTER_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_POINTER_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -12499,7 +12507,7 @@ static bool invoke_void_lv_area_t_p_INT(const invoke_table_entry_t *entry, void 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_area_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_area_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -12541,7 +12549,7 @@ static bool invoke_void_lv_area_t_p_INT_INT(const invoke_table_entry_t *entry, v
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_area_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_area_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -12550,7 +12558,7 @@ static bool invoke_void_lv_area_t_p_INT_INT(const invoke_table_entry_t *entry, v
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_area_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_area_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -12594,7 +12602,7 @@ static bool invoke_void_lv_area_t_p_INT_INT_INT_INT(const invoke_table_entry_t *
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_area_t_p_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_area_t_p_INT_INT_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -12603,7 +12611,7 @@ static bool invoke_void_lv_area_t_p_INT_INT_INT_INT(const invoke_table_entry_t *
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_area_t_p_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_area_t_p_INT_INT_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -12612,7 +12620,7 @@ static bool invoke_void_lv_area_t_p_INT_INT_INT_INT(const invoke_table_entry_t *
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_area_t_p_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_area_t_p_INT_INT_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -12621,7 +12629,7 @@ static bool invoke_void_lv_area_t_p_INT_INT_INT_INT(const invoke_table_entry_t *
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_void_lv_area_t_p_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 4 (using specific type 'specific_type_str4')
-    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_void_lv_area_t_p_INT_INT_INT_INT)", specific_type_str4, entry->name);
         return false;
     }
@@ -12662,7 +12670,7 @@ static bool invoke_void_lv_area_t_p_lv_area_t_p(const invoke_table_entry_t *entr
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_area_t_p_lv_area_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_area_t_p_lv_area_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -12706,7 +12714,7 @@ static bool invoke_void_lv_area_t_p_lv_area_t_p_INT_INT_INT(const invoke_table_e
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_area_t_p_lv_area_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_area_t_p_lv_area_t_p_INT_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -12715,7 +12723,7 @@ static bool invoke_void_lv_area_t_p_lv_area_t_p_INT_INT_INT(const invoke_table_e
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_area_t_p_lv_area_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_area_t_p_lv_area_t_p_INT_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -12724,7 +12732,7 @@ static bool invoke_void_lv_area_t_p_lv_area_t_p_INT_INT_INT(const invoke_table_e
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_area_t_p_lv_area_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_area_t_p_lv_area_t_p_INT_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -12733,7 +12741,7 @@ static bool invoke_void_lv_area_t_p_lv_area_t_p_INT_INT_INT(const invoke_table_e
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_void_lv_area_t_p_lv_area_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 4 (using specific type 'specific_type_str4')
-    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_void_lv_area_t_p_lv_area_t_p_INT_INT_INT)", specific_type_str4, entry->name);
         return false;
     }
@@ -12806,7 +12814,7 @@ static bool invoke_void_lv_array_t_p_INT_INT(const invoke_table_entry_t *entry, 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_array_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_array_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -12815,7 +12823,7 @@ static bool invoke_void_lv_array_t_p_INT_INT(const invoke_table_entry_t *entry, 
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_array_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_array_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -12858,7 +12866,7 @@ static bool invoke_void_lv_array_t_p_POINTER_INT_INT(const invoke_table_entry_t 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_array_t_p_POINTER_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_array_t_p_POINTER_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -12867,7 +12875,7 @@ static bool invoke_void_lv_array_t_p_POINTER_INT_INT(const invoke_table_entry_t 
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_array_t_p_POINTER_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_array_t_p_POINTER_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -12876,7 +12884,7 @@ static bool invoke_void_lv_array_t_p_POINTER_INT_INT(const invoke_table_entry_t 
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_array_t_p_POINTER_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_array_t_p_POINTER_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -12917,7 +12925,7 @@ static bool invoke_void_lv_array_t_p_lv_array_t_p(const invoke_table_entry_t *en
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_array_t_p_lv_array_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_array_t_p_lv_array_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -12989,7 +12997,7 @@ static bool invoke_void_lv_color16_t_p_INT(const invoke_table_entry_t *entry, vo
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_color16_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_color16_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -13061,7 +13069,7 @@ static bool invoke_void_lv_color_filter_dsc_t_p_INT(const invoke_table_entry_t *
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_color_filter_dsc_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_color_filter_dsc_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -13226,7 +13234,7 @@ static bool invoke_void_lv_font_t_p_INT(const invoke_table_entry_t *entry, void 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_font_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_font_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -13300,7 +13308,7 @@ static bool invoke_void_lv_fs_path_ex_t_p_INT_POINTER_INT(const invoke_table_ent
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_fs_path_ex_t_p_INT_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_fs_path_ex_t_p_INT_POINTER_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -13309,7 +13317,7 @@ static bool invoke_void_lv_fs_path_ex_t_p_INT_POINTER_INT(const invoke_table_ent
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_fs_path_ex_t_p_INT_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_fs_path_ex_t_p_INT_POINTER_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -13318,7 +13326,7 @@ static bool invoke_void_lv_fs_path_ex_t_p_INT_POINTER_INT(const invoke_table_ent
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_fs_path_ex_t_p_INT_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_fs_path_ex_t_p_INT_POINTER_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -13393,7 +13401,7 @@ static bool invoke_void_lv_grad_dsc_t_p_lv_color_t_p_lv_opa_t_p_POINTER_INT(cons
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_grad_dsc_t_p_lv_color_t_p_lv_opa_t_p_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_grad_dsc_t_p_lv_color_t_p_lv_opa_t_p_POINTER_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -13402,7 +13410,7 @@ static bool invoke_void_lv_grad_dsc_t_p_lv_color_t_p_lv_opa_t_p_POINTER_INT(cons
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_grad_dsc_t_p_lv_color_t_p_lv_opa_t_p_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_grad_dsc_t_p_lv_color_t_p_lv_opa_t_p_POINTER_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -13411,7 +13419,7 @@ static bool invoke_void_lv_grad_dsc_t_p_lv_color_t_p_lv_opa_t_p_POINTER_INT(cons
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_grad_dsc_t_p_lv_color_t_p_lv_opa_t_p_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_grad_dsc_t_p_lv_color_t_p_lv_opa_t_p_POINTER_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -13420,7 +13428,7 @@ static bool invoke_void_lv_grad_dsc_t_p_lv_color_t_p_lv_opa_t_p_POINTER_INT(cons
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_void_lv_grad_dsc_t_p_lv_color_t_p_lv_opa_t_p_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 4 (using specific type 'specific_type_str4')
-    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_void_lv_grad_dsc_t_p_lv_color_t_p_lv_opa_t_p_POINTER_INT)", specific_type_str4, entry->name);
         return false;
     }
@@ -13523,7 +13531,7 @@ static bool invoke_void_lv_image_decoder_t_p_INT(const invoke_table_entry_t *ent
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_image_decoder_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_image_decoder_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -13564,7 +13572,7 @@ static bool invoke_void_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p(const invo
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_image_decoder_t_p_lv_image_decoder_dsc_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -13637,7 +13645,7 @@ static bool invoke_void_lv_image_dsc_t_p_INT_INT(const invoke_table_entry_t *ent
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_image_dsc_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_image_dsc_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -13646,7 +13654,7 @@ static bool invoke_void_lv_image_dsc_t_p_INT_INT(const invoke_table_entry_t *ent
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_image_dsc_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_image_dsc_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -13718,7 +13726,7 @@ static bool invoke_void_lv_layer_t_p_lv_obj_t_p(const invoke_table_entry_t *entr
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_layer_t_p_lv_obj_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_layer_t_p_lv_obj_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -13790,7 +13798,7 @@ static bool invoke_void_lv_ll_t_p_INT(const invoke_table_entry_t *entry, void *t
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_ll_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_ll_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -13831,7 +13839,7 @@ static bool invoke_void_lv_ll_t_p_POINTER(const invoke_table_entry_t *entry, voi
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_ll_t_p_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_ll_t_p_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -13873,7 +13881,7 @@ static bool invoke_void_lv_ll_t_p_POINTER_POINTER(const invoke_table_entry_t *en
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_ll_t_p_POINTER_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_ll_t_p_POINTER_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -13882,7 +13890,7 @@ static bool invoke_void_lv_ll_t_p_POINTER_POINTER(const invoke_table_entry_t *en
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_ll_t_p_POINTER_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_ll_t_p_POINTER_POINTER)", specific_type_str2, entry->name);
         return false;
     }
@@ -13925,7 +13933,7 @@ static bool invoke_void_lv_ll_t_p_lv_ll_t_p_POINTER_BOOL(const invoke_table_entr
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_ll_t_p_lv_ll_t_p_POINTER_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_ll_t_p_lv_ll_t_p_POINTER_BOOL)", specific_type_str1, entry->name);
         return false;
     }
@@ -13934,7 +13942,7 @@ static bool invoke_void_lv_ll_t_p_lv_ll_t_p_POINTER_BOOL(const invoke_table_entr
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_ll_t_p_lv_ll_t_p_POINTER_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_ll_t_p_lv_ll_t_p_POINTER_BOOL)", specific_type_str2, entry->name);
         return false;
     }
@@ -13943,7 +13951,7 @@ static bool invoke_void_lv_ll_t_p_lv_ll_t_p_POINTER_BOOL(const invoke_table_entr
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_ll_t_p_lv_ll_t_p_POINTER_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_ll_t_p_lv_ll_t_p_POINTER_BOOL)", specific_type_str3, entry->name);
         return false;
     }
@@ -14046,7 +14054,7 @@ static bool invoke_void_lv_obj_t_p_BOOL(const invoke_table_entry_t *entry, void 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_BOOL)", specific_type_str1, entry->name);
         return false;
     }
@@ -14088,7 +14096,7 @@ static bool invoke_void_lv_obj_t_p_BOOL_INT(const invoke_table_entry_t *entry, v
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_BOOL_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_BOOL_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -14097,7 +14105,7 @@ static bool invoke_void_lv_obj_t_p_BOOL_INT(const invoke_table_entry_t *entry, v
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_BOOL_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_BOOL_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -14138,7 +14146,7 @@ static bool invoke_void_lv_obj_t_p_INT(const invoke_table_entry_t *entry, void *
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -14180,7 +14188,7 @@ static bool invoke_void_lv_obj_t_p_INT_BOOL(const invoke_table_entry_t *entry, v
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_INT_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_BOOL)", specific_type_str1, entry->name);
         return false;
     }
@@ -14189,7 +14197,7 @@ static bool invoke_void_lv_obj_t_p_INT_BOOL(const invoke_table_entry_t *entry, v
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_INT_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_BOOL)", specific_type_str2, entry->name);
         return false;
     }
@@ -14231,7 +14239,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT(const invoke_table_entry_t *entry, vo
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -14240,7 +14248,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT(const invoke_table_entry_t *entry, vo
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -14283,7 +14291,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_BOOL(const invoke_table_entry_t *entr
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_BOOL)", specific_type_str1, entry->name);
         return false;
     }
@@ -14292,7 +14300,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_BOOL(const invoke_table_entry_t *entr
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_BOOL)", specific_type_str2, entry->name);
         return false;
     }
@@ -14301,7 +14309,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_BOOL(const invoke_table_entry_t *entr
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_BOOL)", specific_type_str3, entry->name);
         return false;
     }
@@ -14344,7 +14352,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_INT(const invoke_table_entry_t *entry
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -14353,7 +14361,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_INT(const invoke_table_entry_t *entry
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -14362,7 +14370,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_INT(const invoke_table_entry_t *entry
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -14406,7 +14414,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_INT_BOOL(const invoke_table_entry_t *
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT_BOOL)", specific_type_str1, entry->name);
         return false;
     }
@@ -14415,7 +14423,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_INT_BOOL(const invoke_table_entry_t *
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT_BOOL)", specific_type_str2, entry->name);
         return false;
     }
@@ -14424,7 +14432,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_INT_BOOL(const invoke_table_entry_t *
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT_BOOL)", specific_type_str3, entry->name);
         return false;
     }
@@ -14433,7 +14441,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_INT_BOOL(const invoke_table_entry_t *
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 4 (using specific type 'specific_type_str4')
-    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT_BOOL)", specific_type_str4, entry->name);
         return false;
     }
@@ -14479,7 +14487,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_INT_INT_INT_INT(const invoke_table_en
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT_INT_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -14488,7 +14496,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_INT_INT_INT_INT(const invoke_table_en
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT_INT_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -14497,7 +14505,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_INT_INT_INT_INT(const invoke_table_en
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT_INT_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -14506,7 +14514,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_INT_INT_INT_INT(const invoke_table_en
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 4 (using specific type 'specific_type_str4')
-    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT_INT_INT_INT)", specific_type_str4, entry->name);
         return false;
     }
@@ -14515,7 +14523,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_INT_INT_INT_INT(const invoke_table_en
     cJSON *json_arg4 = cJSON_GetArrayItem(args_array, 4);
     if (!json_arg4) { LOG_ERR("Invoke Error: Failed to get JSON arg 4 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 4 into C arg buffer 5 (using specific type 'specific_type_str5')
-    if (!(unmarshal_value(json_arg4, specific_type_str5, (void*)&arg_buf5))) {
+    if (!(unmarshal_value(json_arg4, specific_type_str5, (void*)&arg_buf5, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg4, "Invoke Error: Failed to unmarshal JSON arg 4 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT_INT_INT_INT)", specific_type_str5, entry->name);
         return false;
     }
@@ -14524,7 +14532,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_INT_INT_INT_INT(const invoke_table_en
     cJSON *json_arg5 = cJSON_GetArrayItem(args_array, 5);
     if (!json_arg5) { LOG_ERR("Invoke Error: Failed to get JSON arg 5 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 5 into C arg buffer 6 (using specific type 'specific_type_str6')
-    if (!(unmarshal_value(json_arg5, specific_type_str6, (void*)&arg_buf6))) {
+    if (!(unmarshal_value(json_arg5, specific_type_str6, (void*)&arg_buf6, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg5, "Invoke Error: Failed to unmarshal JSON arg 5 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_INT_INT_INT_INT)", specific_type_str6, entry->name);
         return false;
     }
@@ -14567,7 +14575,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_POINTER(const invoke_table_entry_t *e
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -14576,7 +14584,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_POINTER(const invoke_table_entry_t *e
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_POINTER)", specific_type_str2, entry->name);
         return false;
     }
@@ -14585,7 +14593,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_POINTER(const invoke_table_entry_t *e
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_POINTER)", specific_type_str3, entry->name);
         return false;
     }
@@ -14628,7 +14636,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_const_char_p(const invoke_table_entry
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_const_char_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -14637,7 +14645,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_const_char_p(const invoke_table_entry
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_const_char_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -14646,7 +14654,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_const_char_p(const invoke_table_entry
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_const_char_p)", specific_type_str3, entry->name);
         return false;
     }
@@ -14690,7 +14698,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_lv_color_t_INT(const invoke_table_ent
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_lv_color_t_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_lv_color_t_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -14699,7 +14707,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_lv_color_t_INT(const invoke_table_ent
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_lv_color_t_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_lv_color_t_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -14708,7 +14716,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_lv_color_t_INT(const invoke_table_ent
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_lv_color_t_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_lv_color_t_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -14717,7 +14725,7 @@ static bool invoke_void_lv_obj_t_p_INT_INT_lv_color_t_INT(const invoke_table_ent
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_void_lv_obj_t_p_INT_INT_lv_color_t_INT)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 4 (using specific type 'specific_type_str4')
-    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_INT_lv_color_t_INT)", specific_type_str4, entry->name);
         return false;
     }
@@ -14759,7 +14767,7 @@ static bool invoke_void_lv_obj_t_p_INT_POINTER(const invoke_table_entry_t *entry
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -14768,7 +14776,7 @@ static bool invoke_void_lv_obj_t_p_INT_POINTER(const invoke_table_entry_t *entry
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_POINTER)", specific_type_str2, entry->name);
         return false;
     }
@@ -14812,7 +14820,7 @@ static bool invoke_void_lv_obj_t_p_INT_POINTER_POINTER_POINTER(const invoke_tabl
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_INT_POINTER_POINTER_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_POINTER_POINTER_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -14821,7 +14829,7 @@ static bool invoke_void_lv_obj_t_p_INT_POINTER_POINTER_POINTER(const invoke_tabl
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_INT_POINTER_POINTER_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_POINTER_POINTER_POINTER)", specific_type_str2, entry->name);
         return false;
     }
@@ -14830,7 +14838,7 @@ static bool invoke_void_lv_obj_t_p_INT_POINTER_POINTER_POINTER(const invoke_tabl
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_obj_t_p_INT_POINTER_POINTER_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_POINTER_POINTER_POINTER)", specific_type_str3, entry->name);
         return false;
     }
@@ -14839,7 +14847,7 @@ static bool invoke_void_lv_obj_t_p_INT_POINTER_POINTER_POINTER(const invoke_tabl
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_void_lv_obj_t_p_INT_POINTER_POINTER_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 4 (using specific type 'specific_type_str4')
-    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_POINTER_POINTER_POINTER)", specific_type_str4, entry->name);
         return false;
     }
@@ -14881,7 +14889,7 @@ static bool invoke_void_lv_obj_t_p_INT_const_char_p(const invoke_table_entry_t *
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_INT_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_const_char_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -14890,7 +14898,7 @@ static bool invoke_void_lv_obj_t_p_INT_const_char_p(const invoke_table_entry_t *
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_INT_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_const_char_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -14932,7 +14940,7 @@ static bool invoke_void_lv_obj_t_p_INT_lv_draw_arc_dsc_t_p(const invoke_table_en
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_INT_lv_draw_arc_dsc_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_lv_draw_arc_dsc_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -14941,7 +14949,7 @@ static bool invoke_void_lv_obj_t_p_INT_lv_draw_arc_dsc_t_p(const invoke_table_en
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_INT_lv_draw_arc_dsc_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_lv_draw_arc_dsc_t_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -14983,7 +14991,7 @@ static bool invoke_void_lv_obj_t_p_INT_lv_draw_image_dsc_t_p(const invoke_table_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_INT_lv_draw_image_dsc_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_lv_draw_image_dsc_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -14992,7 +15000,7 @@ static bool invoke_void_lv_obj_t_p_INT_lv_draw_image_dsc_t_p(const invoke_table_
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_INT_lv_draw_image_dsc_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_lv_draw_image_dsc_t_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -15034,7 +15042,7 @@ static bool invoke_void_lv_obj_t_p_INT_lv_draw_label_dsc_t_p(const invoke_table_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_INT_lv_draw_label_dsc_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_lv_draw_label_dsc_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -15043,7 +15051,7 @@ static bool invoke_void_lv_obj_t_p_INT_lv_draw_label_dsc_t_p(const invoke_table_
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_INT_lv_draw_label_dsc_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_lv_draw_label_dsc_t_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -15085,7 +15093,7 @@ static bool invoke_void_lv_obj_t_p_INT_lv_draw_line_dsc_t_p(const invoke_table_e
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_INT_lv_draw_line_dsc_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_lv_draw_line_dsc_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -15094,7 +15102,7 @@ static bool invoke_void_lv_obj_t_p_INT_lv_draw_line_dsc_t_p(const invoke_table_e
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_INT_lv_draw_line_dsc_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_lv_draw_line_dsc_t_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -15136,7 +15144,7 @@ static bool invoke_void_lv_obj_t_p_INT_lv_draw_rect_dsc_t_p(const invoke_table_e
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_INT_lv_draw_rect_dsc_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_lv_draw_rect_dsc_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -15145,7 +15153,7 @@ static bool invoke_void_lv_obj_t_p_INT_lv_draw_rect_dsc_t_p(const invoke_table_e
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_INT_lv_draw_rect_dsc_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_lv_draw_rect_dsc_t_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -15187,7 +15195,7 @@ static bool invoke_void_lv_obj_t_p_INT_lv_point_t_p(const invoke_table_entry_t *
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_INT_lv_point_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_lv_point_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -15196,7 +15204,7 @@ static bool invoke_void_lv_obj_t_p_INT_lv_point_t_p(const invoke_table_entry_t *
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_INT_lv_point_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_INT_lv_point_t_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -15237,7 +15245,7 @@ static bool invoke_void_lv_obj_t_p_POINTER(const invoke_table_entry_t *entry, vo
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -15279,7 +15287,7 @@ static bool invoke_void_lv_obj_t_p_POINTER_INT(const invoke_table_entry_t *entry
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_POINTER_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -15288,7 +15296,7 @@ static bool invoke_void_lv_obj_t_p_POINTER_INT(const invoke_table_entry_t *entry
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_POINTER_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -15332,7 +15340,7 @@ static bool invoke_void_lv_obj_t_p_POINTER_INT_INT_INT(const invoke_table_entry_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_POINTER_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_POINTER_INT_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -15341,7 +15349,7 @@ static bool invoke_void_lv_obj_t_p_POINTER_INT_INT_INT(const invoke_table_entry_
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_POINTER_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_POINTER_INT_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -15350,7 +15358,7 @@ static bool invoke_void_lv_obj_t_p_POINTER_INT_INT_INT(const invoke_table_entry_
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_obj_t_p_POINTER_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_POINTER_INT_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -15359,7 +15367,7 @@ static bool invoke_void_lv_obj_t_p_POINTER_INT_INT_INT(const invoke_table_entry_
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_void_lv_obj_t_p_POINTER_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 4 (using specific type 'specific_type_str4')
-    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_POINTER_INT_INT_INT)", specific_type_str4, entry->name);
         return false;
     }
@@ -15401,7 +15409,7 @@ static bool invoke_void_lv_obj_t_p_POINTER_POINTER(const invoke_table_entry_t *e
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_POINTER_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_POINTER_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -15410,7 +15418,7 @@ static bool invoke_void_lv_obj_t_p_POINTER_POINTER(const invoke_table_entry_t *e
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_POINTER_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_POINTER_POINTER)", specific_type_str2, entry->name);
         return false;
     }
@@ -15451,7 +15459,7 @@ static bool invoke_void_lv_obj_t_p_const_char_p(const invoke_table_entry_t *entr
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_const_char_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -15493,7 +15501,7 @@ static bool invoke_void_lv_obj_t_p_const_char_p_INT(const invoke_table_entry_t *
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_const_char_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_const_char_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -15502,7 +15510,7 @@ static bool invoke_void_lv_obj_t_p_const_char_p_INT(const invoke_table_entry_t *
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_const_char_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_const_char_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -15544,7 +15552,7 @@ static bool invoke_void_lv_obj_t_p_lv_anim_t_p_INT(const invoke_table_entry_t *e
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_anim_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_anim_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -15553,7 +15561,7 @@ static bool invoke_void_lv_obj_t_p_lv_anim_t_p_INT(const invoke_table_entry_t *e
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_anim_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_anim_t_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -15594,7 +15602,7 @@ static bool invoke_void_lv_obj_t_p_lv_area_t_p(const invoke_table_entry_t *entry
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_area_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_area_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -15636,7 +15644,7 @@ static bool invoke_void_lv_obj_t_p_lv_area_t_p_INT(const invoke_table_entry_t *e
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_area_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_area_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -15645,7 +15653,7 @@ static bool invoke_void_lv_obj_t_p_lv_area_t_p_INT(const invoke_table_entry_t *e
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_area_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_area_t_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -15687,7 +15695,7 @@ static bool invoke_void_lv_obj_t_p_lv_area_t_p_lv_area_t_p(const invoke_table_en
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_area_t_p_lv_area_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_area_t_p_lv_area_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -15696,7 +15704,7 @@ static bool invoke_void_lv_obj_t_p_lv_area_t_p_lv_area_t_p(const invoke_table_en
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_area_t_p_lv_area_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_area_t_p_lv_area_t_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -15739,7 +15747,7 @@ static bool invoke_void_lv_obj_t_p_lv_area_t_p_lv_draw_buf_t_p_lv_area_t_p(const
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_area_t_p_lv_draw_buf_t_p_lv_area_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_area_t_p_lv_draw_buf_t_p_lv_area_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -15748,7 +15756,7 @@ static bool invoke_void_lv_obj_t_p_lv_area_t_p_lv_draw_buf_t_p_lv_area_t_p(const
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_area_t_p_lv_draw_buf_t_p_lv_area_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_area_t_p_lv_draw_buf_t_p_lv_area_t_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -15757,7 +15765,7 @@ static bool invoke_void_lv_obj_t_p_lv_area_t_p_lv_draw_buf_t_p_lv_area_t_p(const
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_obj_t_p_lv_area_t_p_lv_draw_buf_t_p_lv_area_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_area_t_p_lv_draw_buf_t_p_lv_area_t_p)", specific_type_str3, entry->name);
         return false;
     }
@@ -15798,7 +15806,7 @@ static bool invoke_void_lv_obj_t_p_lv_buttonmatrix_ctrl_t_p(const invoke_table_e
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_buttonmatrix_ctrl_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_buttonmatrix_ctrl_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -15841,7 +15849,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_cursor_t_p_lv_chart_series_t_p_INT(c
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_cursor_t_p_lv_chart_series_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_cursor_t_p_lv_chart_series_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -15850,7 +15858,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_cursor_t_p_lv_chart_series_t_p_INT(c
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_cursor_t_p_lv_chart_series_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_cursor_t_p_lv_chart_series_t_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -15859,7 +15867,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_cursor_t_p_lv_chart_series_t_p_INT(c
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_cursor_t_p_lv_chart_series_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_cursor_t_p_lv_chart_series_t_p_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -15901,7 +15909,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_cursor_t_p_lv_point_t_p(const invoke
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_cursor_t_p_lv_point_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_cursor_t_p_lv_point_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -15910,7 +15918,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_cursor_t_p_lv_point_t_p(const invoke
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_cursor_t_p_lv_point_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_cursor_t_p_lv_point_t_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -15951,7 +15959,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p(const invoke_table_entry_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -15993,7 +16001,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_BOOL(const invoke_table_e
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_BOOL)", specific_type_str1, entry->name);
         return false;
     }
@@ -16002,7 +16010,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_BOOL(const invoke_table_e
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_BOOL)", specific_type_str2, entry->name);
         return false;
     }
@@ -16044,7 +16052,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT(const invoke_table_en
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -16053,7 +16061,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT(const invoke_table_en
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -16096,7 +16104,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT(const invoke_tabl
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -16105,7 +16113,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT(const invoke_tabl
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -16114,7 +16122,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT(const invoke_tabl
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -16158,7 +16166,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT_INT(const invoke_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -16167,7 +16175,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT_INT(const invoke_
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -16176,7 +16184,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT_INT(const invoke_
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -16185,7 +16193,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT_INT(const invoke_
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 4 (using specific type 'specific_type_str4')
-    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_INT_INT)", specific_type_str4, entry->name);
         return false;
     }
@@ -16228,7 +16236,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_lv_point_t_p(const in
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_lv_point_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_lv_point_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -16237,7 +16245,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_lv_point_t_p(const in
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_lv_point_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_lv_point_t_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -16246,7 +16254,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_lv_point_t_p(const in
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_lv_point_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_INT_lv_point_t_p)", specific_type_str3, entry->name);
         return false;
     }
@@ -16288,7 +16296,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER(const invoke_tabl
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -16297,7 +16305,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER(const invoke_tabl
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER)", specific_type_str2, entry->name);
         return false;
     }
@@ -16340,7 +16348,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_INT(const invoke_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -16349,7 +16357,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_INT(const invoke_
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -16358,7 +16366,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_INT(const invoke_
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -16402,7 +16410,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_POINTER_INT(const
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_POINTER_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -16411,7 +16419,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_POINTER_INT(const
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_POINTER_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -16420,7 +16428,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_POINTER_INT(const
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_POINTER_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -16429,7 +16437,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_POINTER_INT(const
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_POINTER_INT)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 4 (using specific type 'specific_type_str4')
-    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_POINTER_POINTER_INT)", specific_type_str4, entry->name);
         return false;
     }
@@ -16471,7 +16479,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_lv_color_t(const invoke_t
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_lv_color_t)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_lv_color_t)", specific_type_str1, entry->name);
         return false;
     }
@@ -16480,7 +16488,7 @@ static bool invoke_void_lv_obj_t_p_lv_chart_series_t_p_lv_color_t(const invoke_t
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_lv_color_t)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_chart_series_t_p_lv_color_t)", specific_type_str2, entry->name);
         return false;
     }
@@ -16522,7 +16530,7 @@ static bool invoke_void_lv_obj_t_p_lv_color_filter_dsc_t_p_INT(const invoke_tabl
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_color_filter_dsc_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_color_filter_dsc_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -16531,7 +16539,7 @@ static bool invoke_void_lv_obj_t_p_lv_color_filter_dsc_t_p_INT(const invoke_tabl
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_color_filter_dsc_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_color_filter_dsc_t_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -16573,7 +16581,7 @@ static bool invoke_void_lv_obj_t_p_lv_color_t_INT(const invoke_table_entry_t *en
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_color_t_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_color_t_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -16582,7 +16590,7 @@ static bool invoke_void_lv_obj_t_p_lv_color_t_INT(const invoke_table_entry_t *en
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_color_t_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_color_t_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -16623,7 +16631,7 @@ static bool invoke_void_lv_obj_t_p_lv_draw_buf_t_p(const invoke_table_entry_t *e
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_draw_buf_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_draw_buf_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -16665,7 +16673,7 @@ static bool invoke_void_lv_obj_t_p_lv_font_t_p_INT(const invoke_table_entry_t *e
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_font_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_font_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -16674,7 +16682,7 @@ static bool invoke_void_lv_obj_t_p_lv_font_t_p_INT(const invoke_table_entry_t *e
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_font_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_font_t_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -16716,7 +16724,7 @@ static bool invoke_void_lv_obj_t_p_lv_grad_dsc_t_p_INT(const invoke_table_entry_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_grad_dsc_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_grad_dsc_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -16725,7 +16733,7 @@ static bool invoke_void_lv_obj_t_p_lv_grad_dsc_t_p_INT(const invoke_table_entry_
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_grad_dsc_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_grad_dsc_t_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -16766,7 +16774,7 @@ static bool invoke_void_lv_obj_t_p_lv_image_dsc_t_p(const invoke_table_entry_t *
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_image_dsc_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_image_dsc_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -16807,7 +16815,7 @@ static bool invoke_void_lv_obj_t_p_lv_layer_t_p(const invoke_table_entry_t *entr
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_layer_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_layer_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -16848,7 +16856,7 @@ static bool invoke_void_lv_obj_t_p_lv_matrix_t_p(const invoke_table_entry_t *ent
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_matrix_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_matrix_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -16889,7 +16897,7 @@ static bool invoke_void_lv_obj_t_p_lv_obj_t_p(const invoke_table_entry_t *entry,
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -16931,7 +16939,7 @@ static bool invoke_void_lv_obj_t_p_lv_obj_t_p_INT(const invoke_table_entry_t *en
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -16940,7 +16948,7 @@ static bool invoke_void_lv_obj_t_p_lv_obj_t_p_INT(const invoke_table_entry_t *en
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -16983,7 +16991,7 @@ static bool invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT(const invoke_table_entry_t
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -16992,7 +17000,7 @@ static bool invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT(const invoke_table_entry_t
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -17001,7 +17009,7 @@ static bool invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT(const invoke_table_entry_t
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -17045,7 +17053,7 @@ static bool invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT_INT(const invoke_table_ent
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -17054,7 +17062,7 @@ static bool invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT_INT(const invoke_table_ent
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -17063,7 +17071,7 @@ static bool invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT_INT(const invoke_table_ent
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -17072,7 +17080,7 @@ static bool invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT_INT(const invoke_table_ent
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 4 (using specific type 'specific_type_str4')
-    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_INT_INT_INT)", specific_type_str4, entry->name);
         return false;
     }
@@ -17114,7 +17122,7 @@ static bool invoke_void_lv_obj_t_p_lv_obj_t_p_const_char_p(const invoke_table_en
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_const_char_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -17123,7 +17131,7 @@ static bool invoke_void_lv_obj_t_p_lv_obj_t_p_const_char_p(const invoke_table_en
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_const_char_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -17165,7 +17173,7 @@ static bool invoke_void_lv_obj_t_p_lv_obj_t_p_lv_obj_t_p(const invoke_table_entr
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_lv_obj_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_lv_obj_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -17174,7 +17182,7 @@ static bool invoke_void_lv_obj_t_p_lv_obj_t_p_lv_obj_t_p(const invoke_table_entr
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_lv_obj_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_obj_t_p_lv_obj_t_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -17216,7 +17224,7 @@ static bool invoke_void_lv_obj_t_p_lv_point_precise_t_p_INT(const invoke_table_e
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_point_precise_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_point_precise_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -17225,7 +17233,7 @@ static bool invoke_void_lv_obj_t_p_lv_point_precise_t_p_INT(const invoke_table_e
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_point_precise_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_point_precise_t_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -17266,7 +17274,7 @@ static bool invoke_void_lv_obj_t_p_lv_point_t_p(const invoke_table_entry_t *entr
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_point_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_point_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -17308,7 +17316,7 @@ static bool invoke_void_lv_obj_t_p_lv_point_t_p_INT(const invoke_table_entry_t *
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_point_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_point_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -17317,7 +17325,7 @@ static bool invoke_void_lv_obj_t_p_lv_point_t_p_INT(const invoke_table_entry_t *
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_point_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_point_t_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -17360,7 +17368,7 @@ static bool invoke_void_lv_obj_t_p_lv_point_t_p_INT_INT(const invoke_table_entry
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_point_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_point_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -17369,7 +17377,7 @@ static bool invoke_void_lv_obj_t_p_lv_point_t_p_INT_INT(const invoke_table_entry
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_point_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_point_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -17378,7 +17386,7 @@ static bool invoke_void_lv_obj_t_p_lv_point_t_p_INT_INT(const invoke_table_entry
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_obj_t_p_lv_point_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_point_t_p_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -17421,7 +17429,7 @@ static bool invoke_void_lv_obj_t_p_lv_scale_section_t_p_INT_INT(const invoke_tab
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_scale_section_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_scale_section_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -17430,7 +17438,7 @@ static bool invoke_void_lv_obj_t_p_lv_scale_section_t_p_INT_INT(const invoke_tab
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_scale_section_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_scale_section_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -17439,7 +17447,7 @@ static bool invoke_void_lv_obj_t_p_lv_scale_section_t_p_INT_INT(const invoke_tab
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_obj_t_p_lv_scale_section_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_scale_section_t_p_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -17481,7 +17489,7 @@ static bool invoke_void_lv_obj_t_p_lv_scale_section_t_p_lv_style_t_p(const invok
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_scale_section_t_p_lv_style_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_scale_section_t_p_lv_style_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -17490,7 +17498,7 @@ static bool invoke_void_lv_obj_t_p_lv_scale_section_t_p_lv_style_t_p(const invok
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_scale_section_t_p_lv_style_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_scale_section_t_p_lv_style_t_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -17531,7 +17539,7 @@ static bool invoke_void_lv_obj_t_p_lv_span_t_p(const invoke_table_entry_t *entry
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_span_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_span_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -17573,7 +17581,7 @@ static bool invoke_void_lv_obj_t_p_lv_span_t_p_const_char_p(const invoke_table_e
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_span_t_p_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_span_t_p_const_char_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -17582,7 +17590,7 @@ static bool invoke_void_lv_obj_t_p_lv_span_t_p_const_char_p(const invoke_table_e
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_span_t_p_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_span_t_p_const_char_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -17624,7 +17632,7 @@ static bool invoke_void_lv_obj_t_p_lv_span_t_p_lv_style_t_p(const invoke_table_e
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_span_t_p_lv_style_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_span_t_p_lv_style_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -17633,7 +17641,7 @@ static bool invoke_void_lv_obj_t_p_lv_span_t_p_lv_style_t_p(const invoke_table_e
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_span_t_p_lv_style_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_span_t_p_lv_style_t_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -17675,7 +17683,7 @@ static bool invoke_void_lv_obj_t_p_lv_style_t_p_INT(const invoke_table_entry_t *
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_style_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_style_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -17684,7 +17692,7 @@ static bool invoke_void_lv_obj_t_p_lv_style_t_p_INT(const invoke_table_entry_t *
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_style_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_style_t_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -17726,7 +17734,7 @@ static bool invoke_void_lv_obj_t_p_lv_style_transition_dsc_t_p_INT(const invoke_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_style_transition_dsc_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_style_transition_dsc_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -17735,7 +17743,7 @@ static bool invoke_void_lv_obj_t_p_lv_style_transition_dsc_t_p_INT(const invoke_
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_obj_t_p_lv_style_transition_dsc_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_style_transition_dsc_t_p_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -17776,7 +17784,7 @@ static bool invoke_void_lv_obj_t_p_lv_subject_t_p(const invoke_table_entry_t *en
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_obj_t_p_lv_subject_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_obj_t_p_lv_subject_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -17849,7 +17857,7 @@ static bool invoke_void_lv_point_precise_t_p_INT_INT(const invoke_table_entry_t 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_point_precise_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_point_precise_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -17858,7 +17866,7 @@ static bool invoke_void_lv_point_precise_t_p_INT_INT(const invoke_table_entry_t 
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_point_precise_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_point_precise_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -17899,7 +17907,7 @@ static bool invoke_void_lv_point_precise_t_p_lv_point_precise_t_p(const invoke_t
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_point_precise_t_p_lv_point_precise_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_point_precise_t_p_lv_point_precise_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -17941,7 +17949,7 @@ static bool invoke_void_lv_point_t_p_INT_INT(const invoke_table_entry_t *entry, 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_point_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_point_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -17950,7 +17958,7 @@ static bool invoke_void_lv_point_t_p_INT_INT(const invoke_table_entry_t *entry, 
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_point_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_point_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -17996,7 +18004,7 @@ static bool invoke_void_lv_point_t_p_INT_INT_INT_INT_lv_point_t_p_BOOL(const inv
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_INT_lv_point_t_p_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_INT_lv_point_t_p_BOOL)", specific_type_str1, entry->name);
         return false;
     }
@@ -18005,7 +18013,7 @@ static bool invoke_void_lv_point_t_p_INT_INT_INT_INT_lv_point_t_p_BOOL(const inv
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_INT_lv_point_t_p_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_INT_lv_point_t_p_BOOL)", specific_type_str2, entry->name);
         return false;
     }
@@ -18014,7 +18022,7 @@ static bool invoke_void_lv_point_t_p_INT_INT_INT_INT_lv_point_t_p_BOOL(const inv
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_INT_lv_point_t_p_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_INT_lv_point_t_p_BOOL)", specific_type_str3, entry->name);
         return false;
     }
@@ -18023,7 +18031,7 @@ static bool invoke_void_lv_point_t_p_INT_INT_INT_INT_lv_point_t_p_BOOL(const inv
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_INT_lv_point_t_p_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 4 (using specific type 'specific_type_str4')
-    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_INT_lv_point_t_p_BOOL)", specific_type_str4, entry->name);
         return false;
     }
@@ -18032,7 +18040,7 @@ static bool invoke_void_lv_point_t_p_INT_INT_INT_INT_lv_point_t_p_BOOL(const inv
     cJSON *json_arg4 = cJSON_GetArrayItem(args_array, 4);
     if (!json_arg4) { LOG_ERR("Invoke Error: Failed to get JSON arg 4 for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_INT_lv_point_t_p_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 4 into C arg buffer 5 (using specific type 'specific_type_str5')
-    if (!(unmarshal_value(json_arg4, specific_type_str5, (void*)&arg_buf5))) {
+    if (!(unmarshal_value(json_arg4, specific_type_str5, (void*)&arg_buf5, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg4, "Invoke Error: Failed to unmarshal JSON arg 4 as type '%s' for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_INT_lv_point_t_p_BOOL)", specific_type_str5, entry->name);
         return false;
     }
@@ -18041,7 +18049,7 @@ static bool invoke_void_lv_point_t_p_INT_INT_INT_INT_lv_point_t_p_BOOL(const inv
     cJSON *json_arg5 = cJSON_GetArrayItem(args_array, 5);
     if (!json_arg5) { LOG_ERR("Invoke Error: Failed to get JSON arg 5 for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_INT_lv_point_t_p_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 5 into C arg buffer 6 (using specific type 'specific_type_str6')
-    if (!(unmarshal_value(json_arg5, specific_type_str6, (void*)&arg_buf6))) {
+    if (!(unmarshal_value(json_arg5, specific_type_str6, (void*)&arg_buf6, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg5, "Invoke Error: Failed to unmarshal JSON arg 5 as type '%s' for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_INT_lv_point_t_p_BOOL)", specific_type_str6, entry->name);
         return false;
     }
@@ -18086,7 +18094,7 @@ static bool invoke_void_lv_point_t_p_INT_INT_INT_lv_point_t_p_BOOL(const invoke_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_lv_point_t_p_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_lv_point_t_p_BOOL)", specific_type_str1, entry->name);
         return false;
     }
@@ -18095,7 +18103,7 @@ static bool invoke_void_lv_point_t_p_INT_INT_INT_lv_point_t_p_BOOL(const invoke_
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_lv_point_t_p_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_lv_point_t_p_BOOL)", specific_type_str2, entry->name);
         return false;
     }
@@ -18104,7 +18112,7 @@ static bool invoke_void_lv_point_t_p_INT_INT_INT_lv_point_t_p_BOOL(const invoke_
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_lv_point_t_p_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_lv_point_t_p_BOOL)", specific_type_str3, entry->name);
         return false;
     }
@@ -18113,7 +18121,7 @@ static bool invoke_void_lv_point_t_p_INT_INT_INT_lv_point_t_p_BOOL(const invoke_
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_lv_point_t_p_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 4 (using specific type 'specific_type_str4')
-    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_lv_point_t_p_BOOL)", specific_type_str4, entry->name);
         return false;
     }
@@ -18122,7 +18130,7 @@ static bool invoke_void_lv_point_t_p_INT_INT_INT_lv_point_t_p_BOOL(const invoke_
     cJSON *json_arg4 = cJSON_GetArrayItem(args_array, 4);
     if (!json_arg4) { LOG_ERR("Invoke Error: Failed to get JSON arg 4 for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_lv_point_t_p_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 4 into C arg buffer 5 (using specific type 'specific_type_str5')
-    if (!(unmarshal_value(json_arg4, specific_type_str5, (void*)&arg_buf5))) {
+    if (!(unmarshal_value(json_arg4, specific_type_str5, (void*)&arg_buf5, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg4, "Invoke Error: Failed to unmarshal JSON arg 4 as type '%s' for func '%s' (invoke_void_lv_point_t_p_INT_INT_INT_lv_point_t_p_BOOL)", specific_type_str5, entry->name);
         return false;
     }
@@ -18168,7 +18176,7 @@ static bool invoke_void_lv_point_t_p_const_char_p_lv_font_t_p_INT_INT_INT_INT(co
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_point_t_p_const_char_p_lv_font_t_p_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_point_t_p_const_char_p_lv_font_t_p_INT_INT_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -18177,7 +18185,7 @@ static bool invoke_void_lv_point_t_p_const_char_p_lv_font_t_p_INT_INT_INT_INT(co
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_point_t_p_const_char_p_lv_font_t_p_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_point_t_p_const_char_p_lv_font_t_p_INT_INT_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -18186,7 +18194,7 @@ static bool invoke_void_lv_point_t_p_const_char_p_lv_font_t_p_INT_INT_INT_INT(co
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_point_t_p_const_char_p_lv_font_t_p_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_point_t_p_const_char_p_lv_font_t_p_INT_INT_INT_INT)", specific_type_str3, entry->name);
         return false;
     }
@@ -18195,7 +18203,7 @@ static bool invoke_void_lv_point_t_p_const_char_p_lv_font_t_p_INT_INT_INT_INT(co
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_void_lv_point_t_p_const_char_p_lv_font_t_p_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 4 (using specific type 'specific_type_str4')
-    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_void_lv_point_t_p_const_char_p_lv_font_t_p_INT_INT_INT_INT)", specific_type_str4, entry->name);
         return false;
     }
@@ -18204,7 +18212,7 @@ static bool invoke_void_lv_point_t_p_const_char_p_lv_font_t_p_INT_INT_INT_INT(co
     cJSON *json_arg4 = cJSON_GetArrayItem(args_array, 4);
     if (!json_arg4) { LOG_ERR("Invoke Error: Failed to get JSON arg 4 for func '%s' (invoke_void_lv_point_t_p_const_char_p_lv_font_t_p_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 4 into C arg buffer 5 (using specific type 'specific_type_str5')
-    if (!(unmarshal_value(json_arg4, specific_type_str5, (void*)&arg_buf5))) {
+    if (!(unmarshal_value(json_arg4, specific_type_str5, (void*)&arg_buf5, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg4, "Invoke Error: Failed to unmarshal JSON arg 4 as type '%s' for func '%s' (invoke_void_lv_point_t_p_const_char_p_lv_font_t_p_INT_INT_INT_INT)", specific_type_str5, entry->name);
         return false;
     }
@@ -18213,7 +18221,7 @@ static bool invoke_void_lv_point_t_p_const_char_p_lv_font_t_p_INT_INT_INT_INT(co
     cJSON *json_arg5 = cJSON_GetArrayItem(args_array, 5);
     if (!json_arg5) { LOG_ERR("Invoke Error: Failed to get JSON arg 5 for func '%s' (invoke_void_lv_point_t_p_const_char_p_lv_font_t_p_INT_INT_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 5 into C arg buffer 6 (using specific type 'specific_type_str6')
-    if (!(unmarshal_value(json_arg5, specific_type_str6, (void*)&arg_buf6))) {
+    if (!(unmarshal_value(json_arg5, specific_type_str6, (void*)&arg_buf6, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg5, "Invoke Error: Failed to unmarshal JSON arg 5 as type '%s' for func '%s' (invoke_void_lv_point_t_p_const_char_p_lv_font_t_p_INT_INT_INT_INT)", specific_type_str6, entry->name);
         return false;
     }
@@ -18254,7 +18262,7 @@ static bool invoke_void_lv_point_t_p_lv_point_t_p(const invoke_table_entry_t *en
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_point_t_p_lv_point_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_point_t_p_lv_point_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -18327,7 +18335,7 @@ static bool invoke_void_lv_scale_section_t_p_INT_INT(const invoke_table_entry_t 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_scale_section_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_scale_section_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -18336,7 +18344,7 @@ static bool invoke_void_lv_scale_section_t_p_INT_INT(const invoke_table_entry_t 
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_scale_section_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_scale_section_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -18378,7 +18386,7 @@ static bool invoke_void_lv_scale_section_t_p_INT_lv_style_t_p(const invoke_table
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_scale_section_t_p_INT_lv_style_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_scale_section_t_p_INT_lv_style_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -18387,7 +18395,7 @@ static bool invoke_void_lv_scale_section_t_p_INT_lv_style_t_p(const invoke_table
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_scale_section_t_p_INT_lv_style_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_scale_section_t_p_INT_lv_style_t_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -18428,7 +18436,7 @@ static bool invoke_void_lv_span_t_p_const_char_p(const invoke_table_entry_t *ent
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_span_t_p_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_span_t_p_const_char_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -18500,7 +18508,7 @@ static bool invoke_void_lv_style_t_p_BOOL(const invoke_table_entry_t *entry, voi
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_style_t_p_BOOL)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_style_t_p_BOOL)", specific_type_str1, entry->name);
         return false;
     }
@@ -18541,7 +18549,7 @@ static bool invoke_void_lv_style_t_p_INT(const invoke_table_entry_t *entry, void
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_style_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_style_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -18583,7 +18591,7 @@ static bool invoke_void_lv_style_t_p_INT_INT(const invoke_table_entry_t *entry, 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_style_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_style_t_p_INT_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -18592,7 +18600,7 @@ static bool invoke_void_lv_style_t_p_INT_INT(const invoke_table_entry_t *entry, 
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_style_t_p_INT_INT)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_style_t_p_INT_INT)", specific_type_str2, entry->name);
         return false;
     }
@@ -18633,7 +18641,7 @@ static bool invoke_void_lv_style_t_p_POINTER(const invoke_table_entry_t *entry, 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_style_t_p_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_style_t_p_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -18674,7 +18682,7 @@ static bool invoke_void_lv_style_t_p_lv_anim_t_p(const invoke_table_entry_t *ent
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_style_t_p_lv_anim_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_style_t_p_lv_anim_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -18715,7 +18723,7 @@ static bool invoke_void_lv_style_t_p_lv_color_filter_dsc_t_p(const invoke_table_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_style_t_p_lv_color_filter_dsc_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_style_t_p_lv_color_filter_dsc_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -18756,7 +18764,7 @@ static bool invoke_void_lv_style_t_p_lv_color_t(const invoke_table_entry_t *entr
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_style_t_p_lv_color_t)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_style_t_p_lv_color_t)", specific_type_str1, entry->name);
         return false;
     }
@@ -18797,7 +18805,7 @@ static bool invoke_void_lv_style_t_p_lv_font_t_p(const invoke_table_entry_t *ent
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_style_t_p_lv_font_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_style_t_p_lv_font_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -18838,7 +18846,7 @@ static bool invoke_void_lv_style_t_p_lv_grad_dsc_t_p(const invoke_table_entry_t 
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_style_t_p_lv_grad_dsc_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_style_t_p_lv_grad_dsc_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -18879,7 +18887,7 @@ static bool invoke_void_lv_style_t_p_lv_style_t_p(const invoke_table_entry_t *en
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_style_t_p_lv_style_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_style_t_p_lv_style_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -18920,7 +18928,7 @@ static bool invoke_void_lv_style_t_p_lv_style_transition_dsc_t_p(const invoke_ta
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_style_t_p_lv_style_transition_dsc_t_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_style_t_p_lv_style_transition_dsc_t_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -18965,7 +18973,7 @@ static bool invoke_void_lv_style_transition_dsc_t_p_lv_style_prop_t_p_INT_INT_IN
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_style_transition_dsc_t_p_lv_style_prop_t_p_INT_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_style_transition_dsc_t_p_lv_style_prop_t_p_INT_INT_INT_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -18974,7 +18982,7 @@ static bool invoke_void_lv_style_transition_dsc_t_p_lv_style_prop_t_p_INT_INT_IN
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_style_transition_dsc_t_p_lv_style_prop_t_p_INT_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_style_transition_dsc_t_p_lv_style_prop_t_p_INT_INT_INT_POINTER)", specific_type_str2, entry->name);
         return false;
     }
@@ -18983,7 +18991,7 @@ static bool invoke_void_lv_style_transition_dsc_t_p_lv_style_prop_t_p_INT_INT_IN
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_style_transition_dsc_t_p_lv_style_prop_t_p_INT_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_style_transition_dsc_t_p_lv_style_prop_t_p_INT_INT_INT_POINTER)", specific_type_str3, entry->name);
         return false;
     }
@@ -18992,7 +19000,7 @@ static bool invoke_void_lv_style_transition_dsc_t_p_lv_style_prop_t_p_INT_INT_IN
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_void_lv_style_transition_dsc_t_p_lv_style_prop_t_p_INT_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 4 (using specific type 'specific_type_str4')
-    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_void_lv_style_transition_dsc_t_p_lv_style_prop_t_p_INT_INT_INT_POINTER)", specific_type_str4, entry->name);
         return false;
     }
@@ -19001,7 +19009,7 @@ static bool invoke_void_lv_style_transition_dsc_t_p_lv_style_prop_t_p_INT_INT_IN
     cJSON *json_arg4 = cJSON_GetArrayItem(args_array, 4);
     if (!json_arg4) { LOG_ERR("Invoke Error: Failed to get JSON arg 4 for func '%s' (invoke_void_lv_style_transition_dsc_t_p_lv_style_prop_t_p_INT_INT_INT_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 4 into C arg buffer 5 (using specific type 'specific_type_str5')
-    if (!(unmarshal_value(json_arg4, specific_type_str5, (void*)&arg_buf5))) {
+    if (!(unmarshal_value(json_arg4, specific_type_str5, (void*)&arg_buf5, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg4, "Invoke Error: Failed to unmarshal JSON arg 4 as type '%s' for func '%s' (invoke_void_lv_style_transition_dsc_t_p_lv_style_prop_t_p_INT_INT_INT_POINTER)", specific_type_str5, entry->name);
         return false;
     }
@@ -19073,7 +19081,7 @@ static bool invoke_void_lv_subject_t_p_INT(const invoke_table_entry_t *entry, vo
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_subject_t_p_INT)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_subject_t_p_INT)", specific_type_str1, entry->name);
         return false;
     }
@@ -19114,7 +19122,7 @@ static bool invoke_void_lv_subject_t_p_POINTER(const invoke_table_entry_t *entry
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_subject_t_p_POINTER)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_subject_t_p_POINTER)", specific_type_str1, entry->name);
         return false;
     }
@@ -19155,7 +19163,7 @@ static bool invoke_void_lv_subject_t_p_const_char_p(const invoke_table_entry_t *
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_subject_t_p_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_subject_t_p_const_char_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -19199,7 +19207,7 @@ static bool invoke_void_lv_subject_t_p_const_char_p_const_char_p_INT_const_char_
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_subject_t_p_const_char_p_const_char_p_INT_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_subject_t_p_const_char_p_const_char_p_INT_const_char_p)", specific_type_str1, entry->name);
         return false;
     }
@@ -19208,7 +19216,7 @@ static bool invoke_void_lv_subject_t_p_const_char_p_const_char_p_INT_const_char_
     cJSON *json_arg1 = cJSON_GetArrayItem(args_array, 1);
     if (!json_arg1) { LOG_ERR("Invoke Error: Failed to get JSON arg 1 for func '%s' (invoke_void_lv_subject_t_p_const_char_p_const_char_p_INT_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 1 into C arg buffer 2 (using specific type 'specific_type_str2')
-    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2))) {
+    if (!(unmarshal_value(json_arg1, specific_type_str2, (void*)&arg_buf2, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg1, "Invoke Error: Failed to unmarshal JSON arg 1 as type '%s' for func '%s' (invoke_void_lv_subject_t_p_const_char_p_const_char_p_INT_const_char_p)", specific_type_str2, entry->name);
         return false;
     }
@@ -19217,7 +19225,7 @@ static bool invoke_void_lv_subject_t_p_const_char_p_const_char_p_INT_const_char_
     cJSON *json_arg2 = cJSON_GetArrayItem(args_array, 2);
     if (!json_arg2) { LOG_ERR("Invoke Error: Failed to get JSON arg 2 for func '%s' (invoke_void_lv_subject_t_p_const_char_p_const_char_p_INT_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 2 into C arg buffer 3 (using specific type 'specific_type_str3')
-    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3))) {
+    if (!(unmarshal_value(json_arg2, specific_type_str3, (void*)&arg_buf3, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg2, "Invoke Error: Failed to unmarshal JSON arg 2 as type '%s' for func '%s' (invoke_void_lv_subject_t_p_const_char_p_const_char_p_INT_const_char_p)", specific_type_str3, entry->name);
         return false;
     }
@@ -19226,7 +19234,7 @@ static bool invoke_void_lv_subject_t_p_const_char_p_const_char_p_INT_const_char_
     cJSON *json_arg3 = cJSON_GetArrayItem(args_array, 3);
     if (!json_arg3) { LOG_ERR("Invoke Error: Failed to get JSON arg 3 for func '%s' (invoke_void_lv_subject_t_p_const_char_p_const_char_p_INT_const_char_p)", entry->name); return false; }
     // Unmarshal JSON arg 3 into C arg buffer 4 (using specific type 'specific_type_str4')
-    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4))) {
+    if (!(unmarshal_value(json_arg3, specific_type_str4, (void*)&arg_buf4, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg3, "Invoke Error: Failed to unmarshal JSON arg 3 as type '%s' for func '%s' (invoke_void_lv_subject_t_p_const_char_p_const_char_p_INT_const_char_p)", specific_type_str4, entry->name);
         return false;
     }
@@ -19267,7 +19275,7 @@ static bool invoke_void_lv_subject_t_p_lv_color_t(const invoke_table_entry_t *en
     cJSON *json_arg0 = cJSON_GetArrayItem(args_array, 0);
     if (!json_arg0) { LOG_ERR("Invoke Error: Failed to get JSON arg 0 for func '%s' (invoke_void_lv_subject_t_p_lv_color_t)", entry->name); return false; }
     // Unmarshal JSON arg 0 into C arg buffer 1 (using specific type 'specific_type_str1')
-    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1))) {
+    if (!(unmarshal_value(json_arg0, specific_type_str1, (void*)&arg_buf1, target_obj_ptr))) {
         LOG_ERR_JSON(json_arg0, "Invoke Error: Failed to unmarshal JSON arg 0 as type '%s' for func '%s' (invoke_void_lv_subject_t_p_lv_color_t)", specific_type_str1, entry->name);
         return false;
     }
@@ -28436,7 +28444,7 @@ static bool unmarshal_string_ptr(cJSON *node, const char **dest);
 static bool unmarshal_char(cJSON *node, char *dest);
 
 // The core dispatcher for unmarshaling any value from JSON based on expected C type.
-static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest) {
+static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest, void *implicit_parent) {
     if (!json_value || !expected_c_type || !dest) {
         LOG_ERR("Unmarshal Error: NULL argument passed to unmarshal_value (%p, %s, %p)", json_value, expected_c_type ? expected_c_type : "NULL", dest);
         return false;
@@ -28458,8 +28466,11 @@ static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void
                 LOG_ERR_JSON(json_value, "Unmarshal Error: Nested call function '%s' not found in invoke table.", func_name);
                 return false;
             }
+            size_t args = 0; for (args = 0; entry->arg_types[args] != NULL; ++args) {}
+            lv_obj_t *target_obj_ptr = NULL;
+            if (entry->arg_types[0] && strcmp(entry->arg_types[0], "lv_obj_t *") == 0 && cJSON_GetArraySize(args_item) < args) { target_obj_ptr = implicit_parent; }
             // Make the nested call. Result goes into 'dest'. target_obj_ptr is NULL.
-            if (!entry->invoke(entry, NULL, dest, args_item)) {
+            if (!entry->invoke(entry, target_obj_ptr, dest, args_item)) {
                  LOG_ERR_JSON(json_value, "Unmarshal Error: Nested call to '%s' failed.", func_name);
                  return false;
             }
@@ -28708,7 +28719,7 @@ lv_style_t* lv_style_create_managed(const char *name) {
 // Forward declarations
 static bool render_json_node(cJSON *node, lv_obj_t *parent);
 static const invoke_table_entry_t* find_invoke_entry(const char *name);
-static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest);
+static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest, void *implicit_parent);
 extern void* lvgl_json_get_registered_ptr(const char *name, const char *expected_type_name);
 extern void lvgl_json_register_ptr(const char *name, const char *type_name, void *ptr);
 static void set_current_context(cJSON* new_context);
@@ -28873,6 +28884,9 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
         if (!created_entity) return false; // Error logged in creator
         is_widget = false; // Mark as non-widget (doesn't take parent, no children)
     }
+    else if (strcmp(type_str, "with") == 0) {
+        created_entity = parent;
+    }
     else {
         // Default: Assume it's a widget type (lv_obj_t based)
         char create_func_name[64];
@@ -28938,7 +28952,7 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
             if (col_dsc_array) {
                 for (int i = 0; i < num_cols; i++) {
                     cJSON *val_item = cJSON_GetArrayItem(cols_item_json, i);
-                    if (!unmarshal_value(val_item, "int32_t", &col_dsc_array[i])) { // Use unmarshal_value
+                    if (!unmarshal_value(val_item, "int32_t", &col_dsc_array[i], created_entity)) { // Use unmarshal_value
                         LOG_ERR_JSON(val_item, "Grid Error: Failed to parse 'cols' array item %d as int32_t.", i);
                         LV_FREE(col_dsc_array); col_dsc_array = NULL; grid_setup_ok = false;
                         break;
@@ -28961,7 +28975,7 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
             if (row_dsc_array) {
                 for (int i = 0; i < num_rows; i++) {
                     cJSON *val_item = cJSON_GetArrayItem(rows_item_json, i);
-                    if (!unmarshal_value(val_item, "int32_t", &row_dsc_array[i])) { // Use unmarshal_value
+                    if (!unmarshal_value(val_item, "int32_t", &row_dsc_array[i], created_entity)) { // Use unmarshal_value
                         LOG_ERR_JSON(val_item, "Grid Error: Failed to parse 'rows' array item %d as int32_t.", i);
                         LV_FREE(row_dsc_array); row_dsc_array = NULL; grid_setup_ok = false;
                         break;
@@ -29009,6 +29023,18 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
         // Property value must be an array of arguments
         cJSON *old_prop = NULL;
         if (!cJSON_IsArray(prop)) {
+            if (cJSON_IsObject(prop) && strcmp(prop_name, "with") == 0) {
+                cJSON *obj = cJSON_GetObjectItemCaseSensitive(prop, "obj");
+                if (!obj) { LOG_ERR_JSON(prop, "Render Warning: with requires attributes 'obj' and 'do' - with '%s' obj value is missing. Skipping.", prop_name); continue; } 
+                lv_obj_t *new_parent = NULL; unmarshal_value(obj, "lv_obj_t *", &new_parent, created_entity);
+                cJSON *with = cJSON_GetObjectItemCaseSensitive(prop, "do");
+                if (!cJSON_IsObject(with)) { LOG_ERR_JSON(prop, "Render Warning: with requires attributes 'obj' and 'do' - do block must be Object. Skipping."); continue; } 
+                cJSON_AddItemToObject(with, "type", cJSON_CreateString("with"));
+                if (!render_json_node(with, (lv_obj_t*) new_parent)) {
+                    LOG_ERR("Render Error: Failed to render with node. Skipping.");
+                }
+                continue;
+            }
             old_prop = prop;
             prop = cJSON_CreateArray();
             cJSON_AddItemToArray(prop, cJSON_Duplicate(old_prop, true));

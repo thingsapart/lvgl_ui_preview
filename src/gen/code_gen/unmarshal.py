@@ -44,19 +44,19 @@ def get_unmarshal_call(c_type, pointer_level, is_array, json_var_name, dest_var_
          # Special case: char* is treated as string
          if c_type == "char" and pointer_level == 1:
               # Use main dispatcher for consistency, it handles strings.
-              return f"unmarshal_value({json_var_name}, \"{c_type_str}\", {dest_var_name})"
+              return f"unmarshal_value({json_var_name}, \"{c_type_str}\", {dest_var_name}, NULL)"
          else:
               # Use the generic pointer unmarshaler which expects '@' prefix string
               # or direct call for nested results. Let unmarshal_value handle it.
-              return f"unmarshal_value({json_var_name}, \"{c_type_str}\", {dest_var_name})"
+              return f"unmarshal_value({json_var_name}, \"{c_type_str}\", {dest_var_name}, NULL)"
 
     # Handle enums explicitly if we can identify them (e.g. starts with LV_, or check against api_info['enums'])
     # This heuristic relies on type name, might need refinement
     if c_type.startswith("LV_") and c_type.endswith("_T"):
-        return f"unmarshal_value({json_var_name}, \"{c_type}\", {dest_var_name})" # Let dispatcher handle enums too
+        return f"unmarshal_value({json_var_name}, \"{c_type}\", {dest_var_name}, NULL)" # Let dispatcher handle enums too
     if c_type.startswith("lv_") and c_type.endswith("_t") and c_type not in UNMARSHAL_FUNC_MAP and c_type != "lv_coord_t":
          # Assume LVGL typedefs not explicitly mapped (and not coord) are enums
-         return f"unmarshal_value({json_var_name}, \"{c_type}\", {dest_var_name})" # Let dispatcher handle enums too
+         return f"unmarshal_value({json_var_name}, \"{c_type}\", {dest_var_name}, NULL)" # Let dispatcher handle enums too
 
     # Base types - use specific unmarshal func defined in UNMARSHAL_FUNC_MAP or dispatch via unmarshal_value
     func_name = UNMARSHAL_FUNC_MAP.get(c_type)
@@ -64,14 +64,14 @@ def get_unmarshal_call(c_type, pointer_level, is_array, json_var_name, dest_var_
         # Direct call to primitive unmarshaler (can be faster)
         # return f"{func_name}({json_var_name}, ({c_type_str}*){dest_var_name})"
         # OR consistently use the dispatcher for simpler logic:
-        return f"unmarshal_value({json_var_name}, \"{c_type_str}\", {dest_var_name})"
+        return f"unmarshal_value({json_var_name}, \"{c_type_str}\", {dest_var_name}, NULL)"
     elif c_type == "lv_coord_t":
          # lv_coord_t uses the dispatcher which calls unmarshal_coord
-         return f"unmarshal_value({json_var_name}, \"{c_type_str}\", {dest_var_name})"
+         return f"unmarshal_value({json_var_name}, \"{c_type_str}\", {dest_var_name}, NULL)"
     else:
         # Fallback for unknown types - use the dispatcher
         logger.warning(f"No specific unmarshal function found for C type '{c_type_str}'. Using generic dispatcher.")
-        return f"unmarshal_value({json_var_name}, \"{c_type_str}\", {dest_var_name})"
+        return f"unmarshal_value({json_var_name}, \"{c_type_str}\", {dest_var_name}, NULL)"
 
 
 def generate_enum_unmarshalers(hashed_and_sorted_enum_members, all_enum_members_map_for_type_check):
@@ -439,7 +439,7 @@ def generate_custom_unmarshalers(api_info):
     code += "    }\n\n"
     code += "    // Recursively call unmarshal_value with the node found in the context\n"
     code += "    // This allows context values to be numbers, strings, booleans, or even other context/pointer refs.\n"
-    code += "    if (!unmarshal_value(value_from_context, expected_c_type, dest)) {\n"
+    code += "    if (!unmarshal_value(value_from_context, expected_c_type, dest, NULL)) {\n"
     # unmarshal_value would have logged the specific error
     code += "        LOG_ERR_JSON(json_source_node, \"Context Unmarshal Error: Failed to unmarshal context variable '%s' as type '%s'.\", var_name, expected_c_type);\n"
     code += "        return false;\n"
@@ -481,7 +481,7 @@ def generate_main_unmarshaler():
 
     code += "\n"
     code += "// The core dispatcher for unmarshaling any value from JSON based on expected C type.\n"
-    code += "static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest) {\n"
+    code += "static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest, void *implicit_parent) {\n"
     code += "    if (!json_value || !expected_c_type || !dest) {\n"
     code += "        LOG_ERR(\"Unmarshal Error: NULL argument passed to unmarshal_value (%p, %s, %p)\", json_value, expected_c_type ? expected_c_type : \"NULL\", dest);\n"
     code += "        return false;\n"
@@ -503,8 +503,11 @@ def generate_main_unmarshaler():
     code += "                LOG_ERR_JSON(json_value, \"Unmarshal Error: Nested call function '%s' not found in invoke table.\", func_name);\n"
     code += "                return false;\n"
     code += "            }\n"
+    code += "            size_t args = 0; for (args = 0; entry->arg_types[args] != NULL; ++args) {}\n"
+    code += "            lv_obj_t *target_obj_ptr = NULL;\n"
+    code += "            if (entry->arg_types[0] && strcmp(entry->arg_types[0], \"lv_obj_t *\") == 0 && cJSON_GetArraySize(args_item) < args) { target_obj_ptr = implicit_parent; }\n" 
     code += "            // Make the nested call. Result goes into 'dest'. target_obj_ptr is NULL.\n"
-    code += "            if (!entry->invoke(entry, NULL, dest, args_item)) {\n"
+    code += "            if (!entry->invoke(entry, target_obj_ptr, dest, args_item)) {\n"
     code += "                 LOG_ERR_JSON(json_value, \"Unmarshal Error: Nested call to '%s' failed.\", func_name);\n"
     code += "                 return false;\n"
     code += "            }\n"

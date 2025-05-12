@@ -23,7 +23,7 @@ DEFAULT_FUNCTION_EXCLUDE_PREFIXES = ["_lv_", "lv_obj_class", "lv_group_",
                                      "lv_objid_builtin_destroy",
                                      "lv_qrcode", "lv_rle", "lv_snapshot", "lv_bidi",
                                      "lv_tiny_ttf", "lv_tjpgd",
-                                     "lv_draw_", "lv_obj_set_id", "lv_ll_clear_custom"
+                                     "lv_draw_", "lv_obj_set_id", "lv_ll_clear_custom",
                                      ] # Exclude internal/complex subsystems by default
 
 DEFAULT_ENUM_INCLUDES = ['lv_align_t', 'lv_opa_enum_t', 'lv_layout_t', 
@@ -33,7 +33,8 @@ DEFAULT_ENUM_INCLUDES = ['lv_align_t', 'lv_opa_enum_t', 'lv_layout_t',
                          'lv_bar_orientation_t', 'lv_buttonmatrix_ctrl_t', 'lv_scale_mode_t', 
                          'lv_slider_mode_t', 'lv_slider_orientation_t', 'lv_span_overflow_t', 
                          'lv_span_mode_t', 'lv_table_cell_ctrl_t', 'lv_gridnav_ctrl_t', 
-                         'lv_border_side_t', 'lv_grad_dir_t', 'lv_obj_flag_t', ]
+                         'lv_border_side_t', 'lv_grad_dir_t', 'lv_obj_flag_t', "lv_dir_t",
+                        ]
 DEFAULT_ENUM_INCLUDE_PREFIXES = ["LV_"]
 DEFAULT_ENUM_EXCLUDES = []
 DEFAULT_ENUM_EXCLUDE_PREFIXES = ["_LV_"]
