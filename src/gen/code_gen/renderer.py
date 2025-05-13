@@ -12,7 +12,7 @@ def generate_renderer(custom_creators_map):
     c_code += "#include <stdio.h> // For debug prints\n\n"
 
     c_code += "// Forward declarations\n"
-    c_code += "static bool render_json_node(cJSON *node, lv_obj_t *parent);\n"
+    c_code += "static bool render_json_node(cJSON *node, lv_obj_t *parent, const char *named_path);\n"
     c_code += "static const invoke_table_entry_t* find_invoke_entry(const char *name);\n"
     c_code += "static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest, void *implicit_parent);\n"
     c_code += "extern void* lvgl_json_get_registered_ptr(const char *name, const char *expected_type_name);\n"
@@ -28,7 +28,7 @@ def generate_renderer(custom_creators_map):
 
 
     # Main recursive rendering function
-    c_code += "static bool render_json_node(cJSON *node, lv_obj_t *parent) {\n"
+    c_code += "static bool render_json_node(cJSON *node, lv_obj_t *parent, const char *named_path) {\n"
     c_code += "    if (!cJSON_IsObject(node)) {\n"
     c_code += "        LOG_ERR(\"Render Error: Expected JSON object for UI node.\");\n"
     c_code += "        return false;\n"
@@ -83,7 +83,7 @@ def generate_renderer(custom_creators_map):
                     context_set_for_use_view = true;
                 }
                 
-                bool render_success = render_json_node(component_root_node, parent);
+                bool render_success = render_json_node(component_root_node, parent, named_path);
                 
                 if (context_set_for_use_view) {
                     set_current_context(previous_context_before_use_view); // Restore context
@@ -112,7 +112,7 @@ def generate_renderer(custom_creators_map):
             // original_context_for_this_node_call is already saved at the top
             set_current_context(values_item); // Set new context from "values"
             
-            bool render_success = render_json_node(for_item, parent); // Render the "for" block
+            bool render_success = render_json_node(for_item, parent, named_path); // Render the "for" block
             
             set_current_context(original_context_for_this_node_call); // Restore original context
             return render_success; 
@@ -155,6 +155,7 @@ def generate_renderer(custom_creators_map):
     c_code += "    // 2. Create the LVGL Object / Resource\n"
     c_code += "    void *created_entity = NULL; // Can be lv_obj_t* or lv_style_t* etc.\n"
     c_code += "    bool is_widget = true; // Is it an lv_obj_t based widget?\n"
+    c_code += "    char *type_name = \"lv_obj_t *\"; // Is it an lv_obj_t based widget?\n"
     c_code += "    const char *type_str_for_create = type_str;\n\n" # Use a copy for creation func name
 
     c_code += "    if (strcmp(type_str, \"grid\") == 0) {\n"
@@ -176,6 +177,7 @@ def generate_renderer(custom_creators_map):
         c_code += f"        created_entity = (void*){creator_func}(id_str);\n"
         c_code += f"        if (!created_entity) return false; // Error logged in creator\n"
         c_code += f"        is_widget = false; // Mark as non-widget (doesn't take parent, no children)\n"
+        c_code += f"        type_name = \"lv_{obj_type}_t *\";\n"
         c_code += f"    }}\n"
         first_creator = False
 
@@ -322,6 +324,13 @@ def generate_renderer(custom_creators_map):
     c_code += "            (strcmp(prop_name, \"context\") == 0)) {\n"
     c_code += "            continue;\n"
     c_code += "        }\n"
+    c_code += "        if (strcmp(prop_name, \"named\") == 0 && cJSON_IsString(prop)) {\n"
+    c_code += "            char *prop_str = NULL; unmarshal_value(prop, \"char *\", &prop_str, NULL);\n"
+    c_code += "            char path[256] = { 0 }; snprintf(path, 255, \"%s:%s\", named_path ? named_path : \"\", prop_str);\n"
+    c_code += "            named_path = path;\n"
+    c_code += "            lvgl_json_register_ptr(named_path, type_name, created_entity);\n"
+    c_code += "            continue;\n"
+    c_code += "        }\n"
     c_code += "        // Property value must be an array of arguments\n"
     c_code += "        cJSON *old_prop = NULL;\n"
     c_code += "        if (!cJSON_IsArray(prop)) {\n"
@@ -335,7 +344,7 @@ def generate_renderer(custom_creators_map):
     c_code += "                cJSON *with = cJSON_GetObjectItemCaseSensitive(prop, \"do\");\n"
     c_code += "                if (!cJSON_IsObject(with)) { LOG_ERR_JSON(prop, \"Render Warning: with requires attributes 'obj' and 'do' - do block must be Object. Skipping.\"); continue; } \n"
     c_code += "                cJSON_AddItemToObject(with, \"type\", cJSON_CreateString(\"with\"));\n"
-    c_code += "                if (!render_json_node(with, (lv_obj_t*) new_parent)) {\n"
+    c_code += "                if (!render_json_node(with, (lv_obj_t*) new_parent, named_path)) {\n"
     c_code += "                    LOG_ERR(\"Render Error: Failed to render with node. Skipping.\");\n"
     c_code += "                }\n"
     c_code += "                continue;\n"
@@ -416,7 +425,7 @@ def generate_renderer(custom_creators_map):
     c_code += "            }\n"
     c_code += "            cJSON *child_node = NULL;\n"
     c_code += "            cJSON_ArrayForEach(child_node, children_item) {\n"
-    c_code += "                 if (!render_json_node(child_node, (lv_obj_t*)created_entity)) {\n"
+    c_code += "                 if (!render_json_node(child_node, (lv_obj_t*)created_entity, named_path)) {\n"
     c_code += "                     // Error rendering child, stop processing siblings? Or continue?\n"
     c_code += "                     LOG_ERR(\"Render Error: Failed to render child node. Aborting sibling processing for this parent.\");\n"
     c_code += "                     // Cleanup? Difficult to manage partial tree creation.\n"
@@ -458,14 +467,14 @@ def generate_renderer(custom_creators_map):
     c_code += "    if (cJSON_IsArray(root_json)) {\n"
     c_code += "        cJSON *node = NULL;\n"
     c_code += "        cJSON_ArrayForEach(node, root_json) {\n"
-    c_code += "            if (!render_json_node(node, implicit_root_parent)) {\n"
+    c_code += "            if (!render_json_node(node, implicit_root_parent, NULL)) {\n"
     c_code += "                success = false;\n"
     c_code += "                LOG_ERR(\"Render Error: Failed to render top-level node. Aborting.\");\n"
     c_code += "                break; // Stop processing further nodes on failure\n"
     c_code += "            }\n"
     c_code += "        }\n"
     c_code += "    } else if (cJSON_IsObject(root_json)) {\n"
-    c_code += "        success = render_json_node(root_json, implicit_root_parent);\n"
+    c_code += "        success = render_json_node(root_json, implicit_root_parent, NULL);\n"
     c_code += "    } else {\n"
     c_code += "        LOG_ERR(\"Render Error: root_json must be a JSON object or array.\");\n"
     c_code += "        success = false;\n"

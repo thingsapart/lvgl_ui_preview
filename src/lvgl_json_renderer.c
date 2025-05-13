@@ -28717,7 +28717,7 @@ lv_style_t* lv_style_create_managed(const char *name) {
 #include <stdio.h> // For debug prints
 
 // Forward declarations
-static bool render_json_node(cJSON *node, lv_obj_t *parent);
+static bool render_json_node(cJSON *node, lv_obj_t *parent, const char *named_path);
 static const invoke_table_entry_t* find_invoke_entry(const char *name);
 static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest, void *implicit_parent);
 extern void* lvgl_json_get_registered_ptr(const char *name, const char *expected_type_name);
@@ -28727,7 +28727,7 @@ extern lv_fs_drv_t* lv_fs_drv_create_managed(const char *name);
 extern lv_layer_t* lv_layer_create_managed(const char *name);
 extern lv_style_t* lv_style_create_managed(const char *name);
 
-static bool render_json_node(cJSON *node, lv_obj_t *parent) {
+static bool render_json_node(cJSON *node, lv_obj_t *parent, const char *named_path) {
     if (!cJSON_IsObject(node)) {
         LOG_ERR("Render Error: Expected JSON object for UI node.");
         return false;
@@ -28782,7 +28782,7 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
                     context_set_for_use_view = true;
                 }
                 
-                bool render_success = render_json_node(component_root_node, parent);
+                bool render_success = render_json_node(component_root_node, parent, named_path);
                 
                 if (context_set_for_use_view) {
                     set_current_context(previous_context_before_use_view); // Restore context
@@ -28811,7 +28811,7 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
             // original_context_for_this_node_call is already saved at the top
             set_current_context(values_item); // Set new context from "values"
             
-            bool render_success = render_json_node(for_item, parent); // Render the "for" block
+            bool render_success = render_json_node(for_item, parent, named_path); // Render the "for" block
             
             set_current_context(original_context_for_this_node_call); // Restore original context
             return render_success; 
@@ -28846,6 +28846,7 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
     // 2. Create the LVGL Object / Resource
     void *created_entity = NULL; // Can be lv_obj_t* or lv_style_t* etc.
     bool is_widget = true; // Is it an lv_obj_t based widget?
+    char *type_name = "lv_obj_t *"; // Is it an lv_obj_t based widget?
     const char *type_str_for_create = type_str;
 
     if (strcmp(type_str, "grid") == 0) {
@@ -28863,6 +28864,7 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
         created_entity = (void*)lv_fs_drv_create_managed(id_str);
         if (!created_entity) return false; // Error logged in creator
         is_widget = false; // Mark as non-widget (doesn't take parent, no children)
+        type_name = "lv_fs_drv_t *";
     }
     else if (strcmp(type_str, "layer") == 0) {
         if (!id_str) {
@@ -28873,6 +28875,7 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
         created_entity = (void*)lv_layer_create_managed(id_str);
         if (!created_entity) return false; // Error logged in creator
         is_widget = false; // Mark as non-widget (doesn't take parent, no children)
+        type_name = "lv_layer_t *";
     }
     else if (strcmp(type_str, "style") == 0) {
         if (!id_str) {
@@ -28883,6 +28886,7 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
         created_entity = (void*)lv_style_create_managed(id_str);
         if (!created_entity) return false; // Error logged in creator
         is_widget = false; // Mark as non-widget (doesn't take parent, no children)
+        type_name = "lv_style_t *";
     }
     else if (strcmp(type_str, "with") == 0) {
         created_entity = parent;
@@ -29020,6 +29024,13 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
             (strcmp(prop_name, "context") == 0)) {
             continue;
         }
+        if (strcmp(prop_name, "named") == 0 && cJSON_IsString(prop)) {
+            char *prop_str = NULL; unmarshal_value(prop, "char *", &prop_str, NULL);
+            char path[256] = { 0 }; snprintf(path, 255, "%s:%s", named_path ? named_path : "", prop_str);
+            named_path = path;
+            lvgl_json_register_ptr(named_path, type_name, created_entity);
+            continue;
+        }
         // Property value must be an array of arguments
         cJSON *old_prop = NULL;
         if (!cJSON_IsArray(prop)) {
@@ -29030,7 +29041,7 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
                 cJSON *with = cJSON_GetObjectItemCaseSensitive(prop, "do");
                 if (!cJSON_IsObject(with)) { LOG_ERR_JSON(prop, "Render Warning: with requires attributes 'obj' and 'do' - do block must be Object. Skipping."); continue; } 
                 cJSON_AddItemToObject(with, "type", cJSON_CreateString("with"));
-                if (!render_json_node(with, (lv_obj_t*) new_parent)) {
+                if (!render_json_node(with, (lv_obj_t*) new_parent, named_path)) {
                     LOG_ERR("Render Error: Failed to render with node. Skipping.");
                 }
                 continue;
@@ -29115,7 +29126,7 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent) {
             }
             cJSON *child_node = NULL;
             cJSON_ArrayForEach(child_node, children_item) {
-                 if (!render_json_node(child_node, (lv_obj_t*)created_entity)) {
+                 if (!render_json_node(child_node, (lv_obj_t*)created_entity, named_path)) {
                      // Error rendering child, stop processing siblings? Or continue?
                      LOG_ERR("Render Error: Failed to render child node. Aborting sibling processing for this parent.");
                      // Cleanup? Difficult to manage partial tree creation.
@@ -29162,14 +29173,14 @@ bool lvgl_json_render_ui(cJSON *root_json, lv_obj_t *implicit_root_parent) {
     if (cJSON_IsArray(root_json)) {
         cJSON *node = NULL;
         cJSON_ArrayForEach(node, root_json) {
-            if (!render_json_node(node, implicit_root_parent)) {
+            if (!render_json_node(node, implicit_root_parent, NULL)) {
                 success = false;
                 LOG_ERR("Render Error: Failed to render top-level node. Aborting.");
                 break; // Stop processing further nodes on failure
             }
         }
     } else if (cJSON_IsObject(root_json)) {
-        success = render_json_node(root_json, implicit_root_parent);
+        success = render_json_node(root_json, implicit_root_parent, NULL);
     } else {
         LOG_ERR("Render Error: root_json must be a JSON object or array.");
         success = false;

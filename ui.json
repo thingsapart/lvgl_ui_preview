@@ -188,6 +188,7 @@
       "border_color": "#ffffff",
       "border_opa": 40,
       "margin_all": 2,
+      "named": "$name",
       "children": [
         {
           "add_style": [
@@ -677,6 +678,7 @@
       "lv_dropdown_set_text": "!",
       "symbol": null,
       "move_foreground": [],
+      "named": "jog_action_button",
       "with": {
         "obj": {
           "call": "lv_dropdown_get_list",
@@ -699,6 +701,7 @@
       "100%",
       320
     ],
+    "named": "main",
     "children": [
       {
         "layout": "LV_LAYOUT_FLEX",
@@ -722,7 +725,8 @@
               "axis": "X",
               "wcs_pos": "11.000",
               "abs_pos": "51.000",
-              "delta_pos": "2.125"
+              "delta_pos": "2.125",
+              "name": "axis_pos_x"
             }
           },
           {
@@ -732,7 +736,8 @@
               "axis": "Y",
               "wcs_pos": "22.000",
               "abs_pos": "72.000",
-              "delta_pos": "-12.125"
+              "delta_pos": "-12.125",
+              "name": "axis_pos_y"
             }
           },
           {
@@ -742,7 +747,8 @@
               "axis": "Z",
               "wcs_pos": "1.000",
               "abs_pos": "1.000",
-              "delta_pos": "0.125"
+              "delta_pos": "0.125",
+              "name": "axis_pos_z"
             },
             "id": "@axis_jog_speed_adjust",
             "context": {

@@ -129,6 +129,7 @@
     border_color: '#ffffff'
     border_opa: 40
     margin_all: 2
+    named: $name
     children:
       -
         add_style: ['@flex_x', 0]
@@ -371,7 +372,8 @@
     lv_dropdown_set_text: "!\uF079"
     symbol: null
     move_foreground: []
-    with
+    named: jog_action_button
+    with:
       obj: { call: 'lv_dropdown_get_list', args: [] }
       do:
         min_width: 200
@@ -382,6 +384,7 @@
   add_style: ['@container', 0]
   #add_style: ['@bg_gradient', 0]
   size: [100%, 320]
+  named: main
   children:
     # Left main column (axis positions)
     - layout: LV_LAYOUT_FLEX
@@ -403,6 +406,7 @@
             wcs_pos: '11.000'
             abs_pos: '51.000'
             delta_pos: '2.125'
+            name: axis_pos_x
         - type: use-view
           id: '@axis_pos_display'
           context:
@@ -410,6 +414,7 @@
             wcs_pos: '22.000'
             abs_pos: '72.000'
             delta_pos: '-12.125'
+            name: axis_pos_y
         - type: use-view
           id: '@axis_pos_display'
           context:
@@ -417,6 +422,7 @@
             wcs_pos: '1.000'
             abs_pos: '1.000'
             delta_pos: '0.125'
+            name: axis_pos_z
         #- type: use-view
           id: '@axis_jog_speed_adjust'
           context:
