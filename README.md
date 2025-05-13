@@ -6,10 +6,10 @@ Mostly vibe-coded because this was supposed to be a quick thing... but now it's 
 
 Half-rudimentary but somewhat useful. A couple things to note:
 * C-pointers used in API calls need to be "registered" to make them known to the YAML,
-* "component"s (aka sub-views) can be defined and reused,
-* context values (accessible via $name),
-* supports declaring `lv_style_t` styles (they are also automatically registered) as well as per-object local style,
-* pretty good support for many lvgl functions, as well as nested function calls in "setter" arguments,
+* components (aka sub-views) can be defined and reused,
+* context values (accessible via $name) can be used to parametrize components,
+* supports declaring and applying `lv_style_t` styles (they are also automatically registered) as well as per-object local style,
+* some support for lvgl functions, as well as nested function calls in "setter" arguments or in "with: ... blocks",
 * property setters and methods are "resolved" from a shorthand (several prefixes are tried),
 * macro-defined values (like `LV_SIZE_CONTENT`) need to be passed as an additional json file to the generator,
 * support for named/registered widgets/pointers (to access parts of the UI from C code),
@@ -107,6 +107,31 @@ These can be unescaped to retrieve regular strings (for example to set the text 
 * "@name@" => "@name"
 * "100%%" => "100%"
 * "#name#" => "#name"
+
+## Property name resolution
+
+Properties within blocks have shorthands that are resolved using the following rules. Each property must map to a known function using simple text-expansion rules below. If no matching function is found, a warning is printed and the property is ignored.
+
+1. widget blocks (ie those with "type: ..." omited or created/initialized using `lv_*_create()`):
+  * For example the widget block
+  ```
+  - type: label
+    text: some text
+    bg_color: #ff0000
+  ```
+  * resolves the property (`<property>` eg "text" above) on widget of type `<type>` by checking in order:
+    1. `lv_<type>_set_<property>` (`lv_label_set_text` => ☑️),
+    2. `lv_obj_set_<property>` (`lv_obj_set_text` => ✖️),
+    3. `lv_obj_<property>` (`lv_obj_set_text` => ✖️),
+2. Other blocks:
+   * resolved by checking in order:
+     1. `lv_style_<property>` (`lv_style_text` => ✖️)
+     2. `<poperty>` (`text` => ✖️)
+   
+Examples:
+* lv_obj_align => resolves to function "lv_obj_align",
+* flex_flow within widget resolves to function "lv_obj_set_flex_flow",
+* add_style => resolves to function "lv_obj_add_style".
 
 # Example
 ![An example layout: CNC status interface](https://github.com/thingsapart/lvgl_ui_preview/blob/main/docs/ui_ex.jpeg?raw=true)
