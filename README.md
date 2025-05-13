@@ -18,10 +18,16 @@ Half-rudimentary but somewhat useful. A couple things to note:
 
 ## Registry: C-pointers used in API calls need to be "registered" to make them known to the YAML
 
-1. Call `lvgl_json_register_ptr(name, type_name, ptr)` to register,
-2. and `lvgl_json_get_registered_ptr(name, expected_type_name)` to retrieve.
+The registry provides a way to link C-host-code and ui-layout definitions and allow passing objects between them. The C host-app can register pointers that can be accessed in the ui-layout definition via special "@" values (for example `text_font: @font_xyz` to set label's font to a previously registered font "font_xyz").
 
-Somewhat typesafe by providing registered and expected types.
+On the other hand, ui-layout blocks can be assigned a "named" attribute to store the current block in the registry (eg `{ "type": "button", "named": "btn1", ...}` would store a lv_button_t in the registry under name "btn1".
+
+1. Call `lvgl_json_register_ptr(name, type_name, ptr)` to register,
+2. and `lvgl_json_get_registered_ptr(name, expected_type_name)` to retrieve,
+3. reference registered pointers via "@name" attributes in the ui layout,
+4. store current obj/block in the registry via `"name": "id-to-store"` in ui layouts.
+
+Somewhat typesafe by specifying a registered and expected types during registration and retrieval.
 
 ## Components (aka reusable sub-views)
 
