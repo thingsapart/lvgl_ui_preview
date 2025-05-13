@@ -102,7 +102,7 @@ There are a couple short-hands for common attribute types and special values:
 
 These can be unescaped to retrieve regular strings (for example to set the text of a label to "100%", one would need to use `text: 100%%`):
 
-* "$name$" => "$name"
+* "$100 USD$" => "$100 USD"
 * "!name!" => "!name"
 * "@name@" => "@name"
 * "100%%" => "100%"
