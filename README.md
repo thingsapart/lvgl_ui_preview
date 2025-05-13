@@ -20,7 +20,7 @@ Half-rudimentary but somewhat useful. A couple things to note:
 
 The registry provides a way to link C-host-code and ui-layout definitions and allow passing objects between them. The C host-app can register pointers that can be accessed in the ui-layout definition via special "@" values (for example `text_font: @font_xyz` to set label's font to a previously registered font "font_xyz").
 
-On the other hand, ui-layout blocks can be assigned a "named" attribute to store the current block in the registry (eg `{ "type": "button", "named": "btn1", ...}` would store a lv_button_t in the registry under name "btn1".
+On the other hand, ui-layout blocks can be assigned a "named" attribute to store the current block in the registry (eg `{ "type": "button", "named": "btn1", ...}` would store a lv_button_t in the registry under name ":btn1". The are "paths", so a named component "btn1" within a container "container1" has the id ":container1:btn1".
 
 1. Call `lvgl_json_register_ptr(name, type_name, ptr)` to register,
 2. and `lvgl_json_get_registered_ptr(name, expected_type_name)` to retrieve,
