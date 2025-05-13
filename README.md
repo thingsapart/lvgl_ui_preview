@@ -6,11 +6,101 @@ Mostly vibe-coded because this was supposed to be a quick thing... but now it's 
 
 Half-rudimentary but somewhat useful. A couple things to note:
 * C-pointers used in API calls need to be "registered" to make them known to the YAML,
-* "component"s (aka sub-views) can be defined and reused (todo: "context" or template values),
+* "component"s (aka sub-views) can be defined and reused,
+* context values (accessible via $name),
 * supports declaring `lv_style_t` styles (they are also automatically registered) as well as per-object local style,
 * pretty good support for many lvgl functions, as well as nested function calls in "setter" arguments,
 * property setters and methods are "resolved" from a shorthand (several prefixes are tried),
-* macro-defined values (like `LV_SIZE_CONTENT`) need to be passed as an additional json file to the generator.
+* macro-defined values (like `LV_SIZE_CONTENT`) need to be passed as an additional json file to the generator,
+* support for named/registered widgets/pointers (to access parts of the UI from C code),
+* "with-blocks" to apply properties to sub-components,
+* "unescaping" special characters in values ("$name$" => "$name", "!name!" => "!name", "@name@" => "@name", "100%%" => "100%" "#name#" => "#name")
+
+## Registry: C-pointers used in API calls need to be "registered" to make them known to the YAML
+
+1. Call `lvgl_json_register_ptr(name, type_name, ptr)` to register,
+2. and `lvgl_json_get_registered_ptr(name, expected_type_name)` to retrieve.
+
+Somewhat typesafe by providing registered and expected types.
+
+## Components (aka reusable sub-views)
+
+1. Define a component using a `{ "type": "component", .... }` block,
+2. and reference said component using a `{ "type": "use-view", ... } block,
+3. use context to pass values into components.
+
+See example ui code. See "feed_rate_scale" and "axis_pos_display" components and their "use-view"s for example, also note the use of "context" properties to pass information into sub-views.
+
+## Styles (lv_style_t)
+
+Supported using `{ "type": "style", "id": "@someid" ... }` bocks. The "id" attribute (whose value must start with "@") must be specified. Styles are memory allocated on the heap and saved to the registry using the specified id (omiting the leading "@").
+
+For example, the following code creates and registers a style named "bar_indicator" and two lvgl widgets (obj and button) using said style:
+```
+- type: style
+  id: '@bar_indicator'
+  radius: 4
+
+- type: obj
+  add_style: ['@bar_indicator', 0]
+- type: button
+  add_style: ['@bar_indicator', 0]
+```
+
+## Context
+
+Generally, any property value starting with "$" is used to retrieve its value from the current context. If not found, the property is not set. The current context can be assinged along in widget and `use-view` blocks.
+
+For example, this is how context would be passed to a sub-view (it has to be parametrized using "$..." property values:
+
+```
+        - type: use-view
+          id: '@axis_pos_display'
+          context:
+            axis: X
+            wcs_pos: '11.000'
+            abs_pos: '51.000'
+            delta_pos: '2.125'
+```
+
+## Calling lvgl functions
+
+Many lvgl functions that are synthesized from the LVGL api definition can be called as part of the property assignment, for example one can `lv_pct` when assigning a width attribute as `..., "width": { "call": "lv_pct", args: [50] }, ...`.
+
+an object block with properties "call" and "args" is interpreted as a call.
+
+## With blocks
+
+With blocks allow "working with" the result of an expression (could be referencing a registered pointer or result of a call). This is useful to access or create sub-objects like "lv_dropdown_get_list" to access the "list" sub-object of a dropdown and assign a prop/style:
+
+```
+  - type: dropdown
+    ...
+    with:
+      obj: { call: 'lv_dropdown_get_list', args: [] }                                                                 
+      do: 
+        min_width: 200
+```
+
+or adding sub-menus to menus.
+
+## Special string values and unescaping them
+
+There are a couple short-hands for common attribute types and special values:
+
+* "$ctx-var" accesses a context-variable of name "ctx-var",
+* "!this is a static string" provides heap-allocated versions of string that "outlast" the json parsing/ui-generation phase as they are sometimes needed by certain lvgl functions like `lv_dropdown_set_options` (when the component does not allocate and copy the value),
+* "@id" references a registered pointer like `text_font: @lv_font_montserrat_24` would reference a previously registered variable named "lv_font_montserrat_24" (eg via `lvgl_json_register_ptr("font_montserrat_24", "lv_font_t", (void *) &lv_font_montserrat_24);` in the main application),
+* "#aabbcc" is a short-hand for `lv_color_hex(0xaa, 0xbb, 0xcc)`,
+* "nnn%" is a short-hand for `lv_pct(nnn)`.
+
+These can be unescaped to retrieve regular strings (for example to set the text of a label to "100%", one would need to use `text: 100%%`):
+
+* "$name$" => "$name"
+* "!name!" => "!name"
+* "@name@" => "@name"
+* "100%%" => "100%"
+* "#name#" => "#name"
 
 # Example
 ![An example layout: CNC status interface](https://github.com/thingsapart/lvgl_ui_preview/blob/main/docs/ui_ex.jpeg?raw=true)
