@@ -184,7 +184,102 @@ LV_FONT_DECLARE(lcd_7_segment_24);
 LV_FONT_DECLARE(lcd_7_segment_18);
 LV_FONT_DECLARE(lcd_7_segment_14);
 
+#define LV_GRID_FR_1 LV_GRID_FR(1)
+#define LV_BORDER_SIDE_TOP_BOTTOM (LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_BOTTOM)
+
+#include "ui_transpiled.h"
+
 int main(int argc, char *argv[]) {
+
+    // --- Argument Parsing ---
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <path_to_ui_json_file>\n", argv[0]);
+        return 1;
+    }
+    monitored_filepath = argv[1];
+
+
+    // --- LVGL & SDL Initialization (using target code's style) ---
+    lv_init();
+
+    // Workaround for sdl2 `-m32` crash (keep from target code)
+    #ifndef WIN32
+        setenv("DBUS_FATAL_WARNINGS", "0", 1);
+    #endif
+
+    // Register LVGL log callback if enabled (keep from target code)
+    #if LV_USE_LOG != 0
+        // Ensure LV_USE_LOG is set appropriately in lv_conf.h
+        // lv_log_register_print_cb(lv_log_print_g_cb); // Use your actual log function if needed
+    #endif
+
+    // Create SDL display and input devices (keep from target code)
+    lv_display_t *lvDisplay = lv_sdl_window_create(SDL_HOR_RES, SDL_VER_RES);
+    if (!lvDisplay) { // Add basic check
+        LOG_ERROR("Failed to create SDL window");
+        return 1;
+    }
+    lv_indev_t *lvMouse = lv_sdl_mouse_create();
+    lv_indev_t *lvMouseWheel = lv_sdl_mousewheel_create();
+    lv_indev_t *lvKeyboard = lv_sdl_keyboard_create();
+
+    // Optional: set zoom (keep from target code)
+    // lv_sdl_window_set_zoom(lvDisplay, 1);
+
+    // Use SDL_GetTicks for lv_tick_inc (keep from target code)
+    // lv_tick_set_cb(SDL_GetTicks); // lv_tick_set_cb seems deprecated/removed in v9? Use lv_tick_inc directly.
+
+    // Setup signal handler (keep from target code)
+    signal(SIGINT, signal_handler);
+
+    lvgl_json_register_ptr("font_kode_14", "lv_font_t", (void *) &font_kode_14);
+    lvgl_json_register_ptr("font_kode_20", "lv_font_t", (void *) &font_kode_20);
+    lvgl_json_register_ptr("font_kode_24", "lv_font_t", (void *) &font_kode_24);
+    lvgl_json_register_ptr("font_kode_30", "lv_font_t", (void *) &font_kode_30);
+    lvgl_json_register_ptr("font_kode_36", "lv_font_t", (void *) &font_kode_36);
+    lvgl_json_register_ptr("lcd_7_segment_14", "lv_font_t", (void *) &lcd_7_segment_14);
+    lvgl_json_register_ptr("lcd_7_segment_18", "lv_font_t", (void *) &lcd_7_segment_18);
+    lvgl_json_register_ptr("lcd_7_segment_24", "lv_font_t", (void *) &lcd_7_segment_24);
+    lvgl_json_register_ptr("font_montserrat_24", "lv_font_t", (void *) &lv_font_montserrat_24);
+    lvgl_json_register_ptr("font_montserrat_14", "lv_font_t", (void *) &lv_font_montserrat_14);
+    lvgl_json_register_ptr("font_montserrat_12", "lv_font_t", (void *) &lv_font_montserrat_12);
+
+    // --- Initial UI Load ---
+    create_ui_ui_transpiled(lv_screen_active());
+
+    // --- LVGL Main Loop ---
+    LOG_USER("Starting LVGL main loop...");
+    uint32_t lastTick = SDL_GetTicks(); // Initialize last tick time
+    bRunning = true; // Ensure flag is set before loop
+
+    while (bRunning) {
+        uint32_t current_time_ms = SDL_GetTicks(); // Get current time once per loop
+
+        // --- Handle LVGL Tasks (using target code's style) ---
+        // Use SDL_Delay for general yielding/pacing
+        SDL_Delay(10);
+
+        // Update LVGL tick (keep from target code)
+        uint32_t current = SDL_GetTicks(); // Fetch potentially updated ticks
+        lv_tick_inc(current - lastTick);
+        lastTick = current;
+
+        // Handle LVGL timers and drawing (keep from target code)
+        lv_timer_handler();
+    }
+
+    // --- Cleanup ---
+    LOG_USER("Exiting...");
+    // Add explicit cleanup if necessary (e.g., lv_display_destroy, SDL_Quit)
+    // Depending on lv_drivers behavior, some cleanup might happen automatically.
+    // Consider adding:
+    // lv_display_delete(lvDisplay); // Or similar function if provided by driver
+    // SDL_Quit();
+
+    return 0;
+}
+
+int main_render(int argc, char *argv[]) {
 
     // --- Argument Parsing ---
     if (argc < 2) {
