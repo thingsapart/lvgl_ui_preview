@@ -3,10 +3,11 @@ import argparse
 import json
 import logging
 import os
-from pathlib import Path
+from pathlib import Path # Ensure Path is imported
 
 import api_parser
 import type_utils
+from pathlib import Path # Ensure Path is imported
 from code_gen import invocation, unmarshal, registry, renderer # Assuming these are in code_gen subpackage
 
 # Basic Logging Setup
@@ -94,6 +95,10 @@ char* json_node_to_string(cJSON *node); // Exposed for potential external use? M
 #define LV_GRID_FR_4 LV_GRID_FR(4)
 #define LV_GRID_FR_5 LV_GRID_FR(5)
 #define LV_GRID_FR_10 LV_GRID_FR(10)
+
+// Forward declare if not in lvgl.h for some reason, or ensure lvgl.h is included first.
+// These might be part of LVGL's standard headers, but good to be aware of.
+extern lv_obj_t *lv_screen_active(void);
 
 
 // --- Public API ---
@@ -284,6 +289,10 @@ static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void
 
 """
 
+C_TRANSPILE_OUTPUT_DIR_DEFAULT = "output_c_transpiled"
+C_TRANSPILE_UI_SPEC_DEFAULT = "ui.json" # Default name for the UI spec file
+
+
 def generate_macro_values_exporter_c_code(macro_names_list):
     # This C code will rely on djb2_hash_c, compare_generated_enum_hash,
     # g_generated_enum_table, and G_GENERATED_ENUM_TABLE_SIZE being defined earlier in the C file.
@@ -371,6 +380,17 @@ def main():
     parser.add_argument("-a", "--api-json", required=True, help="Path to the LVGL API JSON definition file.")
     parser.add_argument("-o", "--output-dir", default="output", help="Directory to write the generated C library files.")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging macros in generated code.")
+    parser.add_argument(
+        "--mode",
+        choices=["preview", "c_transpile"],
+        default="preview",
+        help="Generation mode: 'preview' (JSON interpreter library) or 'c_transpile' (direct C code)."
+    )
+    parser.add_argument(
+        "--ui-spec",
+        default=None, # Default to None, require if mode is c_transpile
+        help=f"Path to the UI specification JSON file (required for 'c_transpile' mode). Defaults to {C_TRANSPILE_UI_SPEC_DEFAULT} if not provided and mode is c_transpile."
+    )
     parser.add_argument("-m",
         "--macro-names-list",
         type=str,
@@ -385,10 +405,22 @@ def main():
     # Add arguments for include/exclude lists here if needed
     args = parser.parse_args()
 
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    if args.mode == "c_transpile":
+        if args.ui_spec is None:
+            args.ui_spec = C_TRANSPILE_UI_SPEC_DEFAULT
+            logger.info(f"--ui-spec not provided for c_transpile mode, defaulting to {args.ui_spec}")
+        if not Path(args.ui_spec).exists():
+            logger.error(f"UI specification file '{args.ui_spec}' not found (required for 'c_transpile' mode).")
+            return 1
+        # Adjust output directory for C transpiler mode if default is used
+        if args.output_dir == "output": # Default for preview mode
+            args.output_dir = C_TRANSPILE_OUTPUT_DIR_DEFAULT
+            logger.info(f"Output directory for c_transpile mode set to: {args.output_dir}")
 
     logger.info(f"Parsing API definition from: {args.api_json}")
+    
+    output_path = Path(args.output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
     # Pass include/exclude lists from args if implemented
     # api_info = api_parser.parse_api(args.api_json) # Old line
 
@@ -407,6 +439,44 @@ def main():
         logger.critical("Failed to parse API information. Exiting.")
         return 1
 
+    if args.mode == "preview":
+        generate_preview_mode(api_info, args, output_path)
+    elif args.mode == "c_transpile":
+        # Ensure the c_transpiler module can be imported
+        try:
+            from c_transpiler import transpiler as c_transpiler_module
+            c_transpiler_module.generate_c_transpiled_ui(api_info, args.ui_spec, output_path)
+        except ImportError as e:
+            logger.error(f"Could not import C transpiler module: {e}")
+            logger.error("Please ensure 'gen/c_transpiler/transpiler.py' exists and is structured correctly.")
+            return 1
+        except Exception as e:
+            logger.error(f"Error during C transpilation: {e}", exc_info=True)
+            return 1
+    else:
+        logger.error(f"Unknown mode: {args.mode}")
+        return 1
+
+    logger.info("Generation complete.")
+    return 0
+
+def generate_preview_mode(api_info, args, output_dir):
+    """Generates the files for the 'preview' (JSON interpreter) mode."""
+    logger.info("Generating files for 'preview' mode...")
+
+    # Original logic from main() for preview mode starts here
+    
+    # --- Prepare macro names for JSON value exporter ---
+    macro_names_for_exporter = DEFAULT_MACRO_NAMES_TO_EXPORT
+    if args.macro_names_list:
+        macro_names_for_exporter = [name.strip() for name in args.macro_names_list.split(',') if name.strip()]
+        logger.info(f"Using custom list of {len(macro_names_for_exporter)} macros for JSON value exporter.")
+    else:
+        logger.info(f"Using default list of {len(macro_names_for_exporter)} macros for JSON value exporter.")
+    
+    logger.info("Generating C code for macro values JSON exporter...")
+    macro_values_exporter_c = generate_macro_values_exporter_c_code(macro_names_for_exporter)
+
     # --- Generate Code Sections ---
     logger.info("Generating pointer registry...")
     registry_c = registry.generate_registry()
@@ -417,17 +487,6 @@ def main():
         api_info['hashed_and_sorted_enum_members'],
         api_info['enum_members'] # The old map, can be used as a fallback or for type heuristics if needed
     )
-    
-    logger.info("Preparing macro names for JSON value exporter...")
-    macro_names_for_exporter = DEFAULT_MACRO_NAMES_TO_EXPORT
-    if args.macro_names_list:
-        macro_names_for_exporter = [name.strip() for name in args.macro_names_list.split(',') if name.strip()]
-        logger.info(f"Using custom list of {len(macro_names_for_exporter)} macros for JSON value exporter.")
-    else:
-        logger.info(f"Using default list of {len(macro_names_for_exporter)} macros for JSON value exporter.")
-    logger.info("Generating C code for macro values JSON exporter...")
-    macro_values_exporter_c = generate_macro_values_exporter_c_code(macro_names_for_exporter)
-    
     logger.info("Generating primitive unmarshalers...")
     primitive_unmarshal_c = unmarshal.generate_primitive_unmarshalers()
 
@@ -515,8 +574,6 @@ def main():
     with open(source_path, "w") as f:
         f.write(c_source_content)
 
-    logger.info("Generation complete.")
-    return 0
 
 if __name__ == "__main__":
     # Set higher log level for libraries during generation itself
