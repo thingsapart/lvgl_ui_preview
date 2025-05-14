@@ -36,6 +36,23 @@ DEFAULT_MACRO_NAMES_TO_EXPORT = [
 
 # --- C File Templates ---
 
+C_COMMON_DEFINES = """
+#define LV_MALLOC lv_malloc
+#define LV_FREE lv_free
+#define LV_GRID_FR_1 LV_GRID_FR(1)
+#define LV_GRID_FR_2 LV_GRID_FR(2)
+#define LV_GRID_FR_3 LV_GRID_FR(3)
+#define LV_GRID_FR_4 LV_GRID_FR(4)
+#define LV_GRID_FR_5 LV_GRID_FR(5)
+#define LV_GRID_FR_10 LV_GRID_FR(10)
+#define LV_BORDER_SIDE_TOP_BOTTOM (LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_BOTTOM)
+#define LV_BORDER_SIDE_LEFT_RIGHT (LV_BORDER_SIDE_LEFT | LV_BORDER_SIDE_RIGHT)
+#define LV_BORDER_SIDE_LEFT_TOP (LV_BORDER_SIDE_LEFT | LV_BORDER_SIDE_TOP)
+#define LV_BORDER_SIDE_LEFT_BOTTOM (LV_BORDER_SIDE_LEFT | LV_BORDER_SIDE_BOTTOM)
+#define LV_BORDER_SIDE_RIGHT_TOP (LV_BORDER_SIDE_RIGHT | LV_BORDER_SIDE_TOP)
+#define LV_BORDER_SIDE_RIGHT_BOTTOM (LV_BORDER_SIDE_RIGHT | LV_BORDER_SIDE_BOTTOM)
+"""
+
 C_HEADER_TEMPLATE = """
 #ifndef LVGL_JSON_RENDERER_H
 #define LVGL_JSON_RENDERER_H
@@ -87,14 +104,7 @@ char* json_node_to_string(cJSON *node); // Exposed for potential external use? M
 #endif
 #endif
 
-#define LV_MALLOC lv_malloc
-#define LV_FREE lv_free
-#define LV_GRID_FR_1 LV_GRID_FR(1)
-#define LV_GRID_FR_2 LV_GRID_FR(2)
-#define LV_GRID_FR_3 LV_GRID_FR(3)
-#define LV_GRID_FR_4 LV_GRID_FR(4)
-#define LV_GRID_FR_5 LV_GRID_FR(5)
-#define LV_GRID_FR_10 LV_GRID_FR(10)
+{common_defines}
 
 // Forward declare if not in lvgl.h for some reason, or ensure lvgl.h is included first.
 // These might be part of LVGL's standard headers, but good to be aware of.
@@ -554,7 +564,8 @@ def generate_preview_mode(api_info, args, output_dir):
 
     logger.info("Assembling C header file...")
     c_header_content = C_HEADER_TEMPLATE.format(
-        custom_creator_prototypes=custom_creator_prototypes_h
+        custom_creator_prototypes=custom_creator_prototypes_h,
+        common_defines=C_COMMON_DEFINES
     )
 
     # Add debug define if requested

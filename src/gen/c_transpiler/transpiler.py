@@ -5,6 +5,7 @@ import re
 import copy # For deepcopy
 import type_utils # For lvgl_type_to_widget_name, etc.
 import api_parser # To access api_info for enums etc.
+from generator import C_COMMON_DEFINES
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +248,7 @@ class CTranspiler:
                 c_array_elements = []
                 for item_node in json_value_node: 
                     c_array_elements.append(self._format_c_value(item_node, "lv_coord_t", current_parent_c_var, current_context))
+                c_array_elements.append("LV_GRID_TEMPLATE_LAST")
                 
                 array_var_name = self._get_unique_c_var_name_base("coord_array")
                 self._add_decl(f"    static const lv_coord_t {array_var_name}[] = {{ {', '.join(c_array_elements)} }};")
@@ -592,6 +594,7 @@ class CTranspiler:
     def generate_c_function(self, function_name="create_ui_from_spec"):
         self._add_predecl(f"#include \"lvgl.h\"", indent=False)
         self._add_predecl(f"", indent=False)
+        self._add_predecl(C_COMMON_DEFINES, indent=False)
         self._add_predecl(f"extern void lvgl_json_register_ptr(const char *name, const char *type_name, void *ptr);", indent=False)
         self._add_predecl(f"extern void* lvgl_json_get_registered_ptr(const char *name, const char *expected_type_name);", indent=False)
         self._add_predecl(f"", indent=False)

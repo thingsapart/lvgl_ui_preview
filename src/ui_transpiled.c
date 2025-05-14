@@ -1,5 +1,21 @@
 #include "lvgl.h"
 
+
+#define LV_MALLOC lv_malloc
+#define LV_FREE lv_free
+#define LV_GRID_FR_1 LV_GRID_FR(1)
+#define LV_GRID_FR_2 LV_GRID_FR(2)
+#define LV_GRID_FR_3 LV_GRID_FR(3)
+#define LV_GRID_FR_4 LV_GRID_FR(4)
+#define LV_GRID_FR_5 LV_GRID_FR(5)
+#define LV_GRID_FR_10 LV_GRID_FR(10)
+#define LV_BORDER_SIDE_TOP_BOTTOM (LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_BOTTOM)
+#define LV_BORDER_SIDE_LEFT_RIGHT (LV_BORDER_SIDE_LEFT | LV_BORDER_SIDE_RIGHT)
+#define LV_BORDER_SIDE_LEFT_TOP (LV_BORDER_SIDE_LEFT | LV_BORDER_SIDE_TOP)
+#define LV_BORDER_SIDE_LEFT_BOTTOM (LV_BORDER_SIDE_LEFT | LV_BORDER_SIDE_BOTTOM)
+#define LV_BORDER_SIDE_RIGHT_TOP (LV_BORDER_SIDE_RIGHT | LV_BORDER_SIDE_TOP)
+#define LV_BORDER_SIDE_RIGHT_BOTTOM (LV_BORDER_SIDE_RIGHT | LV_BORDER_SIDE_BOTTOM)
+
 extern void lvgl_json_register_ptr(const char *name, const char *type_name, void *ptr);
 extern void* lvgl_json_get_registered_ptr(const char *name, const char *expected_type_name);
 
@@ -9,9 +25,6 @@ extern void* lvgl_json_get_registered_ptr(const char *name, const char *expected
 #ifndef LV_SIZE_CONTENT
 #define LV_SIZE_CONTENT LV_COORD_MAX
 #endif
-
-#define LV_GRID_FR_1 LV_GRID_FR(1)
-#define LV_BORDER_SIDE_TOP_BOTTOM (LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_BOTTOM)
 
 void create_ui_ui_transpiled(lv_obj_t *screen_parent) {
     // --- VARIABLE DECLARATIONS ---
@@ -62,8 +75,8 @@ void create_ui_ui_transpiled(lv_obj_t *screen_parent) {
     lv_obj_t * c_obj_32;
     lv_obj_t * c_label_33;
     lv_obj_t * c_grid_obj_34;
-    static const lv_coord_t c_coord_array_35[] = { LV_GRID_CONTENT, LV_GRID_FR_1 };
-    static const lv_coord_t c_coord_array_36[] = { LV_GRID_CONTENT };
+    static const lv_coord_t c_coord_array_35[] = { LV_GRID_CONTENT, LV_GRID_FR_1, LV_GRID_TEMPLATE_LAST };
+    static const lv_coord_t c_coord_array_36[] = { LV_GRID_CONTENT, LV_GRID_TEMPLATE_LAST };
     lv_obj_t * c_label_37;
     lv_obj_t * c_label_38;
     lv_obj_t * c_obj_39;
@@ -78,8 +91,8 @@ void create_ui_ui_transpiled(lv_obj_t *screen_parent) {
     lv_obj_t * c_obj_48;
     lv_obj_t * c_label_49;
     lv_obj_t * c_grid_obj_50;
-    static const lv_coord_t c_coord_array_51[] = { LV_GRID_CONTENT, LV_GRID_FR_1 };
-    static const lv_coord_t c_coord_array_52[] = { LV_GRID_CONTENT };
+    static const lv_coord_t c_coord_array_51[] = { LV_GRID_CONTENT, LV_GRID_FR_1, LV_GRID_TEMPLATE_LAST };
+    static const lv_coord_t c_coord_array_52[] = { LV_GRID_CONTENT, LV_GRID_TEMPLATE_LAST };
     lv_obj_t * c_label_53;
     lv_obj_t * c_label_54;
     lv_obj_t * c_obj_55;
@@ -94,8 +107,8 @@ void create_ui_ui_transpiled(lv_obj_t *screen_parent) {
     lv_obj_t * c_obj_64;
     lv_obj_t * c_label_65;
     lv_obj_t * c_grid_obj_66;
-    static const lv_coord_t c_coord_array_67[] = { 35, 45, 20, 40 };
-    static const lv_coord_t c_coord_array_68[] = { LV_GRID_CONTENT };
+    static const lv_coord_t c_coord_array_67[] = { 35, 45, 20, 40, LV_GRID_TEMPLATE_LAST };
+    static const lv_coord_t c_coord_array_68[] = { LV_GRID_CONTENT, LV_GRID_TEMPLATE_LAST };
     lv_obj_t * c_label_69;
     lv_obj_t * c_label_70;
     lv_obj_t * c_label_71;
