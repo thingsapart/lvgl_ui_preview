@@ -140,7 +140,14 @@ class CTranspiler:
 
         if isinstance(json_value_node, str): 
             s_val = json_value_node 
-            
+
+            # Unescape if needed.
+            TOKENS = ['$', '#', '@', '!']
+            if len(s_val) > 1 and s_val[0] in TOKENS and s_val[-1] in TOKENS:
+                s_val = s_val[:-1]
+            if s_val.endswith('%%'):
+                s_val = s_val[:-1]
+
             # 1. Handle prefixes: $, #, @, !
             if s_val.startswith("$") and not s_val.startswith("$$"): 
                 var_name = s_val[1:]

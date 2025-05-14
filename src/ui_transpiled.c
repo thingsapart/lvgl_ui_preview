@@ -540,9 +540,9 @@ void create_ui_ui_transpiled(lv_obj_t *screen_parent) {
                         c_label_44 = lv_label_create(c_obj_42);
                         lv_label_set_text(c_label_44, "Feed Ovr");
                         c_label_45 = lv_label_create(c_obj_42);
-                        lv_label_set_text(c_label_45, "100%%");
+                        lv_label_set_text(c_label_45, "100%");
                         c_label_46 = lv_label_create(c_obj_42);
-                        lv_label_set_text(c_label_46, "65%%");
+                        lv_label_set_text(c_label_46, "65%");
             // Using view component 'feed_rate_scale' with context CJSONObject([('unit', '/MIN'), ('label', 'SPEED'), ('letter', 'S'), ('ovr', 'Speed Ovr'), ('pad_bottom', 12)])
                 c_obj_47 = lv_obj_create(c_obj_30);
                 lv_obj_set_size(c_obj_47, lv_pct(100), lv_pct(100));
@@ -641,9 +641,9 @@ void create_ui_ui_transpiled(lv_obj_t *screen_parent) {
                         c_label_60 = lv_label_create(c_obj_58);
                         lv_label_set_text(c_label_60, "Speed Ovr");
                         c_label_61 = lv_label_create(c_obj_58);
-                        lv_label_set_text(c_label_61, "100%%");
+                        lv_label_set_text(c_label_61, "100%");
                         c_label_62 = lv_label_create(c_obj_58);
-                        lv_label_set_text(c_label_62, "65%%");
+                        lv_label_set_text(c_label_62, "65%");
             // Using view component 'jog_feed' with context CJSONObject([('unit', 'MM'), ('label', 'JOG'), ('ovr', 'Jog Ovr'), ('pad_bottom', 0)])
                 c_obj_63 = lv_obj_create(c_obj_30);
                 lv_obj_set_size(c_obj_63, lv_pct(100), lv_pct(100));
@@ -726,7 +726,7 @@ void create_ui_ui_transpiled(lv_obj_t *screen_parent) {
                         c_label_75 = lv_label_create(c_obj_73);
                         lv_label_set_text(c_label_75, "Jog Ovr");
                         c_label_76 = lv_label_create(c_obj_73);
-                        lv_label_set_text(c_label_76, "100%%");
+                        lv_label_set_text(c_label_76, "100%");
     // Using view component 'nav_action_button' with context {}
         c_dropdown_77 = lv_dropdown_create(parent_obj);
         lv_obj_add_style(c_dropdown_77, &action_button, 0);
