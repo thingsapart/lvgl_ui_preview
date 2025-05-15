@@ -270,8 +270,10 @@ typedef struct {
 } generated_enum_entry_t;
 
 static const generated_enum_entry_t g_generated_enum_table[] = {
+    {0x00a56f66, "LV_EVENT_HOVER_OVER", 0x18 }, // Type: lv_event_code_t
     {0x00cfc914, "LV_STYLE_LAYOUT", 0x16 }, // Type: UNKNOWN_TYPE
     {0x00fd8677, "LV_ALIGN_OUT_TOP_RIGHT", 0x0c }, // Type: lv_align_t
+    {0x010dd82d, "LV_EVENT_REFR_EXT_DRAW_SIZE", 0x1b }, // Type: lv_event_code_t
     {0x011200b8, "LV_STYLE_LENGTH", 0x03 }, // Type: UNKNOWN_TYPE
     {0x01efa188, "LV_STYLE_MARGIN_BOTTOM", 0x19 }, // Type: UNKNOWN_TYPE
     {0x03fea8f4, "LV_STYLE_OUTLINE_COLOR", 0x39 }, // Type: UNKNOWN_TYPE
@@ -283,27 +285,34 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x04fb2cb1, "LV_STYLE_TEXT_FONT", 0x5a }, // Type: UNKNOWN_TYPE
     {0x05652755, "LV_STYLE_OUTLINE_WIDTH", 0x38 }, // Type: UNKNOWN_TYPE
     {0x0567548a, "LV_STYLE_GRID_ROW_DSC_ARRAY", 0x81 }, // Type: UNKNOWN_TYPE
+    {0x0612e295, "LV_EVENT_PRESS_LOST", 0x03 }, // Type: lv_event_code_t
     {0x069ea8b4, "LV_STYLE_LINE_DASH_GAP", 0x4a }, // Type: UNKNOWN_TYPE
     {0x070d3696, "LV_OBJ_FLAG_SEND_DRAW_TASK_EVENTS", 0x80000 }, // Type: lv_obj_flag_t
     {0x0784fec8, "LV_STR_SYMBOL_DIRECTORY", 0x22 }, // Type: UNKNOWN_TYPE
+    {0x0787ce72, "LV_EVENT_SCREEN_UNLOADED", 0x30 }, // Type: lv_event_code_t
     {0x07e8bb1a, "LV_STYLE_TEXT_OPA", 0x59 }, // Type: UNKNOWN_TYPE
     {0x082c6744, "LV_TREE_WALK_POST_ORDER", 0x01 }, // Type: UNKNOWN_TYPE
     {0x087177a6, "LV_ALIGN_OUT_LEFT_BOTTOM", 0x12 }, // Type: lv_align_t
     {0x097d9702, "LV_DIR_RIGHT", 0x02 }, // Type: lv_dir_t
     {0x0a84396d, "LV_STYLE_IMAGE_RECOLOR_OPA", 0x46 }, // Type: UNKNOWN_TYPE
     {0x0db371ba, "LV_BUTTONMATRIX_CTRL_NONE", 0x00 }, // Type: lv_buttonmatrix_ctrl_t
+    {0x0e20a317, "LV_EVENT_SINGLE_CLICKED", 0x05 }, // Type: lv_event_code_t
     {0x0ec31f5e, "LV_STYLE_RADIUS", 0x0c }, // Type: UNKNOWN_TYPE
     {0x0ed249cf, "LV_SCALE_MODE_HORIZONTAL_BOTTOM", 0x01 }, // Type: lv_scale_mode_t
     {0x0f1e6bc3, "LV_GRID_FR_10", 0x1fffffa5 }, // Type: MACRO_FROM_STRING_VALUES
+    {0x0f3267d4, "LV_EVENT_CHILD_CHANGED", 0x2a }, // Type: lv_event_code_t
     {0x10b0ead1, "LV_STYLE_MARGIN_RIGHT", 0x1b }, // Type: UNKNOWN_TYPE
     {0x112d1946, "LV_STYLE_MARGIN_TOP", 0x18 }, // Type: UNKNOWN_TYPE
     {0x118e53bc, "LV_GRAD_DIR_LINEAR", 0x03 }, // Type: lv_grad_dir_t
+    {0x11d1f9db, "LV_EVENT_LAST", 0x43 }, // Type: lv_event_code_t
     {0x12434c36, "LV_GRID_ALIGN_CENTER", 0x01 }, // Type: lv_grid_align_t
     {0x12fbf1da, "LV_STYLE_BG_GRAD_DIR", 0x20 }, // Type: UNKNOWN_TYPE
     {0x12fc217b, "LV_STYLE_BG_GRAD_OPA", 0x25 }, // Type: UNKNOWN_TYPE
+    {0x140652dd, "LV_EVENT_DRAW_MAIN_BEGIN", 0x1c }, // Type: lv_event_code_t
     {0x1406fca7, "LV_STR_SYMBOL_EYE_OPEN", 0x1b }, // Type: UNKNOWN_TYPE
     {0x1451d3d9, "LV_DIR_BOTTOM", 0x08 }, // Type: lv_dir_t
     {0x1453e5bd, "LV_STYLE_BG_COLOR", 0x1c }, // Type: UNKNOWN_TYPE
+    {0x1513aff7, "LV_EVENT_HOVER_LEAVE", 0x19 }, // Type: lv_event_code_t
     {0x16799639, "LV_OBJ_FLAG_SCROLL_MOMENTUM", 0x40 }, // Type: lv_obj_flag_t
     {0x16ce98d5, "LV_STYLE_OUTLINE_OPA", 0x3a }, // Type: UNKNOWN_TYPE
     {0x16ce9b2a, "LV_STYLE_OUTLINE_PAD", 0x3b }, // Type: UNKNOWN_TYPE
@@ -313,27 +322,16 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x18592fc0, "LV_COORD_MIN", -0x1fffffff }, // Type: MACRO_FROM_STRING_VALUES
     {0x1881fee0, "LV_STYLE_ANIM_DURATION", 0x67 }, // Type: UNKNOWN_TYPE
     {0x1999fc1b, "LV_STYLE_ANIM", 0x66 }, // Type: UNKNOWN_TYPE
+    {0x1ad32581, "LV_EVENT_STYLE_CHANGED", 0x32 }, // Type: lv_event_code_t
     {0x1b6d1aff, "LV_RADIUS_CIRCLE", 0x7fff }, // Type: MACRO_FROM_STRING_VALUES
+    {0x1ba861ad, "LV_EVENT_PREPROCESS", 0x8000 }, // Type: lv_event_code_t
     {0x1bc72f1b, "LV_STR_SYMBOL_BULLET", 0x00 }, // Type: UNKNOWN_TYPE
+    {0x1bcd7bbb, "LV_EVENT_RENDER_READY", 0x3c }, // Type: lv_event_code_t
+    {0x1be7cfb4, "LV_EVENT_RENDER_START", 0x3b }, // Type: lv_event_code_t
+    {0x1c475fbe, "LV_EVENT_REFR_REQUEST", 0x38 }, // Type: lv_event_code_t
     {0x1d2b2abd, "LV_STR_SYMBOL_CHARGE", 0x2a }, // Type: UNKNOWN_TYPE
     {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: lv_gridnav_ctrl_t
-    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
-    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
-    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
-    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
-    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
-    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
-    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
-    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
-    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
-    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
-    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
-    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
-    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
-    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
-    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
-    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
-    {0x1d7d9e75, "LV_GRIDNAV_CTRL_VERTICAL_MOVE_ONLY", 0x08 }, // Type: _lvimage_flags_t
+    {0x1da65726, "LV_EVENT_GESTURE", 0x10 }, // Type: lv_event_code_t
     {0x1e46e344, "LV_STR_SYMBOL_SETTINGS", 0x07 }, // Type: UNKNOWN_TYPE
     {0x1e605647, "LV_BUTTONMATRIX_CTRL_NO_REPEAT", 0x20 }, // Type: lv_buttonmatrix_ctrl_t
     {0x1ef718ae, "LV_GRAD_DIR_RADIAL", 0x04 }, // Type: lv_grad_dir_t
@@ -352,7 +350,9 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x243c2f5e, "LV_FLEX_FLOW_ROW_REVERSE", 0x08 }, // Type: lv_flex_flow_t
     {0x2540e730, "LV_CHART_POINT_NONE", 0x7fffffff }, // Type: MACRO_FROM_STRING_VALUES
     {0x264290ca, "LV_STYLE_ARC_COLOR", 0x52 }, // Type: UNKNOWN_TYPE
+    {0x26c77682, "LV_EVENT_CHILD_CREATED", 0x2b }, // Type: lv_event_code_t
     {0x2769a0dc, "LV_STYLE_BG_GRAD", 0x26 }, // Type: UNKNOWN_TYPE
+    {0x278bbaae, "LV_EVENT_LAYOUT_CHANGED", 0x33 }, // Type: lv_event_code_t
     {0x27a90f2b, "LV_STYLE_ARC_WIDTH", 0x50 }, // Type: UNKNOWN_TYPE
     {0x27cd06e9, "LV_ARC_MODE_SYMMETRICAL", 0x01 }, // Type: lv_arc_mode_t
     {0x2880e9a3, "LV_GRID_ALIGN_START", 0x00 }, // Type: lv_grid_align_t
@@ -360,9 +360,11 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x2a1168dc, "LV_STYLE_LINE_DASH_WIDTH", 0x49 }, // Type: UNKNOWN_TYPE
     {0x2a4f71fe, "LV_STYLE_PROP_ANY", 0xff }, // Type: UNKNOWN_TYPE
     {0x2a4f9403, "LV_STYLE_PROP_INV", 0x00 }, // Type: UNKNOWN_TYPE
+    {0x2a503213, "LV_EVENT_SCREEN_LOAD_START", 0x2e }, // Type: lv_event_code_t
     {0x2aa565ef, "LV_STYLE_BASE_DIR", 0x27 }, // Type: UNKNOWN_TYPE
     {0x2ae7c8c5, "LV_BORDER_SIDE_RIGHT", 0x08 }, // Type: lv_border_side_t
     {0x2c90dc45, "LV_GRIDNAV_CTRL_HORIZONTAL_MOVE_ONLY", 0x04 }, // Type: lv_gridnav_ctrl_t
+    {0x2d6f7f10, "LV_EVENT_DOUBLE_CLICKED", 0x06 }, // Type: lv_event_code_t
     {0x2dd3e235, "LV_TEXT_ALIGN_CENTER", 0x02 }, // Type: lv_text_align_t
     {0x2e9760f5, "LV_STYLE_BG_IMAGE_RECOLOR_OPA", 0x2b }, // Type: UNKNOWN_TYPE
     {0x2eabd768, "LV_SCROLLBAR_MODE_OFF", 0x00 }, // Type: lv_scrollbar_mode_t
@@ -393,6 +395,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x3a1253e0, "LV_STR_SYMBOL_BATTERY_FULL", 0x31 }, // Type: UNKNOWN_TYPE
     {0x3d727e82, "LV_ALIGN_BOTTOM_RIGHT", 0x06 }, // Type: lv_align_t
     {0x3da6341b, "LV_STYLE_MAX_WIDTH", 0x05 }, // Type: UNKNOWN_TYPE
+    {0x3de95580, "LV_EVENT_INVALIDATE_AREA", 0x35 }, // Type: lv_event_code_t
     {0x3e20f98e, "LV_BORDER_SIDE_TOP_BOTTOM", 0x03 }, // Type: MACRO_FROM_STRING_VALUES
     {0x3e327fc4, "LV_PART_ANY", 0xf0000 }, // Type: lv_style_parts_t
     {0x3e950be2, "LV_STR_SYMBOL_REFRESH", 0x0b }, // Type: UNKNOWN_TYPE
@@ -403,6 +406,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x4475985c, "LV_STYLE_ARC_ROUNDED", 0x51 }, // Type: UNKNOWN_TYPE
     {0x44f9f359, "LV_STYLE_SHADOW_OFFSET_X", 0x40 }, // Type: UNKNOWN_TYPE
     {0x44f9f35a, "LV_STYLE_SHADOW_OFFSET_Y", 0x41 }, // Type: UNKNOWN_TYPE
+    {0x45633a4a, "LV_EVENT_FLUSH_WAIT_START", 0x3f }, // Type: lv_event_code_t
     {0x4687766f, "LV_STYLE_TEXT_OUTLINE_STROKE_COLOR", 0x61 }, // Type: UNKNOWN_TYPE
     {0x4696b705, "LV_STR_SYMBOL_AUDIO", 0x01 }, // Type: UNKNOWN_TYPE
     {0x46b628a9, "LV_STR_SYMBOL_CLOSE", 0x05 }, // Type: UNKNOWN_TYPE
@@ -419,11 +423,18 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x47ecd7f5, "LV_STR_SYMBOL_TRASH", 0x38 }, // Type: UNKNOWN_TYPE
     {0x47edf4d0, "LV_STYLE_TEXT_OUTLINE_STROKE_WIDTH", 0x5f }, // Type: UNKNOWN_TYPE
     {0x480c248a, "LV_STR_SYMBOL_VIDEO", 0x02 }, // Type: UNKNOWN_TYPE
+    {0x48777eea, "LV_EVENT_GET_SELF_SIZE", 0x34 }, // Type: lv_event_code_t
+    {0x48b27696, "LV_EVENT_SCREEN_UNLOAD_START", 0x2d }, // Type: lv_event_code_t
     {0x48f1f330, "LV_STR_SYMBOL_BACKSPACE", 0x3a }, // Type: UNKNOWN_TYPE
     {0x4a11507f, "LV_FLEX_ALIGN_CENTER", 0x02 }, // Type: lv_flex_align_t
     {0x4b1d47b9, "LV_ALIGN_OUT_BOTTOM_RIGHT", 0x0f }, // Type: lv_align_t
     {0x4b72bccf, "LV_BORDER_SIDE_LEFT_RIGHT", 0x0c }, // Type: MACRO_FROM_STRING_VALUES
+    {0x4b92c48c, "LV_EVENT_LONG_PRESSED_REPEAT", 0x09 }, // Type: lv_event_code_t
     {0x4be33b98, "LV_TABLE_CELL_CTRL_TEXT_CROP", 0x02 }, // Type: lv_table_cell_ctrl_t
+    {0x4c131ab4, "LV_EVENT_LEAVE", 0x15 }, // Type: lv_event_code_t
+    {0x4c5fbe2b, "LV_EVENT_SIZE_CHANGED", 0x31 }, // Type: lv_event_code_t
+    {0x4c7fab7c, "LV_EVENT_READY", 0x26 }, // Type: lv_event_code_t
+    {0x4cd0221a, "LV_EVENT_VSYNC", 0x41 }, // Type: lv_event_code_t
     {0x4cd86641, "LV_STYLE_ALIGN", 0x0a }, // Type: UNKNOWN_TYPE
     {0x4d0261b5, "LV_ALIGN_DEFAULT", 0x00 }, // Type: lv_align_t
     {0x4d3e9502, "LV_STYLE_PAD_ROW", 0x14 }, // Type: UNKNOWN_TYPE
@@ -442,7 +453,9 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x52d680d9, "LV_STYLE_GRID_CELL_COLUMN_SPAN", 0x84 }, // Type: UNKNOWN_TYPE
     {0x538bfef3, "LV_STYLE_BORDER_OPA", 0x32 }, // Type: UNKNOWN_TYPE
     {0x544e84e4, "LV_BORDER_SIDE_INTERNAL", 0x10 }, // Type: lv_border_side_t
+    {0x54cf9486, "LV_EVENT_MARKED_DELETING", 0x10000 }, // Type: lv_event_code_t
     {0x559e9e23, "LV_STYLE_GRID_CELL_ROW_SPAN", 0x87 }, // Type: UNKNOWN_TYPE
+    {0x55ef8021, "LV_EVENT_CHILD_DELETED", 0x2c }, // Type: lv_event_code_t
     {0x583355b0, "LV_STR_SYMBOL_VOLUME_MAX", 0x0e }, // Type: UNKNOWN_TYPE
     {0x583356a4, "LV_STR_SYMBOL_VOLUME_MID", 0x0d }, // Type: UNKNOWN_TYPE
     {0x58e0ce5f, "LV_STYLE_PAD_BOTTOM", 0x11 }, // Type: UNKNOWN_TYPE
@@ -460,8 +473,11 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x5eab8875, "LV_OPA_0", 0x00 }, // Type: lv_opa_enum_t
     {0x5f06e2a9, "LV_GRID_ALIGN_SPACE_AROUND", 0x05 }, // Type: lv_grid_align_t
     {0x5f754928, "LV_SCALE_MODE_VERTICAL_RIGHT", 0x03 }, // Type: lv_scale_mode_t
+    {0x5f75d58f, "LV_EVENT_DRAW_MAIN_END", 0x1e }, // Type: lv_event_code_t
     {0x606bea3a, "LV_BORDER_SIDE_TOP", 0x02 }, // Type: lv_border_side_t
     {0x6088f854, "LV_SCALE_MODE_ROUND_INNER", 0x04 }, // Type: lv_scale_mode_t
+    {0x60949939, "LV_EVENT_DRAW_MAIN", 0x1d }, // Type: lv_event_code_t
+    {0x60967b3a, "LV_EVENT_DRAW_POST", 0x20 }, // Type: lv_event_code_t
     {0x60cf07ef, "LV_SPAN_MODE_LAST", 0x03 }, // Type: lv_span_mode_t
     {0x60f97b87, "LV_SCALE_MODE_ROUND_OUTER", 0x05 }, // Type: lv_scale_mode_t
     {0x610409e0, "LV_ALIGN_TOP_RIGHT", 0x03 }, // Type: lv_align_t
@@ -477,8 +493,11 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x6b00d3a2, "LV_STYLE_TRANSFORM_SKEW_X", 0x73 }, // Type: UNKNOWN_TYPE
     {0x6b00d3a3, "LV_STYLE_TRANSFORM_SKEW_Y", 0x74 }, // Type: UNKNOWN_TYPE
     {0x6b25fd61, "LV_STYLE_TRANSITION", 0x68 }, // Type: UNKNOWN_TYPE
+    {0x6b7a5836, "LV_EVENT_REFRESH", 0x25 }, // Type: lv_event_code_t
     {0x6d18e635, "LV_BUTTONMATRIX_CTRL_CUSTOM_1", 0x4000 }, // Type: lv_buttonmatrix_ctrl_t
     {0x6d18e636, "LV_BUTTONMATRIX_CTRL_CUSTOM_2", 0x8000 }, // Type: lv_buttonmatrix_ctrl_t
+    {0x6d253740, "LV_EVENT_ALL", 0x00 }, // Type: lv_event_code_t
+    {0x6d2560f0, "LV_EVENT_KEY", 0x11 }, // Type: lv_event_code_t
     {0x6de19d7a, "LV_BORDER_SIDE_FULL", 0x0f }, // Type: lv_border_side_t
     {0x6de4a2f2, "LV_BORDER_SIDE_LEFT", 0x04 }, // Type: lv_border_side_t
     {0x6de5e737, "LV_BORDER_SIDE_NONE", 0x00 }, // Type: lv_border_side_t
@@ -487,7 +506,10 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x6ebc8a43, "LV_STYLE_FLEX_GROW", 0x7e }, // Type: UNKNOWN_TYPE
     {0x6ee5d1ca, "LV_GRID_ALIGN_SPACE_BETWEEN", 0x06 }, // Type: lv_grid_align_t
     {0x6f04e840, "LV_BUTTONMATRIX_CTRL_RECOLOR", 0x800 }, // Type: lv_buttonmatrix_ctrl_t
+    {0x71aad010, "LV_EVENT_DRAW_POST_END", 0x21 }, // Type: lv_event_code_t
     {0x72829581, "LV_STYLE_BG_GRAD_STOP", 0x22 }, // Type: UNKNOWN_TYPE
+    {0x73e89262, "LV_EVENT_VSYNC_REQUEST", 0x42 }, // Type: lv_event_code_t
+    {0x74184a96, "LV_EVENT_FLUSH_START", 0x3d }, // Type: lv_event_code_t
     {0x749b558b, "LV_ALIGN_OUT_LEFT_MID", 0x11 }, // Type: lv_align_t
     {0x749b7424, "LV_ALIGN_OUT_LEFT_TOP", 0x10 }, // Type: lv_align_t
     {0x77102a9a, "LV_STYLE_SHADOW_COLOR", 0x3d }, // Type: UNKNOWN_TYPE
@@ -496,6 +518,8 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x799294fe, "LV_STR_SYMBOL_BATTERY_1", 0x34 }, // Type: UNKNOWN_TYPE
     {0x799294ff, "LV_STR_SYMBOL_BATTERY_2", 0x33 }, // Type: UNKNOWN_TYPE
     {0x79929500, "LV_STR_SYMBOL_BATTERY_3", 0x32 }, // Type: UNKNOWN_TYPE
+    {0x79a2fce3, "LV_EVENT_COVER_CHECK", 0x1a }, // Type: lv_event_code_t
+    {0x79bfe14d, "LV_EVENT_SCROLL_THROW_BEGIN", 0x0d }, // Type: lv_event_code_t
     {0x79c5c7cc, "LV_OBJ_FLAG_SCROLL_ELASTIC", 0x20 }, // Type: lv_obj_flag_t
     {0x7a042580, "LV_SPAN_MODE_BREAK", 0x02 }, // Type: lv_span_mode_t
     {0x7a47e96b, "LV_SPAN_MODE_FIXED", 0x00 }, // Type: lv_span_mode_t
@@ -507,8 +531,11 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x804f9e0e, "LV_GRAD_DIR_VER", 0x01 }, // Type: lv_grad_dir_t
     {0x806f0d49, "LV_TEXT_DECOR_STRIKETHROUGH", 0x02 }, // Type: lv_text_decor_t
     {0x832b151c, "LV_PART_TEXTAREA_PLACEHOLDER", 0x80000 }, // Type: UNKNOWN_TYPE
+    {0x83e13318, "LV_EVENT_DRAW_TASK_ADDED", 0x22 }, // Type: lv_event_code_t
     {0x83e3adb9, "LV_FLEX_FLOW_COLUMN", 0x01 }, // Type: lv_flex_flow_t
     {0x86c222f5, "LV_SCALE_MODE_VERTICAL_LEFT", 0x02 }, // Type: lv_scale_mode_t
+    {0x8763f19e, "LV_EVENT_DRAW_POST_BEGIN", 0x1f }, // Type: lv_event_code_t
+    {0x87ae2464, "LV_EVENT_RESOLUTION_CHANGED", 0x36 }, // Type: lv_event_code_t
     {0x8813eb49, "LV_SCROLLBAR_MODE_ACTIVE", 0x02 }, // Type: lv_scrollbar_mode_t
     {0x88c5d304, "LV_STR_SYMBOL_NEW_LINE", 0x3c }, // Type: UNKNOWN_TYPE
     {0x89729d85, "LV_SCALE_MODE_LAST", 0x06 }, // Type: lv_scale_mode_t
@@ -517,6 +544,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x8bc0f1ed, "LV_OBJ_FLAG_SCROLL_WITH_ARROW", 0x800 }, // Type: lv_obj_flag_t
     {0x8f00602d, "LV_STYLE_TEXT_LINE_SPACE", 0x5c }, // Type: UNKNOWN_TYPE
     {0x8f0b08cc, "LV_FLEX_ALIGN_START", 0x00 }, // Type: lv_flex_align_t
+    {0x8f3525a5, "LV_EVENT_SHORT_CLICKED", 0x04 }, // Type: lv_event_code_t
     {0x90ad9ada, "LV_BUTTONMATRIX_CTRL_RESERVED_1", 0x1000 }, // Type: lv_buttonmatrix_ctrl_t
     {0x90ad9adb, "LV_BUTTONMATRIX_CTRL_RESERVED_2", 0x2000 }, // Type: lv_buttonmatrix_ctrl_t
     {0x918d5ea8, "LV_ARC_MODE_NORMAL", 0x00 }, // Type: lv_arc_mode_t
@@ -534,6 +562,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x988bcb5c, "LV_STYLE_LINE_COLOR", 0x4c }, // Type: UNKNOWN_TYPE
     {0x99320ff2, "LV_OBJ_FLAG_CLICK_FOCUSABLE", 0x04 }, // Type: lv_obj_flag_t
     {0x99f249bd, "LV_STYLE_LINE_WIDTH", 0x48 }, // Type: UNKNOWN_TYPE
+    {0x99fbb27f, "LV_EVENT_INDEV_RESET", 0x17 }, // Type: lv_event_code_t
     {0x9c8dd45a, "LV_GRAD_DIR_CONICAL", 0x05 }, // Type: lv_grad_dir_t
     {0x9dee7b99, "LV_STYLE_MIN_WIDTH", 0x04 }, // Type: UNKNOWN_TYPE
     {0x9f3aa47c, "LV_FLEX_ALIGN_SPACE_EVENLY", 0x03 }, // Type: lv_flex_align_t
@@ -574,9 +603,12 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0xb8232b50, "LV_STYLE_TRANSFORM_SCALE_X", 0x6e }, // Type: UNKNOWN_TYPE
     {0xb8232b51, "LV_STYLE_TRANSFORM_SCALE_Y", 0x6f }, // Type: UNKNOWN_TYPE
     {0xb9280ba4, "LV_ANIM_PLAYTIME_INFINITE", 0xffffffff }, // Type: MACRO_FROM_STRING_VALUES
+    {0xb93671ed, "LV_EVENT_CANCEL", 0x27 }, // Type: lv_event_code_t
     {0xb9551103, "LV_OBJ_FLAG_GESTURE_BUBBLE", 0x8000 }, // Type: lv_obj_flag_t
     {0xba15cc4e, "LV_OBJ_FLAG_PRESS_LOCK", 0x2000 }, // Type: lv_obj_flag_t
+    {0xba651c7b, "LV_EVENT_CREATE", 0x28 }, // Type: lv_event_code_t
     {0xbad9524a, "LV_OBJ_FLAG_SCROLL_CHAIN", 0x300 }, // Type: lv_obj_flag_t
+    {0xbbd2ee3a, "LV_EVENT_DELETE", 0x29 }, // Type: lv_event_code_t
     {0xbc40e802, "LV_BUTTONMATRIX_CTRL_DISABLED", 0x40 }, // Type: lv_buttonmatrix_ctrl_t
     {0xc160013d, "LV_STYLE_LINE_OPA", 0x4d }, // Type: UNKNOWN_TYPE
     {0xc1b0f31a, "LV_STYLE_BG_GRAD_COLOR", 0x23 }, // Type: UNKNOWN_TYPE
@@ -594,23 +626,29 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0xc50c6819, "LV_STYLE_BORDER_POST", 0x35 }, // Type: UNKNOWN_TYPE
     {0xc50df1b8, "LV_STYLE_BORDER_SIDE", 0x34 }, // Type: UNKNOWN_TYPE
     {0xc575d691, "LV_STYLE_TRANSFORM_WIDTH", 0x6a }, // Type: UNKNOWN_TYPE
+    {0xc58a39ad, "LV_EVENT_VALUE_CHANGED", 0x23 }, // Type: lv_event_code_t
     {0xc69f62a4, "LV_STR_SYMBOL_KEYBOARD", 0x2d }, // Type: UNKNOWN_TYPE
     {0xc6d9075e, "LV_PART_CUSTOM_FIRST", 0x80000 }, // Type: lv_style_parts_t
     {0xc6fc809f, "LV_BAR_ORIENTATION_VERTICAL", 0x02 }, // Type: lv_bar_orientation_t
     {0xc7008097, "LV_FLEX_FLOW_ROW_WRAP_REVERSE", 0x0c }, // Type: lv_flex_flow_t
+    {0xc8236c5c, "LV_EVENT_INSERT", 0x24 }, // Type: lv_event_code_t
     {0xca01bd93, "LV_STYLE_COLOR_FILTER_DSC", 0x64 }, // Type: UNKNOWN_TYPE
     {0xca01ebf9, "LV_STYLE_COLOR_FILTER_OPA", 0x65 }, // Type: UNKNOWN_TYPE
     {0xcb1c7aea, "LV_SCROLLBAR_MODE_ON", 0x01 }, // Type: lv_scrollbar_mode_t
     {0xcb713489, "LV_STR_SYMBOL_BLUETOOTH", 0x37 }, // Type: UNKNOWN_TYPE
     {0xcc123b23, "LV_OBJ_FLAG_SCROLL_ON_FOCUS", 0x400 }, // Type: lv_obj_flag_t
     {0xcc9facad, "LV_ALIGN_TOP_LEFT", 0x01 }, // Type: lv_align_t
+    {0xcd80b579, "LV_EVENT_DEFOCUSED", 0x14 }, // Type: lv_event_code_t
+    {0xceb2838c, "LV_EVENT_LONG_PRESSED", 0x08 }, // Type: lv_event_code_t
     {0xcef97b1a, "LV_GRIDNAV_CTRL_SCROLL_FIRST", 0x02 }, // Type: lv_gridnav_ctrl_t
     {0xcf297af4, "LV_STYLE_MAX_HEIGHT", 0x07 }, // Type: UNKNOWN_TYPE
+    {0xcf39bea5, "LV_EVENT_TRIPLE_CLICKED", 0x07 }, // Type: lv_event_code_t
     {0xd02778fb, "LV_STYLE_SHADOW_OPA", 0x3e }, // Type: UNKNOWN_TYPE
     {0xd1062cc8, "LV_OBJ_FLAG_USER_1", 0x8000000 }, // Type: lv_obj_flag_t
     {0xd1062cc9, "LV_OBJ_FLAG_USER_2", 0x10000000 }, // Type: lv_obj_flag_t
     {0xd1062cca, "LV_OBJ_FLAG_USER_3", 0x20000000 }, // Type: lv_obj_flag_t
     {0xd1062ccb, "LV_OBJ_FLAG_USER_4", 0x40000000 }, // Type: lv_obj_flag_t
+    {0xd2b7609d, "LV_EVENT_FLUSH_WAIT_FINISH", 0x40 }, // Type: lv_event_code_t
     {0xd3f9826f, "LV_OBJ_FLAG_SNAPPABLE", 0x1000 }, // Type: lv_obj_flag_t
     {0xd44fcf2c, "LV_GRID_ALIGN_END", 0x02 }, // Type: lv_grid_align_t
     {0xd59331fb, "LV_STYLE_TRANSLATE_X", 0x6c }, // Type: UNKNOWN_TYPE
@@ -620,7 +658,13 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0xd7637f89, "LV_LAYOUT_GRID", 0x02 }, // Type: lv_layout_t
     {0xd765f677, "LV_LAYOUT_LAST", 0x03 }, // Type: lv_layout_t
     {0xd7674a13, "LV_LAYOUT_NONE", 0x00 }, // Type: lv_layout_t
+    {0xd80e7a69, "LV_EVENT_FLUSH_FINISH", 0x3e }, // Type: lv_event_code_t
     {0xd8242f9b, "LV_OBJ_FLAG_FLEX_IN_NEW_TRACK", 0x200000 }, // Type: lv_obj_flag_t
+    {0xdd346de8, "LV_EVENT_ROTARY", 0x12 }, // Type: lv_event_code_t
+    {0xde21536f, "LV_EVENT_SCREEN_LOADED", 0x2f }, // Type: lv_event_code_t
+    {0xde2c74ca, "LV_EVENT_REFR_READY", 0x3a }, // Type: lv_event_code_t
+    {0xde46c8c3, "LV_EVENT_REFR_START", 0x39 }, // Type: lv_event_code_t
+    {0xdeaf9276, "LV_EVENT_SCROLL", 0x0f }, // Type: lv_event_code_t
     {0xe012d8db, "LV_ARC_MODE_REVERSE", 0x02 }, // Type: lv_arc_mode_t
     {0xe0b1505a, "LV_STYLE_TRANSFORM_PIVOT_X", 0x71 }, // Type: UNKNOWN_TYPE
     {0xe0b1505b, "LV_STYLE_TRANSFORM_PIVOT_Y", 0x72 }, // Type: UNKNOWN_TYPE
@@ -631,7 +675,10 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0xe5e4e26d, "LV_STR_SYMBOL_OK", 0x04 }, // Type: UNKNOWN_TYPE
     {0xe5e4e338, "LV_STR_SYMBOL_UP", 0x1f }, // Type: UNKNOWN_TYPE
     {0xe64bc046, "LV_STYLE_CLIP_CORNER", 0x2d }, // Type: UNKNOWN_TYPE
+    {0xe6deaad0, "LV_EVENT_FOCUSED", 0x13 }, // Type: lv_event_code_t
+    {0xe7d6e28c, "LV_EVENT_RELEASED", 0x0b }, // Type: lv_event_code_t
     {0xe860b68b, "LV_BAR_MODE_RANGE", 0x02 }, // Type: lv_bar_mode_t
+    {0xe8bb3eb2, "LV_EVENT_PRESSING", 0x02 }, // Type: lv_event_code_t
     {0xe9ec0f5e, "LV_STYLE_BG_OPA", 0x1d }, // Type: UNKNOWN_TYPE
     {0xe9f6a4fd, "LV_OPA_TRANSP", 0x00 }, // Type: lv_opa_enum_t
     {0xeb15edf1, "LV_STR_SYMBOL_ENVELOPE", 0x29 }, // Type: UNKNOWN_TYPE
@@ -640,6 +687,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0xed0f58c9, "LV_STYLE_RADIAL_OFFSET", 0x0d }, // Type: UNKNOWN_TYPE
     {0xed20cfad, "LV_FLEX_FLOW_COLUMN_WRAP_REVERSE", 0x0d }, // Type: lv_flex_flow_t
     {0xed4f6cd5, "LV_BUTTONMATRIX_CTRL_POPOVER", 0x400 }, // Type: lv_buttonmatrix_ctrl_t
+    {0xefc79c7d, "LV_EVENT_PRESSED", 0x01 }, // Type: lv_event_code_t
     {0xf06cb8ec, "LV_STYLE_RECOLOR", 0x78 }, // Type: UNKNOWN_TYPE
     {0xf0807264, "LV_ALIGN_OUT_TOP_LEFT", 0x0a }, // Type: lv_align_t
     {0xf142f5d6, "LV_STYLE_OPA", 0x62 }, // Type: UNKNOWN_TYPE
@@ -667,6 +715,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0xf2ab9582, "LV_STR_SYMBOL_WIFI", 0x30 }, // Type: UNKNOWN_TYPE
     {0xf37869b1, "LV_BUTTONMATRIX_CTRL_CHECKED", 0x100 }, // Type: lv_buttonmatrix_ctrl_t
     {0xf50dbe95, "LV_STYLE_PAD_LEFT", 0x12 }, // Type: UNKNOWN_TYPE
+    {0xf5b7786b, "LV_EVENT_HIT_TEST", 0x16 }, // Type: lv_event_code_t
     {0xf695560e, "LV_STYLE_X", 0x08 }, // Type: UNKNOWN_TYPE
     {0xf695560f, "LV_STYLE_Y", 0x09 }, // Type: UNKNOWN_TYPE
     {0xf6d7364b, "LV_TABLE_CELL_CTRL_CUSTOM_1", 0x10 }, // Type: lv_table_cell_ctrl_t
@@ -675,6 +724,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0xf6d7364e, "LV_TABLE_CELL_CTRL_CUSTOM_4", 0x80 }, // Type: lv_table_cell_ctrl_t
     {0xf711719f, "LV_STYLE_BLEND_MODE", 0x69 }, // Type: UNKNOWN_TYPE
     {0xf7ba9ecf, "LV_STYLE_HEIGHT", 0x02 }, // Type: UNKNOWN_TYPE
+    {0xf8b5254c, "LV_EVENT_SCROLL_END", 0x0e }, // Type: lv_event_code_t
     {0xf8f338b4, "LV_FLEX_FLOW_COLUMN_REVERSE", 0x09 }, // Type: lv_flex_flow_t
     {0xf95181da, "LV_BUTTONMATRIX_CTRL_WIDTH_1", 0x01 }, // Type: lv_buttonmatrix_ctrl_t
     {0xf95181db, "LV_BUTTONMATRIX_CTRL_WIDTH_2", 0x02 }, // Type: lv_buttonmatrix_ctrl_t
@@ -685,6 +735,9 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0xf95181e0, "LV_BUTTONMATRIX_CTRL_WIDTH_7", 0x07 }, // Type: lv_buttonmatrix_ctrl_t
     {0xf95181e1, "LV_BUTTONMATRIX_CTRL_WIDTH_8", 0x08 }, // Type: lv_buttonmatrix_ctrl_t
     {0xf95181e2, "LV_BUTTONMATRIX_CTRL_WIDTH_9", 0x09 }, // Type: lv_buttonmatrix_ctrl_t
+    {0xf9530cd6, "LV_EVENT_CLICKED", 0x0a }, // Type: lv_event_code_t
+    {0xfa265eb7, "LV_EVENT_COLOR_FORMAT_CHANGED", 0x37 }, // Type: lv_event_code_t
+    {0xfa5885da, "LV_EVENT_SCROLL_BEGIN", 0x0c }, // Type: lv_event_code_t
     {0xfc18831d, "LV_STYLE_PROP_CONST", 0xff }, // Type: UNKNOWN_TYPE
     {0xfc3394e8, "LV_STYLE_BG_MAIN_STOP", 0x21 }, // Type: UNKNOWN_TYPE
     {0xfcd323f3, "LV_OBJ_FLAG_CLICKABLE", 0x02 }, // Type: lv_obj_flag_t
@@ -28510,13 +28563,7 @@ static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void
             // Check for '@' pointer prefix
             if (str_val[0] == '@') {
                if (str_val[len - 1] != '@') {
-                 // Ensure expected type is some kind of pointer or a special component type
-                 if (strchr(expected_c_type, '*') || strcmp(expected_c_type, "component_json_node") == 0) {
-                      return unmarshal_registered_ptr(json_value, expected_c_type, (void**)dest);
-                 } else {
-                     LOG_ERR_JSON(json_value, "Unmarshal Error: Found registered pointer string '%s' but expected non-pointer type '%s'", str_val, expected_c_type);
-                     //return false;
-                 }
+                 return unmarshal_registered_ptr(json_value, expected_c_type, (void**)dest);
                } else { str_val[--len] = '\0'; }
             }
             // Check for '!' (registered, static string) prefix

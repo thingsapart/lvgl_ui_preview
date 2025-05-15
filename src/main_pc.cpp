@@ -189,61 +189,7 @@ LV_FONT_DECLARE(lcd_7_segment_14);
 
 #include "ui_transpiled.h"
 
-int main(int argc, char *argv[]) {
-
-    // --- Argument Parsing ---
-    if (argc < 2) {
-        fprintf(stderr, "Usage: %s <path_to_ui_json_file>\n", argv[0]);
-        return 1;
-    }
-    monitored_filepath = argv[1];
-
-
-    // --- LVGL & SDL Initialization (using target code's style) ---
-    lv_init();
-
-    // Workaround for sdl2 `-m32` crash (keep from target code)
-    #ifndef WIN32
-        setenv("DBUS_FATAL_WARNINGS", "0", 1);
-    #endif
-
-    // Register LVGL log callback if enabled (keep from target code)
-    #if LV_USE_LOG != 0
-        // Ensure LV_USE_LOG is set appropriately in lv_conf.h
-        // lv_log_register_print_cb(lv_log_print_g_cb); // Use your actual log function if needed
-    #endif
-
-    // Create SDL display and input devices (keep from target code)
-    lv_display_t *lvDisplay = lv_sdl_window_create(SDL_HOR_RES, SDL_VER_RES);
-    if (!lvDisplay) { // Add basic check
-        LOG_ERROR("Failed to create SDL window");
-        return 1;
-    }
-    lv_indev_t *lvMouse = lv_sdl_mouse_create();
-    lv_indev_t *lvMouseWheel = lv_sdl_mousewheel_create();
-    lv_indev_t *lvKeyboard = lv_sdl_keyboard_create();
-
-    // Optional: set zoom (keep from target code)
-    // lv_sdl_window_set_zoom(lvDisplay, 1);
-
-    // Use SDL_GetTicks for lv_tick_inc (keep from target code)
-    // lv_tick_set_cb(SDL_GetTicks); // lv_tick_set_cb seems deprecated/removed in v9? Use lv_tick_inc directly.
-
-    // Setup signal handler (keep from target code)
-    signal(SIGINT, signal_handler);
-
-    lvgl_json_register_ptr("font_kode_14", "lv_font_t", (void *) &font_kode_14);
-    lvgl_json_register_ptr("font_kode_20", "lv_font_t", (void *) &font_kode_20);
-    lvgl_json_register_ptr("font_kode_24", "lv_font_t", (void *) &font_kode_24);
-    lvgl_json_register_ptr("font_kode_30", "lv_font_t", (void *) &font_kode_30);
-    lvgl_json_register_ptr("font_kode_36", "lv_font_t", (void *) &font_kode_36);
-    lvgl_json_register_ptr("lcd_7_segment_14", "lv_font_t", (void *) &lcd_7_segment_14);
-    lvgl_json_register_ptr("lcd_7_segment_18", "lv_font_t", (void *) &lcd_7_segment_18);
-    lvgl_json_register_ptr("lcd_7_segment_24", "lv_font_t", (void *) &lcd_7_segment_24);
-    lvgl_json_register_ptr("font_montserrat_24", "lv_font_t", (void *) &lv_font_montserrat_24);
-    lvgl_json_register_ptr("font_montserrat_14", "lv_font_t", (void *) &lv_font_montserrat_14);
-    lvgl_json_register_ptr("font_montserrat_12", "lv_font_t", (void *) &lv_font_montserrat_12);
-
+int main_transpiled(int argc, char *argv[]) {
     // --- Initial UI Load ---
     create_ui_ui_transpiled(lv_screen_active());
 
@@ -280,60 +226,6 @@ int main(int argc, char *argv[]) {
 }
 
 int main_render(int argc, char *argv[]) {
-
-    // --- Argument Parsing ---
-    if (argc < 2) {
-        fprintf(stderr, "Usage: %s <path_to_ui_json_file>\n", argv[0]);
-        return 1;
-    }
-    monitored_filepath = argv[1];
-
-
-    // --- LVGL & SDL Initialization (using target code's style) ---
-    lv_init();
-
-    // Workaround for sdl2 `-m32` crash (keep from target code)
-    #ifndef WIN32
-        setenv("DBUS_FATAL_WARNINGS", "0", 1);
-    #endif
-
-    // Register LVGL log callback if enabled (keep from target code)
-    #if LV_USE_LOG != 0
-        // Ensure LV_USE_LOG is set appropriately in lv_conf.h
-        // lv_log_register_print_cb(lv_log_print_g_cb); // Use your actual log function if needed
-    #endif
-
-    // Create SDL display and input devices (keep from target code)
-    lv_display_t *lvDisplay = lv_sdl_window_create(SDL_HOR_RES, SDL_VER_RES);
-    if (!lvDisplay) { // Add basic check
-        LOG_ERROR("Failed to create SDL window");
-        return 1;
-    }
-    lv_indev_t *lvMouse = lv_sdl_mouse_create();
-    lv_indev_t *lvMouseWheel = lv_sdl_mousewheel_create();
-    lv_indev_t *lvKeyboard = lv_sdl_keyboard_create();
-
-    // Optional: set zoom (keep from target code)
-    // lv_sdl_window_set_zoom(lvDisplay, 1);
-
-    // Use SDL_GetTicks for lv_tick_inc (keep from target code)
-    // lv_tick_set_cb(SDL_GetTicks); // lv_tick_set_cb seems deprecated/removed in v9? Use lv_tick_inc directly.
-
-    // Setup signal handler (keep from target code)
-    signal(SIGINT, signal_handler);
-
-    lvgl_json_register_ptr("font_kode_14", "lv_font_t", (void *) &font_kode_14);
-    lvgl_json_register_ptr("font_kode_20", "lv_font_t", (void *) &font_kode_20);
-    lvgl_json_register_ptr("font_kode_24", "lv_font_t", (void *) &font_kode_24);
-    lvgl_json_register_ptr("font_kode_30", "lv_font_t", (void *) &font_kode_30);
-    lvgl_json_register_ptr("font_kode_36", "lv_font_t", (void *) &font_kode_36);
-    lvgl_json_register_ptr("lcd_7_segment_14", "lv_font_t", (void *) &lcd_7_segment_14);
-    lvgl_json_register_ptr("lcd_7_segment_18", "lv_font_t", (void *) &lcd_7_segment_18);
-    lvgl_json_register_ptr("lcd_7_segment_24", "lv_font_t", (void *) &lcd_7_segment_24);
-    lvgl_json_register_ptr("font_montserrat_24", "lv_font_t", (void *) &lv_font_montserrat_24);
-    lvgl_json_register_ptr("font_montserrat_14", "lv_font_t", (void *) &lv_font_montserrat_14);
-    lvgl_json_register_ptr("font_montserrat_12", "lv_font_t", (void *) &lv_font_montserrat_12);
-
     // --- Initial UI Load ---
     LOG_USER("Monitoring file: %s", monitored_filepath);
     struct stat initial_stat;
@@ -425,4 +317,72 @@ int main_render(int argc, char *argv[]) {
     // SDL_Quit();
 
     return 0;
+}
+
+void btn_clicked(lv_event_t *evt) {
+    printf("CLICKED!!\n");
+}
+
+int main(int argc, char *argv[]) {
+
+    // --- Argument Parsing ---
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <path_to_ui_json_file>\n", argv[0]);
+        return 1;
+    }
+    monitored_filepath = argv[1];
+
+
+    // --- LVGL & SDL Initialization (using target code's style) ---
+    lv_init();
+
+    // Workaround for sdl2 `-m32` crash (keep from target code)
+    #ifndef WIN32
+        setenv("DBUS_FATAL_WARNINGS", "0", 1);
+    #endif
+
+    // Register LVGL log callback if enabled (keep from target code)
+    #if LV_USE_LOG != 0
+        // Ensure LV_USE_LOG is set appropriately in lv_conf.h
+        // lv_log_register_print_cb(lv_log_print_g_cb); // Use your actual log function if needed
+    #endif
+
+    // Create SDL display and input devices (keep from target code)
+    lv_display_t *lvDisplay = lv_sdl_window_create(SDL_HOR_RES, SDL_VER_RES);
+    if (!lvDisplay) { // Add basic check
+        LOG_ERROR("Failed to create SDL window");
+        return 1;
+    }
+    lv_indev_t *lvMouse = lv_sdl_mouse_create();
+    lv_indev_t *lvMouseWheel = lv_sdl_mousewheel_create();
+    lv_indev_t *lvKeyboard = lv_sdl_keyboard_create();
+
+    // Optional: set zoom (keep from target code)
+    // lv_sdl_window_set_zoom(lvDisplay, 1);
+
+    // Use SDL_GetTicks for lv_tick_inc (keep from target code)
+    // lv_tick_set_cb(SDL_GetTicks); // lv_tick_set_cb seems deprecated/removed in v9? Use lv_tick_inc directly.
+
+    // Setup signal handler (keep from target code)
+    signal(SIGINT, signal_handler);
+
+    lvgl_json_register_ptr("font_kode_14", "lv_font_t", (void *) &font_kode_14);
+    lvgl_json_register_ptr("font_kode_20", "lv_font_t", (void *) &font_kode_20);
+    lvgl_json_register_ptr("font_kode_24", "lv_font_t", (void *) &font_kode_24);
+    lvgl_json_register_ptr("font_kode_30", "lv_font_t", (void *) &font_kode_30);
+    lvgl_json_register_ptr("font_kode_36", "lv_font_t", (void *) &font_kode_36);
+    lvgl_json_register_ptr("lcd_7_segment_14", "lv_font_t", (void *) &lcd_7_segment_14);
+    lvgl_json_register_ptr("lcd_7_segment_18", "lv_font_t", (void *) &lcd_7_segment_18);
+    lvgl_json_register_ptr("lcd_7_segment_24", "lv_font_t", (void *) &lcd_7_segment_24);
+    lvgl_json_register_ptr("font_montserrat_24", "lv_font_t", (void *) &lv_font_montserrat_24);
+    lvgl_json_register_ptr("font_montserrat_14", "lv_font_t", (void *) &lv_font_montserrat_14);
+    lvgl_json_register_ptr("font_montserrat_12", "lv_font_t", (void *) &lv_font_montserrat_12);
+
+    lvgl_json_register_ptr("btn_clicked", "lv_event_cb_t", (void *) &btn_clicked);
+
+#ifdef TRANSPILE
+    return main_transpiled(argc, argv);
+#else
+    return main_render(argc, argv);
+#endif
 }

@@ -321,6 +321,7 @@
                 height: LV_SIZE_CONTENT
                 text: ' 5'
                 add_style: ['@indicator_yellow', 0]
+                add_event_cb: ['@btn_clicked', LV_EVENT_CLICKED, null]
 
       # Right column
       - layout: LV_LAYOUT_FLEX

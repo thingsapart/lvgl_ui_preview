@@ -580,6 +580,11 @@
                   "add_style": [
                     "@indicator_yellow",
                     0
+                  ],
+                  "add_event_cb": [
+                    "@btn_clicked",
+                    "LV_EVENT_CLICKED",
+                    null
                   ]
                 }
               ]

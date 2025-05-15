@@ -7,23 +7,23 @@ DEFAULT_FUNCTION_INCLUDES = [
     "lv_obj_create", "lv_style_init", "lv_color_hex", "lv_color_mix", "lv_pct",
     "lv_obj_set_grid_dsc_array", "lv_obj_set_grid_cell", "lv_obj_align",
 ]
-DEFAULT_FUNCTION_INCLUDE_PREFIXES = ["lv_obj_set_", "lv_style_set_", "lv_"] # Broad lv_ prefix, more specific setters
-DEFAULT_FUNCTION_EXCLUDE_PREFIXES = ["_lv_", "lv_obj_class", "lv_group_",
-                                     "lv_theme_", "lv_event_", "lv_timer_",
-                                     "lv_anim_", "lv_indev_", "lv_display_",
-                                     "lv_font_manager_", "lv_freetype_", "lv_barcode_",
-                                     "lv_fragment_", "lv_imgfont", "lv_bmp_", "lv_gif",
-                                     "lv_log_register_print_", "lv_log_add",
-                                     "lv_calendar_", "lv_gridnav_", "lv_draw_buf_",
-                                     "lv_iter_", "lv_keyboard_set_map", "lv_anim",
-                                     "lv_color_brightness", "lv_led", "lv_libpng",
-                                     "lv_libjpeg", "lv_lodepng",
-                                     "lv_obj_get_id", "lv_obj_free_id", "lv_obj_assign_id",
-                                     "lv_obj_stringify_id", "lv_obj_find_by_id", "lv_obj_id_compare",
-                                     "lv_objid_builtin_destroy",
-                                     "lv_qrcode", "lv_rle", "lv_snapshot", "lv_bidi",
-                                     "lv_tiny_ttf", "lv_tjpgd",
-                                     "lv_draw_", "lv_obj_set_id", "lv_ll_clear_custom",
+DEFAULT_FUNCTION_INCLUDE_PREFIXES = ['lv_obj_set_', 'lv_style_set_', 'lv_'] # Broad lv_ prefix, more specific setters
+DEFAULT_FUNCTION_EXCLUDE_PREFIXES = ['_lv_', 'lv_obj_class', 'lv_group_',
+                                     'lv_theme_', 'lv_event_', 'lv_timer_',
+                                     'lv_anim_', 'lv_indev_', 'lv_display_',
+                                     'lv_font_manager_', 'lv_freetype_', 'lv_barcode_',
+                                     'lv_fragment_', 'lv_imgfont', 'lv_bmp_', 'lv_gif',
+                                     'lv_log_register_print_', 'lv_log_add',
+                                     'lv_calendar_', 'lv_gridnav_', 'lv_draw_buf_',
+                                     'lv_iter_', 'lv_keyboard_set_map', 'lv_anim',
+                                     'lv_color_brightness', 'lv_led', 'lv_libpng',
+                                     'lv_libjpeg', 'lv_lodepng',
+                                     'lv_obj_get_id', 'lv_obj_free_id', 'lv_obj_assign_id',
+                                     'lv_obj_stringify_id', 'lv_obj_find_by_id', 'lv_obj_id_compare',
+                                     'lv_objid_builtin_destroy',
+                                     'lv_qrcode', 'lv_rle', 'lv_snapshot', 'lv_bidi',
+                                     'lv_tiny_ttf', 'lv_tjpgd',
+                                     'lv_draw_', 'lv_obj_set_id', 'lv_ll_clear_custom',
                                      ] # Exclude internal/complex subsystems by default
 
 DEFAULT_ENUM_INCLUDES = ['lv_align_t', 'lv_opa_enum_t', 'lv_layout_t', 
@@ -33,11 +33,12 @@ DEFAULT_ENUM_INCLUDES = ['lv_align_t', 'lv_opa_enum_t', 'lv_layout_t',
                          'lv_bar_orientation_t', 'lv_buttonmatrix_ctrl_t', 'lv_scale_mode_t', 
                          'lv_slider_mode_t', 'lv_slider_orientation_t', 'lv_span_overflow_t', 
                          'lv_span_mode_t', 'lv_table_cell_ctrl_t', 'lv_gridnav_ctrl_t', 
-                         'lv_border_side_t', 'lv_grad_dir_t', 'lv_obj_flag_t', "lv_dir_t",
+                         'lv_border_side_t', 'lv_grad_dir_t', 'lv_obj_flag_t', 'lv_dir_t',
+                         'lv_event_code_t'
                         ]
-DEFAULT_ENUM_INCLUDE_PREFIXES = ["LV_"]
+DEFAULT_ENUM_INCLUDE_PREFIXES = ['LV_']
 DEFAULT_ENUM_EXCLUDES = []
-DEFAULT_ENUM_EXCLUDE_PREFIXES = ["_LV_"]
+DEFAULT_ENUM_EXCLUDE_PREFIXES = ['_LV_']
 
 logger = logging.getLogger(__name__)
 
