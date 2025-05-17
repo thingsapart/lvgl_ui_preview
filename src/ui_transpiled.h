@@ -3,7 +3,7 @@
 
 #include "lvgl.h"
 
-// Forward declarations for registry API (ensure these are available in your build)
+// If using the runtime registry with transpiled code, ensure these are linked:
 // extern void lvgl_json_register_ptr(const char *name, const char *type_name, void *ptr);
 // extern void* lvgl_json_get_registered_ptr(const char *name, const char *expected_type_name);
 

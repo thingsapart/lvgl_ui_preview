@@ -313,6 +313,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x1451d3d9, "LV_DIR_BOTTOM", 0x08 }, // Type: lv_dir_t
     {0x1453e5bd, "LV_STYLE_BG_COLOR", 0x1c }, // Type: UNKNOWN_TYPE
     {0x1513aff7, "LV_EVENT_HOVER_LEAVE", 0x19 }, // Type: lv_event_code_t
+    {0x15955d87, "LV_MENU_HEADER_TOP_UNFIXED", 0x01 }, // Type: lv_menu_mode_header_t
     {0x16799639, "LV_OBJ_FLAG_SCROLL_MOMENTUM", 0x40 }, // Type: lv_obj_flag_t
     {0x16ce98d5, "LV_STYLE_OUTLINE_OPA", 0x3a }, // Type: UNKNOWN_TYPE
     {0x16ce9b2a, "LV_STYLE_OUTLINE_PAD", 0x3b }, // Type: UNKNOWN_TYPE
@@ -523,6 +524,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0x79c5c7cc, "LV_OBJ_FLAG_SCROLL_ELASTIC", 0x20 }, // Type: lv_obj_flag_t
     {0x7a042580, "LV_SPAN_MODE_BREAK", 0x02 }, // Type: lv_span_mode_t
     {0x7a47e96b, "LV_SPAN_MODE_FIXED", 0x00 }, // Type: lv_span_mode_t
+    {0x7bc6c364, "LV_MENU_HEADER_TOP_FIXED", 0x00 }, // Type: lv_menu_mode_header_t
     {0x7c4666bc, "LV_STR_SYMBOL_BATTERY_EMPTY", 0x35 }, // Type: UNKNOWN_TYPE
     {0x7d2d0ab7, "LV_STYLE_PAD_RADIAL", 0x0e }, // Type: UNKNOWN_TYPE
     {0x7e7d3e3a, "LV_STYLE_SHADOW_SPREAD", 0x42 }, // Type: UNKNOWN_TYPE
@@ -573,6 +575,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0xa280fe9f, "LV_STR_SYMBOL_CUT", 0x25 }, // Type: UNKNOWN_TYPE
     {0xa2810efd, "LV_STR_SYMBOL_GPS", 0x2e }, // Type: UNKNOWN_TYPE
     {0xa2814add, "LV_STR_SYMBOL_USB", 0x36 }, // Type: UNKNOWN_TYPE
+    {0xa2ab64d3, "LV_MENU_ROOT_BACK_BUTTON_ENABLED", 0x01 }, // Type: lv_menu_mode_root_back_button_t
     {0xa4048c85, "LV_STYLE_TEXT_ALIGN", 0x5e }, // Type: UNKNOWN_TYPE
     {0xa41bd11c, "LV_TEXT_DECOR_UNDERLINE", 0x01 }, // Type: lv_text_decor_t
     {0xa42a7079, "LV_STYLE_TEXT_COLOR", 0x58 }, // Type: UNKNOWN_TYPE
@@ -594,6 +597,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0xb1fd5c65, "LV_OBJ_FLAG_HIDDEN", 0x01 }, // Type: lv_obj_flag_t
     {0xb33769fc, "LV_BUTTONMATRIX_CTRL_CHECKABLE", 0x80 }, // Type: lv_buttonmatrix_ctrl_t
     {0xb447d83d, "LV_STYLE_GRID_ROW_ALIGN", 0x80 }, // Type: UNKNOWN_TYPE
+    {0xb4d85fc0, "LV_MENU_ROOT_BACK_BUTTON_DISABLED", 0x00 }, // Type: lv_menu_mode_root_back_button_t
     {0xb54a61a0, "LV_ANIM_REPEAT_INFINITE", 0xffffffff }, // Type: MACRO_FROM_STRING_VALUES
     {0xb5b0423b, "LV_SIZE_CONTENT", 0x3fffffff }, // Type: MACRO_FROM_STRING_VALUES
     {0xb6fa9e09, "LV_STR_SYMBOL_WARNING", 0x1d }, // Type: UNKNOWN_TYPE
@@ -632,6 +636,7 @@ static const generated_enum_entry_t g_generated_enum_table[] = {
     {0xc6fc809f, "LV_BAR_ORIENTATION_VERTICAL", 0x02 }, // Type: lv_bar_orientation_t
     {0xc7008097, "LV_FLEX_FLOW_ROW_WRAP_REVERSE", 0x0c }, // Type: lv_flex_flow_t
     {0xc8236c5c, "LV_EVENT_INSERT", 0x24 }, // Type: lv_event_code_t
+    {0xc98372c6, "LV_MENU_HEADER_BOTTOM_FIXED", 0x02 }, // Type: lv_menu_mode_header_t
     {0xca01bd93, "LV_STYLE_COLOR_FILTER_DSC", 0x64 }, // Type: UNKNOWN_TYPE
     {0xca01ebf9, "LV_STYLE_COLOR_FILTER_OPA", 0x65 }, // Type: UNKNOWN_TYPE
     {0xcb1c7aea, "LV_SCROLLBAR_MODE_ON", 0x01 }, // Type: lv_scrollbar_mode_t
@@ -28605,8 +28610,8 @@ static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void
             // return false; // Strict: If it looked like an enum, it must parse as one.
         }
 
-        // Finally, try as a regular string pointer if expected type is `const char *`
-        if (strcmp(expected_c_type, "const char *") == 0 || strcmp(expected_c_type, "char *") == 0) {
+        // Finally, try as a regular string pointer if expected type is `const char *` (or rarely void * - DANGER!)
+        if (strcmp(expected_c_type, "const char *") == 0 || strcmp(expected_c_type, "char *") == 0 || strcmp(expected_c_type, "void *") == 0) {
              return unmarshal_string_ptr(json_value, (const char **)dest);
         }
         // If it's a string but none of the above matched, it's an error.
@@ -28764,20 +28769,257 @@ lv_style_t* lv_style_create_managed(const char *name) {
 #include <stdio.h> // For debug prints
 
 // Forward declarations
-static bool render_json_node(cJSON *node, lv_obj_t *parent, const char *named_path);
+static void* render_json_node(cJSON *node, lv_obj_t *parent, const char *named_path_prefix);
+static bool apply_setters_and_attributes(cJSON *attributes_json_obj, void *target_entity, const char *target_actual_type_str, const char *target_create_type_str, bool target_is_widget, lv_obj_t *parent_for_children_attr, const char *path_prefix_for_named_and_children, const char *default_type_name_for_registry_if_named);
 static const invoke_table_entry_t* find_invoke_entry(const char *name);
 static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest, void *implicit_parent);
 extern void* lvgl_json_get_registered_ptr(const char *name, const char *expected_type_name);
 extern void lvgl_json_register_ptr(const char *name, const char *type_name, void *ptr);
 static void set_current_context(cJSON* new_context);
+static cJSON* get_current_context(void); // Already declared in source template, but good for clarity
 extern lv_fs_drv_t* lv_fs_drv_create_managed(const char *name);
 extern lv_layer_t* lv_layer_create_managed(const char *name);
 extern lv_style_t* lv_style_create_managed(const char *name);
 
-static bool render_json_node(cJSON *node, lv_obj_t *parent, const char *named_path) {
+
+static bool apply_setters_and_attributes(
+    cJSON *attributes_json_obj,
+    void *target_entity,
+    const char *target_actual_type_str, // e.g., "button", "style", "obj" (real type of target_entity)
+    const char *target_create_type_str, // e.g., "obj" if target_actual_type_str is "grid" (type used for lv_obj_set_... fallbacks)
+    bool target_is_widget,
+    lv_obj_t *explicit_parent_for_children_attr, // Parent if "children" attr is found, usually target_entity if widget
+    const char *path_prefix_for_named_and_children, // Path prefix for "named" attr registration and for children within attributes_json_obj
+    const char *default_type_name_for_registry_if_named // e.g. "lv_obj_t", "lv_style_t" if "named" is processed
+) {
+    if (!attributes_json_obj || !cJSON_IsObject(attributes_json_obj) || !target_entity) {
+        LOG_ERR("apply_setters_and_attributes: Invalid arguments.");
+        return false;
+    }
+
+    LOG_DEBUG("Applying attributes with path_prefix: %s to entity %p of type %s (create_type %s)",
+        path_prefix_for_named_and_children ? path_prefix_for_named_and_children : "NULL",
+        target_entity, target_actual_type_str, target_create_type_str);
+
+    char current_children_base_path[256];
+    if (path_prefix_for_named_and_children) {
+        strncpy(current_children_base_path, path_prefix_for_named_and_children, sizeof(current_children_base_path) - 1);
+        current_children_base_path[sizeof(current_children_base_path) - 1] = '\0';
+    } else {
+        current_children_base_path[0] = '\0';
+    }
+
+    cJSON *prop_item = NULL;
+    for (prop_item = attributes_json_obj->child; prop_item != NULL; prop_item = prop_item->next) {
+        const char *prop_name = prop_item->string;
+        if (!prop_name) continue;
+
+        // Attributes handled by render_json_node's main logic or specific setup
+        if (strcmp(prop_name, "type") == 0 || strcmp(prop_name, "id") == 0 || strcmp(prop_name, "context") == 0) {
+            continue;
+        }
+        if (strcmp(target_actual_type_str, "grid") == 0 && (strcmp(prop_name, "cols") == 0 || strcmp(prop_name, "rows") == 0)) {
+            continue;
+        }
+        // "do" is a structural element, not a direct attribute to be set here unless it's for "with"
+        // This function is called FOR the contents of a "do" block, it shouldn't process a "do" key itself in most cases.
+        // The "with" block below is an exception where "do" is part of its structure.
+        if (strcmp(prop_name, "do") == 0 && strcmp(target_actual_type_str, "with") !=0) { // "with" type is a pseudo-type
+             // If we are applying attributes for a "use-view"'s "do" block, target_actual_type_str is the component root's type.
+             // If we are applying attributes for a regular node, target_actual_type_str is the node's type.
+             // In these cases, a "do" key here is unexpected or a nested "do", which is not standard.
+            LOG_WARN_JSON(prop_item, "Skipping unexpected 'do' attribute key '%s' during general attribute application for type '%s'.", prop_name, target_actual_type_str);
+            continue;
+        }
+
+
+        if (strcmp(prop_name, "named") == 0 && cJSON_IsString(prop_item)) {
+            char *named_value_str = NULL;
+            if (unmarshal_value(prop_item, "char *", &named_value_str, target_entity)) {
+                char full_named_path_buf[256] = {0};
+                if (path_prefix_for_named_and_children && path_prefix_for_named_and_children[0] != '\0') {
+                    snprintf(full_named_path_buf, sizeof(full_named_path_buf) - 1, "%s:%s", path_prefix_for_named_and_children, named_value_str);
+                } else {
+                    strncpy(full_named_path_buf, named_value_str, sizeof(full_named_path_buf) - 1);
+                }
+                
+                if (default_type_name_for_registry_if_named && default_type_name_for_registry_if_named[0]) {
+                     lvgl_json_register_ptr(full_named_path_buf, default_type_name_for_registry_if_named, target_entity);
+                     LOG_INFO("Registered entity %p as '%s' (type %s) via 'named' attribute.", target_entity, full_named_path_buf, default_type_name_for_registry_if_named);
+                     // Update current_children_base_path for subsequent children within this attribute set
+                     strncpy(current_children_base_path, full_named_path_buf, sizeof(current_children_base_path) - 1);
+                     current_children_base_path[sizeof(current_children_base_path) - 1] = '\0';
+                } else {
+                    LOG_WARN_JSON(prop_item, "'named' attribute used, but no valid type_name_for_registry provided for '%s'. Entity %p not registered by this 'named' attribute.", named_value_str, target_entity);
+                }
+            } else {
+                LOG_ERR_JSON(prop_item, "Failed to resolve 'named' property value string: '%s'", prop_item->valuestring);
+            }
+            continue;
+        }
+
+        if (strcmp(prop_name, "children") == 0) {
+            if (!cJSON_IsArray(prop_item)) {
+                LOG_ERR_JSON(prop_item, "'children' property must be an array.");
+                // Continue processing other attributes, but this is an error.
+                continue;
+            }
+            if (!target_is_widget || !explicit_parent_for_children_attr) {
+                LOG_ERR_JSON(prop_item, "'children' attribute found, but target entity is not a widget or parent_for_children_attr is NULL. Cannot add children.");
+                continue;
+            }
+            LOG_DEBUG("Processing 'children' for entity %p under path prefix '%s'", target_entity, current_children_base_path);
+            cJSON *child_node_json = NULL;
+            cJSON_ArrayForEach(child_node_json, prop_item) {
+                if (render_json_node(child_node_json, explicit_parent_for_children_attr, current_children_base_path) == NULL) {
+                    LOG_ERR_JSON(child_node_json, "Failed to render child node from 'children' attribute. Aborting siblings for this 'children' array.");
+                    // Depending on desired strictness, could return false here or just log and continue.
+                    // For now, log and let other attributes/children process.
+                    break; 
+                }
+            }
+            continue;
+        }
+        
+        if (strcmp(prop_name, "with") == 0 && cJSON_IsObject(prop_item)) {
+            cJSON *obj_to_run_with_json = cJSON_GetObjectItemCaseSensitive(prop_item, "obj");
+            cJSON *do_block_for_with_json = cJSON_GetObjectItemCaseSensitive(prop_item, "do");
+
+            if (!obj_to_run_with_json) {
+                LOG_ERR_JSON(prop_item, "'with' block is missing 'obj' attribute. Skipping.");
+                continue;
+            }
+            if (!do_block_for_with_json || !cJSON_IsObject(do_block_for_with_json)) {
+                LOG_ERR_JSON(prop_item, "'with' block is missing 'do' object or it's not an object. Skipping.");
+                continue;
+            }
+
+            lv_obj_t *with_target_obj = NULL;
+            if (!unmarshal_value(obj_to_run_with_json, "lv_obj_t *", &with_target_obj, target_entity)) { // Pass current target_entity as implicit_parent for context in unmarshal
+                LOG_ERR_JSON(obj_to_run_with_json, "Failed to unmarshal 'obj' for 'with' block. Skipping 'with'.");
+                continue;
+            }
+            if (!with_target_obj) {
+                LOG_ERR_JSON(obj_to_run_with_json, "'obj' for 'with' block resolved to NULL. Skipping 'with'.");
+                continue;
+            }
+            
+            LOG_INFO("Applying 'with.do' attributes to target %p (resolved from 'with.obj')", with_target_obj);
+            // For 'with.do', the target is the resolved 'with_target_obj'. Assume it's an 'obj' type.
+            // The named path context for children/named inside this 'do' block should be the same as the 'with' block's context.
+            // The 'default_type_name_for_registry_if_named' for 'with_target_obj' is "lv_obj_t".
+            if (!apply_setters_and_attributes(
+                    do_block_for_with_json,
+                    with_target_obj,
+                    "obj", // Actual type of with_target_obj is lv_obj_t*, specific type (button, label) is unknown here.
+                    "obj", // Create type for fallbacks.
+                    true,  // It's an lv_obj_t*.
+                    with_target_obj, // Parent for children defined in the 'do' block.
+                    path_prefix_for_named_and_children, // Path prefix is inherited from the context of the 'with' attribute itself.
+                    "lv_obj_t" // Type for registering if 'named' is in the 'do' block.
+                )) {
+                LOG_ERR_JSON(do_block_for_with_json, "Failed to apply attributes in 'with.do' block.");
+                // Decide if this is a fatal error for the current apply_setters_and_attributes call.
+            }
+            continue;
+        }
+
+
+        // --- Standard Setter Logic ---
+        cJSON *prop_args_array = prop_item;
+        bool temp_array_created = false;
+        if (!cJSON_IsArray(prop_item)) {
+            prop_args_array = cJSON_CreateArray();
+            if (prop_args_array) {
+                cJSON_AddItemToArray(prop_args_array, cJSON_Duplicate(prop_item, true));
+                temp_array_created = true;
+            } else {
+                LOG_ERR_JSON(prop_item, "Failed to create temporary array for property '%s'", prop_name);
+                continue;
+            }
+        }
+
+        char setter_name_buf[128];
+        const invoke_table_entry_t* setter_entry = NULL;
+
+        // 1. Try specific type: lv_<target_actual_type_str>_set_<prop_name>
+        if (target_actual_type_str && target_actual_type_str[0]) {
+            snprintf(setter_name_buf, sizeof(setter_name_buf), "lv_%s_set_%s", target_actual_type_str, prop_name);
+            setter_entry = find_invoke_entry(setter_name_buf);
+        }
+
+        // 2. Try specific type (short form): lv_<target_actual_type_str>_<prop_name>
+        if (!setter_entry && target_actual_type_str && target_actual_type_str[0]) {
+            snprintf(setter_name_buf, sizeof(setter_name_buf), "lv_%s_%s", target_actual_type_str, prop_name);
+            setter_entry = find_invoke_entry(setter_name_buf);
+        }
+        
+        // Fallbacks for widgets (using target_create_type_str for consistency, e.g. "obj" for "grid")
+        if (target_is_widget) {
+            // 3. Try generic obj: lv_obj_set_<prop_name>
+            if (!setter_entry) {
+                snprintf(setter_name_buf, sizeof(setter_name_buf), "lv_obj_set_%s", prop_name);
+                setter_entry = find_invoke_entry(setter_name_buf);
+            }
+            // 4. Try generic obj (short form): lv_obj_<prop_name>
+            if (!setter_entry) {
+                snprintf(setter_name_buf, sizeof(setter_name_buf), "lv_obj_%s", prop_name);
+                setter_entry = find_invoke_entry(setter_name_buf);
+            }
+            // 5. Try style property: lv_obj_set_style_<prop_name>
+            if (!setter_entry) {
+                snprintf(setter_name_buf, sizeof(setter_name_buf), "lv_obj_set_style_%s", prop_name);
+                setter_entry = find_invoke_entry(setter_name_buf);
+                size_t arg_count = 0; for (arg_count = 0; setter_entry && setter_entry->arg_types[arg_count] != NULL; ++arg_count);
+                if (setter_entry && 
+                    arg_count > 2 && // obj, value, selector
+                    setter_entry->arg_types[2] != NULL &&
+                    (strcmp(setter_entry->arg_types[2], "lv_style_selector_t") == 0 || strcmp(setter_entry->arg_types[2], "int") == 0 || strcmp(setter_entry->arg_types[2], "uint32_t") == 0) &&
+                    cJSON_GetArraySize(prop_args_array) == 1) {
+                    LOG_DEBUG("Adding default selector LV_PART_MAIN (0) for style property '%s' on %s", prop_name, target_actual_type_str);
+                    cJSON_AddItemToArray(prop_args_array, cJSON_CreateNumber(LV_PART_MAIN));
+                }
+            }
+        } else if (strcmp(target_actual_type_str, "style") == 0) { // Fallbacks for styles
+            // 3b. Try lv_style_set_<prop_name>
+            if (!setter_entry) {
+                snprintf(setter_name_buf, sizeof(setter_name_buf), "lv_style_set_%s", prop_name);
+                setter_entry = find_invoke_entry(setter_name_buf);
+            }
+            // 4b. Try lv_style_<prop_name>
+            if (!setter_entry) {
+                snprintf(setter_name_buf, sizeof(setter_name_buf), "lv_style_%s", prop_name);
+                setter_entry = find_invoke_entry(setter_name_buf);
+            }
+        }
+
+        // 6. Try verbatim name (for direct function calls, less common for setters)
+        if (!setter_entry) {
+            setter_entry = find_invoke_entry(prop_name);
+        }
+
+        if (!setter_entry) {
+            LOG_WARN_JSON(prop_args_array, "No setter/invokable found for property '%s' on type '%s' (create type '%s').", prop_name, target_actual_type_str, target_create_type_str);
+        } else {
+            if (!setter_entry->invoke(setter_entry, target_entity, NULL, prop_args_array)) {
+                LOG_ERR_JSON(prop_args_array, "Failed to set property '%s' using '%s' on entity %p.", prop_name, setter_entry->name, target_entity);
+                // Potentially return false or handle error more strictly
+            } else {
+                 LOG_DEBUG("Successfully applied property '%s' using '%s' to entity %p", prop_name, setter_entry->name, target_entity);
+            }
+        }
+
+        if (temp_array_created) {
+            cJSON_Delete(prop_args_array);
+        }
+    } // End for loop over attributes
+
+    return true; // Indicate success
+}
+static void* render_json_node(cJSON *node, lv_obj_t *parent, const char *named_path_prefix) {
     if (!cJSON_IsObject(node)) {
         LOG_ERR("Render Error: Expected JSON object for UI node.");
-        return false;
+        return NULL;
     }
 
 
@@ -28792,6 +29034,7 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent, const char *named_pa
         type_str = type_item->valuestring;
     }
 
+
     if (strcmp(type_str, "component") == 0) {
         cJSON *id_item_comp = cJSON_GetObjectItemCaseSensitive(node, "id");
         cJSON *root_item_comp = cJSON_GetObjectItemCaseSensitive(node, "root");
@@ -28802,40 +29045,98 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent, const char *named_pa
             cJSON *duplicated_root = cJSON_Duplicate(root_item_comp, true);
             if (duplicated_root) {
                 lvgl_json_register_ptr(comp_id_str, "component_json_node", (void*)duplicated_root);
-                return true; // Component definition processed
+                return (void*)1; // Success, non-NULL arbitrary pointer
             } else {
                 LOG_ERR_JSON(node, "Component Error: Failed to duplicate root for component '%s'", comp_id_str);
-                return false;
+                return NULL;
             }
         } else {
             LOG_ERR_JSON(node, "Component Error: Invalid 'component' definition. Requires 'id' (string starting with '@') and 'root' (object).");
-            return false;
+            return NULL;
         }
     } else if (strcmp(type_str, "use-view") == 0) {
+        bool view_context_set_locally = false;
         cJSON *id_item_use_view = cJSON_GetObjectItemCaseSensitive(node, "id");
         if (id_item_use_view && cJSON_IsString(id_item_use_view) && id_item_use_view->valuestring && id_item_use_view->valuestring[0] == '@') {
             const char *view_id_str = id_item_use_view->valuestring + 1; // Skip '@'
-            cJSON *component_root_node = (cJSON*)lvgl_json_get_registered_ptr(view_id_str, "component_json_node");
+            cJSON *component_root_json_node = (cJSON*)lvgl_json_get_registered_ptr(view_id_str, "component_json_node");
 
-            if (component_root_node) {
-                LOG_INFO("Using view '%s'", view_id_str);
-                // --- Context for use-view ---
+            if (component_root_json_node) {
+                LOG_INFO("Using view '%s', named_path_prefix for component render: '%s'", view_id_str, named_path_prefix ? named_path_prefix : "ROOT");
+                
                 cJSON* context_for_view_item = cJSON_GetObjectItemCaseSensitive(node, "context");
-                cJSON* previous_context_before_use_view = get_current_context(); // This is original_context_for_this_node_call
-                bool context_set_for_use_view = false;
-
                 if (context_for_view_item && cJSON_IsObject(context_for_view_item)) {
-                    set_current_context(context_for_view_item);
-                    context_set_for_use_view = true;
+                    set_current_context(context_for_view_item); 
+                    view_context_set_locally = true;
                 }
                 
-                bool render_success = render_json_node(component_root_node, parent, named_path);
+                // Render the component's root node. It will be parented to `parent` of `use-view`.
+                // The `named_path_prefix` for the component instance is the same as the use-view's.
+                // If the component_root_json_node has an `id`, it will be registered relative to this `named_path_prefix`.
+                void* component_root_entity = render_json_node(component_root_json_node, parent, named_path_prefix);
                 
-                if (context_set_for_use_view) {
-                    set_current_context(previous_context_before_use_view); // Restore context
+                // After render_json_node returns, context is restored to what it was BEFORE component_root_json_node
+                // was processed. This would be the context set by use-view's "context" or inherited.
+
+                cJSON *do_attrs_json = cJSON_GetObjectItemCaseSensitive(node, "do");
+                if (component_root_entity && do_attrs_json && cJSON_IsObject(do_attrs_json)) {
+                    LOG_INFO("Applying 'do' attributes to component '%s' root %p", view_id_str, component_root_entity);
+                    
+                    const char *comp_root_actual_type_str = "obj"; // Default
+                    cJSON *comp_root_type_item = cJSON_GetObjectItemCaseSensitive(component_root_json_node, "type");
+                    if (comp_root_type_item && cJSON_IsString(comp_root_type_item)) {
+                        comp_root_actual_type_str = comp_root_type_item->valuestring;
+                    }
+                    const char *comp_root_create_type_str = (strcmp(comp_root_actual_type_str, "grid") == 0) ? "obj" : comp_root_actual_type_str;
+                    
+                    bool is_comp_root_widget = true;
+                    char comp_root_registry_type_name[64] = "lv_obj_t";
+
+                    if (strcmp(comp_root_actual_type_str, "style") == 0) { // Add other non-widget types if any
+                        is_comp_root_widget = false;
+                        snprintf(comp_root_registry_type_name, sizeof(comp_root_registry_type_name), "lv_style_t");
+                    } else {
+                         // For widgets, construct full type name e.g. lv_button_t
+                        snprintf(comp_root_registry_type_name, sizeof(comp_root_registry_type_name), "lv_%s_t", comp_root_create_type_str);
+                    }
+
+                    // Determine the path prefix for "named" and "children" inside the "do" block.
+                    // This path should be relative to the component root's own identity.
+                    char path_for_do_block_context[256];
+                    path_for_do_block_context[0] = '\0';
+                    const char* base_for_do_path = named_path_prefix; // Path context of the use-view instantiation
+
+                    cJSON* comp_root_id_item = cJSON_GetObjectItemCaseSensitive(component_root_json_node, "id");
+                    if (comp_root_id_item && cJSON_IsString(comp_root_id_item) && comp_root_id_item->valuestring[0] == '@') {
+                        const char* comp_root_id_val = comp_root_id_item->valuestring + 1;
+                        if (base_for_do_path && base_for_do_path[0]) {
+                            snprintf(path_for_do_block_context, sizeof(path_for_do_block_context)-1, "%s:%s", base_for_do_path, comp_root_id_val);
+                        } else {
+                            strncpy(path_for_do_block_context, comp_root_id_val, sizeof(path_for_do_block_context)-1);
+                        }
+                    } else if (base_for_do_path) {
+                         strncpy(path_for_do_block_context, base_for_do_path, sizeof(path_for_do_block_context)-1);
+                    }
+                    // else path_for_do_block_context remains empty (root)
+
+                    apply_setters_and_attributes(
+                        do_attrs_json,
+                        component_root_entity,
+                        comp_root_actual_type_str,
+                        comp_root_create_type_str,
+                        is_comp_root_widget,
+                        is_comp_root_widget ? (lv_obj_t*)component_root_entity : NULL,
+                        path_for_do_block_context, // Path context for "named"/"children" in DO block
+                        comp_root_registry_type_name
+                    );
                 }
-                return render_success;
-            } else {
+
+                if (view_context_set_locally) {
+                    set_current_context(original_context_for_this_node_call); 
+                }
+                return component_root_entity; 
+
+            } else { // component_root_json_node not found
                 LOG_WARN_JSON(node, "Use-View Error: Component '%s' not found or type error. Creating fallback label.", view_id_str);
                 lv_obj_t *fallback_label = lv_label_create(parent);
                 if(fallback_label) {
@@ -28843,152 +29144,197 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent, const char *named_pa
                     snprintf(fallback_text, sizeof(fallback_text), "Component '%s' error", view_id_str);
                     lv_label_set_text(fallback_label, fallback_text);
                 }
-                return true; 
+                if (view_context_set_locally) { 
+                     set_current_context(original_context_for_this_node_call);
+                }
+                return fallback_label; 
             }
-        } else {
+        } else { 
             LOG_ERR_JSON(node, "Use-View Error: Invalid 'use-view' definition. Requires 'id' (string starting with '@').");
-            return false;
+            return NULL;
         }
     } else if (strcmp(type_str, "context") == 0) {
         cJSON *values_item = cJSON_GetObjectItemCaseSensitive(node, "values");
         cJSON *for_item = cJSON_GetObjectItemCaseSensitive(node, "for");
 
         if (values_item && cJSON_IsObject(values_item) && for_item && cJSON_IsObject(for_item)) {
-            // LOG_DEBUG("Processing 'context' type node.");
-            // original_context_for_this_node_call is already saved at the top
-            set_current_context(values_item); // Set new context from "values"
-            
-            bool render_success = render_json_node(for_item, parent, named_path); // Render the "for" block
-            
-            set_current_context(original_context_for_this_node_call); // Restore original context
-            return render_success; 
+            set_current_context(values_item); 
+            // The `named_path_prefix` is passed through to the `for_item`.
+            void* result_entity = render_json_node(for_item, parent, named_path_prefix); 
+            set_current_context(original_context_for_this_node_call); 
+            return result_entity; 
         } else {
             LOG_ERR_JSON(node, "'context' type node Error: Requires 'values' (object) and 'for' (object) properties.");
-            return false;
+            return NULL;
         }
     }
 
     // --- If not a special type handled above, proceed with generic node processing ---
-    // --- Set node-specific context if provided for this generic node ---
     cJSON* context_property_on_this_node = cJSON_GetObjectItemCaseSensitive(node, "context");
     if (context_property_on_this_node && cJSON_IsObject(context_property_on_this_node)) {
-        // original_context_for_this_node_call is already saved
         set_current_context(context_property_on_this_node);
         context_was_locally_changed_by_this_node = true;
     }
-    
-    // --- Continue with standard object/resource determination and creation ---
-    // 1. Determine Object Type and ID
+    // 1. Determine Object ID for registration and path construction
     cJSON *id_item = cJSON_GetObjectItemCaseSensitive(node, "id");
-    const char *id_str = NULL;
-    if (id_item && cJSON_IsString(id_item)) {
-        if (id_item->valuestring[0] == '@') {
-           id_str = id_item->valuestring + 1; // Get name part after '@'
-        } else {
-           LOG_WARN("Render Warning: 'id' property '%s' should start with '@' for registration. Ignoring registration.", id_item->valuestring);
-           id_str = NULL; // Don't register if format is wrong
-        }
+    const char *id_str_val = NULL;
+    char current_node_path_segment[128] = {0}; // Segment this node adds to the path
+    if (id_item && cJSON_IsString(id_item) && id_item->valuestring && id_item->valuestring[0] == '@') {
+        id_str_val = id_item->valuestring + 1;
+        strncpy(current_node_path_segment, id_str_val, sizeof(current_node_path_segment) -1);
+    } else if (id_item && cJSON_IsString(id_item)) {
+        LOG_WARN_JSON(id_item, "Render Warning: 'id' property '%s' should start with '@' for registration/path construction. Treating as non-identifying.", id_item->valuestring);
     }
 
-    // 2. Create the LVGL Object / Resource
-    void *created_entity = NULL; // Can be lv_obj_t* or lv_style_t* etc.
-    bool is_widget = true; // Is it an lv_obj_t based widget?
-    char *type_name = "lv_obj_t *"; // Is it an lv_obj_t based widget?
-    const char *type_str_for_create = type_str;
+    // Construct full path for this node, to be used for its registration and as prefix for its children/named attributes
+    char effective_path_for_node_and_children[256];
+    if (named_path_prefix && named_path_prefix[0] != '\0') {
+        if (current_node_path_segment[0] != '\0') {
+            snprintf(effective_path_for_node_and_children, sizeof(effective_path_for_node_and_children)-1, "%s:%s", named_path_prefix, current_node_path_segment);
+        } else {
+            strncpy(effective_path_for_node_and_children, named_path_prefix, sizeof(effective_path_for_node_and_children)-1);
+        }
+    } else {
+        strncpy(effective_path_for_node_and_children, current_node_path_segment, sizeof(effective_path_for_node_and_children)-1);
+    }
+    effective_path_for_node_and_children[sizeof(effective_path_for_node_and_children)-1] = '\0';
 
-    if (strcmp(type_str, "grid") == 0) {
-        type_str_for_create = "obj"; // A 'grid' is a generic obj with grid layout
+    // 2. Create the LVGL Object / Resource
+    void *created_entity = NULL;
+    bool is_widget = true;
+    char type_name_for_registry_buf[64] = "lv_obj_t"; // Default, will be updated
+    const char *actual_type_str_for_node = type_str; //This is the 'type_str' from JSON
+    const char *create_type_str_for_node = type_str; //This might become 'obj' if type_str is 'grid'
+
+    if (strcmp(actual_type_str_for_node, "grid") == 0) {
+        create_type_str_for_node = "obj";
         LOG_INFO("Encountered 'grid' type, will create as 'lv_obj' and apply grid layout.");
     }
 
     // Check for custom creators (e.g., for styles)
-    if (strcmp(type_str, "fs_drv") == 0) {
-        if (!id_str) {
-            LOG_ERR("Render Error: Type 'fs_drv' requires an 'id' property starting with '@'.");
-            return false;
+    if (strcmp(actual_type_str_for_node, "fs_drv") == 0) {
+        if (!id_str_val || !id_str_val[0]) {
+             // If custom type absolutely needs an ID, this is an error. For styles, it's managed by name.
+             // The registration happens using effective_path_for_node_and_children which is built from id_str_val.
+             // Let creator decide if name is sufficient or log error if id_str_val was expected to be part of effective_path_for_node_and_children
+            LOG_WARN_JSON(node, "Warning: Type '%s' created without a direct '@id' for path construction. Name for registration: '%s'", actual_type_str_for_node, effective_path_for_node_and_children);
         }
-        // Call custom creator which handles allocation, init, and registration
-        created_entity = (void*)lv_fs_drv_create_managed(id_str);
-        if (!created_entity) return false; // Error logged in creator
-        is_widget = false; // Mark as non-widget (doesn't take parent, no children)
-        type_name = "lv_fs_drv_t *";
-    }
-    else if (strcmp(type_str, "layer") == 0) {
-        if (!id_str) {
-            LOG_ERR("Render Error: Type 'layer' requires an 'id' property starting with '@'.");
-            return false;
+        // Use effective_path_for_node_and_children as the name if it's non-empty, otherwise NULL.
+        const char* name_for_custom_creator = (effective_path_for_node_and_children[0] != '\0') ? effective_path_for_node_and_children : NULL;
+        if (!name_for_custom_creator && id_str_val) name_for_custom_creator = id_str_val; // Fallback if path is empty but id_str_val exists (e.g. root node)
+        if (!name_for_custom_creator) { 
+            LOG_ERR_JSON(node, "Render Error: Type '%s' requires an 'id' to form a registration name, but no id found or path is empty.", actual_type_str_for_node);
+            if (context_was_locally_changed_by_this_node) set_current_context(original_context_for_this_node_call);
+            return NULL;
         }
-        // Call custom creator which handles allocation, init, and registration
-        created_entity = (void*)lv_layer_create_managed(id_str);
-        if (!created_entity) return false; // Error logged in creator
-        is_widget = false; // Mark as non-widget (doesn't take parent, no children)
-        type_name = "lv_layer_t *";
-    }
-    else if (strcmp(type_str, "style") == 0) {
-        if (!id_str) {
-            LOG_ERR("Render Error: Type 'style' requires an 'id' property starting with '@'.");
-            return false;
+        created_entity = (void*)lv_fs_drv_create_managed(name_for_custom_creator);
+        if (!created_entity) { 
+             LOG_ERR_JSON(node, "Render Error: Custom creator %s for name '%s' returned NULL.", "{creator_func}", name_for_custom_creator);
+             if (context_was_locally_changed_by_this_node) set_current_context(original_context_for_this_node_call);
+             return NULL; 
         }
-        // Call custom creator which handles allocation, init, and registration
-        created_entity = (void*)lv_style_create_managed(id_str);
-        if (!created_entity) return false; // Error logged in creator
-        is_widget = false; // Mark as non-widget (doesn't take parent, no children)
-        type_name = "lv_style_t *";
+        is_widget = false;
+        snprintf(type_name_for_registry_buf, sizeof(type_name_for_registry_buf), "lv_fs_drv_t");
     }
-    else if (strcmp(type_str, "with") == 0) {
-        created_entity = parent;
+    else if (strcmp(actual_type_str_for_node, "layer") == 0) {
+        if (!id_str_val || !id_str_val[0]) {
+             // If custom type absolutely needs an ID, this is an error. For styles, it's managed by name.
+             // The registration happens using effective_path_for_node_and_children which is built from id_str_val.
+             // Let creator decide if name is sufficient or log error if id_str_val was expected to be part of effective_path_for_node_and_children
+            LOG_WARN_JSON(node, "Warning: Type '%s' created without a direct '@id' for path construction. Name for registration: '%s'", actual_type_str_for_node, effective_path_for_node_and_children);
+        }
+        // Use effective_path_for_node_and_children as the name if it's non-empty, otherwise NULL.
+        const char* name_for_custom_creator = (effective_path_for_node_and_children[0] != '\0') ? effective_path_for_node_and_children : NULL;
+        if (!name_for_custom_creator && id_str_val) name_for_custom_creator = id_str_val; // Fallback if path is empty but id_str_val exists (e.g. root node)
+        if (!name_for_custom_creator) { 
+            LOG_ERR_JSON(node, "Render Error: Type '%s' requires an 'id' to form a registration name, but no id found or path is empty.", actual_type_str_for_node);
+            if (context_was_locally_changed_by_this_node) set_current_context(original_context_for_this_node_call);
+            return NULL;
+        }
+        created_entity = (void*)lv_layer_create_managed(name_for_custom_creator);
+        if (!created_entity) { 
+             LOG_ERR_JSON(node, "Render Error: Custom creator %s for name '%s' returned NULL.", "{creator_func}", name_for_custom_creator);
+             if (context_was_locally_changed_by_this_node) set_current_context(original_context_for_this_node_call);
+             return NULL; 
+        }
+        is_widget = false;
+        snprintf(type_name_for_registry_buf, sizeof(type_name_for_registry_buf), "lv_layer_t");
     }
-    else {
-        // Default: Assume it's a widget type (lv_obj_t based)
+    else if (strcmp(actual_type_str_for_node, "style") == 0) {
+        if (!id_str_val || !id_str_val[0]) {
+             // If custom type absolutely needs an ID, this is an error. For styles, it's managed by name.
+             // The registration happens using effective_path_for_node_and_children which is built from id_str_val.
+             // Let creator decide if name is sufficient or log error if id_str_val was expected to be part of effective_path_for_node_and_children
+            LOG_WARN_JSON(node, "Warning: Type '%s' created without a direct '@id' for path construction. Name for registration: '%s'", actual_type_str_for_node, effective_path_for_node_and_children);
+        }
+        // Use effective_path_for_node_and_children as the name if it's non-empty, otherwise NULL.
+        const char* name_for_custom_creator = (effective_path_for_node_and_children[0] != '\0') ? effective_path_for_node_and_children : NULL;
+        if (!name_for_custom_creator && id_str_val) name_for_custom_creator = id_str_val; // Fallback if path is empty but id_str_val exists (e.g. root node)
+        if (!name_for_custom_creator) { 
+            LOG_ERR_JSON(node, "Render Error: Type '%s' requires an 'id' to form a registration name, but no id found or path is empty.", actual_type_str_for_node);
+            if (context_was_locally_changed_by_this_node) set_current_context(original_context_for_this_node_call);
+            return NULL;
+        }
+        created_entity = (void*)lv_style_create_managed(name_for_custom_creator);
+        if (!created_entity) { 
+             LOG_ERR_JSON(node, "Render Error: Custom creator %s for name '%s' returned NULL.", "{creator_func}", name_for_custom_creator);
+             if (context_was_locally_changed_by_this_node) set_current_context(original_context_for_this_node_call);
+             return NULL; 
+        }
+        is_widget = false;
+        snprintf(type_name_for_registry_buf, sizeof(type_name_for_registry_buf), "lv_style_t");
+    }
+    else if (strcmp(actual_type_str_for_node, "with") == 0) {
+        // 'with' doesn't create its own LVGL object. It's a directive to apply attributes to another object.
+        // The 'target_entity' for its attributes will be resolved by apply_setters_and_attributes when it processes the 'with' key.
+        // For the purpose of render_json_node, we can say the 'created_entity' is the parent,
+        // as 'with' acts as a modifier in the context of its parent or specified object.
+        // However, specific 'with.obj' handling is in apply_setters_and_attributes.
+        // This block mainly sets up types for the apply_setters_and_attributes call for the 'with' node itself.
+        created_entity = (void*)parent; // Placeholder, real target is resolved in apply_setters_and_attributes
+        is_widget = true; // Assume it operates on widgets primarily.
+        snprintf(type_name_for_registry_buf, sizeof(type_name_for_registry_buf), "lv_obj_t"); 
+        actual_type_str_for_node = "obj"; // Treat as obj for attribute application purposes
+        create_type_str_for_node = "obj";
+        LOG_DEBUG("Processing 'with' node. Target entity will be determined by 'with.obj' attribute.");
+    }
+    else  {
         char create_func_name[64];
-        snprintf(create_func_name, sizeof(create_func_name), "lv_%s_create", type_str_for_create);
+        snprintf(create_func_name, sizeof(create_func_name), "lv_%s_create", create_type_str_for_node);
         const invoke_table_entry_t* create_entry = find_invoke_entry(create_func_name);
         if (!create_entry) {
-            LOG_ERR_JSON(node, "Render Error: Create function '%s' not found.", create_func_name);
-            return false;
+            LOG_ERR_JSON(node, "Render Error: Create function '%s' not found for type '%s' (create type '%s').", create_func_name, actual_type_str_for_node, create_type_str_for_node);
+            if (context_was_locally_changed_by_this_node) set_current_context(original_context_for_this_node_call);
+            return NULL;
         }
 
-        // Prepare arguments for creator (just the parent obj)
-        cJSON *create_args_json = cJSON_CreateArray();
-        if (!create_args_json) { LOG_ERR("Memory error creating args for %s", create_func_name); return false; }
-
-        // How to pass the parent lv_obj_t*? 
-        // Option A: Register parent temporarily? Seems complex.
-        // Option B: Modify invoke_fn_t signature? Chosen earlier to avoid.
-        // Option C: Assume create functions take exactly one lv_obj_t* arg 
-        //           and handle it specially here or in the invoke func?
-        // Let's assume the invoker for lv_..._create(lv_obj_t*) handles this.
-        // The generated invoker needs to know its first arg is lv_obj_t* and get it from `parent`.
-        // -- RETHINK invoke_fn_t signature --
-        // Let's assume invoke_fn_t takes target_obj_ptr which is the parent here.
-        // We pass NULL for json args as lv_..._create only takes parent.
         lv_obj_t* new_widget = NULL;
-        // We need the invoker to place the result into &new_widget.
+        // First arg to creator is parent. Creator returns void*, but we expect lv_obj_t** for widget creators via invoke. 
         if (!create_entry->invoke(create_entry, (void*)parent, &new_widget, NULL)) { 
             LOG_ERR_JSON(node, "Render Error: Failed to invoke %s.", create_func_name);
-            // cJSON_Delete(create_args_json); // Not needed if passing NULL
-            return false;
+            if (context_was_locally_changed_by_this_node) set_current_context(original_context_for_this_node_call);
+            return NULL;
         }
-        // cJSON_Delete(create_args_json); // Not needed if passing NULL
-        if (!new_widget) { LOG_ERR("Render Error: %s returned NULL.", create_func_name); return false; }
+        if (!new_widget) { 
+             LOG_ERR_JSON(node, "Render Error: %s returned NULL.", create_func_name); 
+             if (context_was_locally_changed_by_this_node) set_current_context(original_context_for_this_node_call);
+             return NULL; 
+        }
         created_entity = (void*)new_widget;
         is_widget = true;
 
-        // Register if ID is provided and it wasn't a custom-created type
-        if (id_str) {
-            char entity_type_name_buf[64];
-            // For widgets, type_str_for_create holds the base type like "obj", "label"
-            // For custom created (e.g. styles), type_str holds "style"
-            // We need to construct the C type name like "lv_label_t", "lv_style_t"
-            const char* base_type_for_reg = is_widget ? type_str_for_create : type_str;
-            snprintf(entity_type_name_buf, sizeof(entity_type_name_buf), "lv_%s_t", base_type_for_reg);
-            lvgl_json_register_ptr(id_str, entity_type_name_buf, created_entity);
+        // Determine type for registry (e.g., lv_button_t, lv_obj_t)
+        snprintf(type_name_for_registry_buf, sizeof(type_name_for_registry_buf), "lv_%s_t", create_type_str_for_node);
+        if (id_str_val && id_str_val[0] && effective_path_for_node_and_children[0] != '\0') {
+            lvgl_json_register_ptr(effective_path_for_node_and_children, type_name_for_registry_buf, created_entity);
+            LOG_INFO("Registered widget %p as '%s' (type %s)", created_entity, effective_path_for_node_and_children, type_name_for_registry_buf);
+        } else if (id_str_val && id_str_val[0]) {
+            LOG_WARN("Widget with id '%s' created, but effective_path_for_node_and_children is empty. Not registered by id.", id_str_val);
         }
     }
 
 
-    // Special handling for "grid" type to set up column and row descriptors
-    if (created_entity && is_widget && strcmp(type_str, "grid") == 0) { // type_str is original JSON type
+    if (created_entity && is_widget && strcmp(actual_type_str_for_node, "grid") == 0) { 
         lv_obj_t* grid_obj = (lv_obj_t*)created_entity;
         cJSON *cols_item_json = cJSON_GetObjectItemCaseSensitive(node, "cols");
         cJSON *rows_item_json = cJSON_GetObjectItemCaseSensitive(node, "rows");
@@ -29003,7 +29349,7 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent, const char *named_pa
             if (col_dsc_array) {
                 for (int i = 0; i < num_cols; i++) {
                     cJSON *val_item = cJSON_GetArrayItem(cols_item_json, i);
-                    if (!unmarshal_value(val_item, "int32_t", &col_dsc_array[i], created_entity)) { // Use unmarshal_value
+                    if (!unmarshal_value(val_item, "int32_t", &col_dsc_array[i], created_entity)) { 
                         LOG_ERR_JSON(val_item, "Grid Error: Failed to parse 'cols' array item %d as int32_t.", i);
                         LV_FREE(col_dsc_array); col_dsc_array = NULL; grid_setup_ok = false;
                         break;
@@ -29014,19 +29360,18 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent, const char *named_pa
                 LOG_ERR("Grid Error: Failed to allocate memory for column descriptors.");
                 grid_setup_ok = false;
             }
-        } else {
+        } else { 
             LOG_ERR_JSON(node, "Grid Error: 'cols' array is missing or not an array for grid type.");
             grid_setup_ok = false;
         }
 
-        // Only proceed with rows if cols were OK and rows_item_json is valid
         if (grid_setup_ok && rows_item_json && cJSON_IsArray(rows_item_json)) {
             int num_rows = cJSON_GetArraySize(rows_item_json);
             row_dsc_array = (int32_t*)LV_MALLOC(sizeof(int32_t) * (num_rows + 1));
             if (row_dsc_array) {
                 for (int i = 0; i < num_rows; i++) {
                     cJSON *val_item = cJSON_GetArrayItem(rows_item_json, i);
-                    if (!unmarshal_value(val_item, "int32_t", &row_dsc_array[i], created_entity)) { // Use unmarshal_value
+                    if (!unmarshal_value(val_item, "int32_t", &row_dsc_array[i], created_entity)) { 
                         LOG_ERR_JSON(val_item, "Grid Error: Failed to parse 'rows' array item %d as int32_t.", i);
                         LV_FREE(row_dsc_array); row_dsc_array = NULL; grid_setup_ok = false;
                         break;
@@ -29037,209 +29382,114 @@ static bool render_json_node(cJSON *node, lv_obj_t *parent, const char *named_pa
                 LOG_ERR("Grid Error: Failed to allocate memory for row descriptors.");
                 grid_setup_ok = false;
             }
-        } else if (grid_setup_ok) { // This implies rows_item_json was missing/invalid
+        } else if (grid_setup_ok) { 
              LOG_ERR_JSON(node, "Grid Error: 'rows' array is missing or not an array for grid type.");
              grid_setup_ok = false;
         }
 
         if (grid_setup_ok && col_dsc_array && row_dsc_array) {
-            char temp_name_buf[64]; // For snprintf
-
+            // Register arrays for potential later retrieval/management if needed, though LVGL copies them.
+            // This registration is mostly for debugging or advanced scenarios.
+            char temp_name_buf[64]; 
             snprintf(temp_name_buf, sizeof(temp_name_buf), "grid_col_dsc_%p", (void*)grid_obj);
-            lvgl_json_register_ptr(temp_name_buf, "lv_coord_array", (void*)col_dsc_array); // Registry will lv_strdup the name
-
+            lvgl_json_register_ptr(temp_name_buf, "lv_coord_array_temp", (void*)col_dsc_array); 
             snprintf(temp_name_buf, sizeof(temp_name_buf), "grid_row_dsc_%p", (void*)grid_obj);
-            lvgl_json_register_ptr(temp_name_buf, "lv_coord_array", (void*)row_dsc_array); // Registry will lv_strdup the name
+            lvgl_json_register_ptr(temp_name_buf, "lv_coord_array_temp", (void*)row_dsc_array); 
             
             lv_obj_set_grid_dsc_array(grid_obj, col_dsc_array, row_dsc_array);
-            // Note: Memory for col_dsc_array and row_dsc_array should ideally be freed on LV_EVENT_DELETE of grid_obj.
-            // This is not added here to keep changes minimal as per request.
         } else {
-            if (col_dsc_array) { LV_FREE(col_dsc_array); } // Free if allocated but not used
-            if (row_dsc_array) { LV_FREE(row_dsc_array); } // Free if allocated but not used
+            if (col_dsc_array) { LV_FREE(col_dsc_array); } 
+            if (row_dsc_array) { LV_FREE(row_dsc_array); } 
             LOG_ERR_JSON(node, "Grid Error: Failed to set up complete grid descriptors. Grid layout will not apply.");
         }
     }
-    // 3. Set Properties
-    cJSON *prop = NULL;
-    for (prop = node->child; prop != NULL; prop = prop->next) {
-        const char *prop_name = prop->string;
-        if (!prop_name) continue;
-        // Skip known control properties OR grid-specific OR context property setup properties handled earlier
-        if (strcmp(prop_name, "type") == 0 || strcmp(prop_name, "id") == 0 || strcmp(prop_name, "children") == 0 || 
-            (strcmp(type_str, "grid") == 0 && (strcmp(prop_name, "cols") == 0 || strcmp(prop_name, "rows") == 0)) || 
-            (strcmp(prop_name, "context") == 0)) {
-            continue;
+    // 3. Set Properties, handle children, etc., using the new function
+    if (created_entity) {
+        if (!apply_setters_and_attributes(
+                node,                                   // Attributes are from the node itself
+                created_entity,                         // Target is the newly created entity
+                actual_type_str_for_node,               // Actual type (e.g. "button", "grid", "style")
+                create_type_str_for_node,               // Create type (e.g. "button", "obj" for grid)
+                is_widget,                              // Is it a widget?
+                is_widget ? (lv_obj_t*)created_entity : NULL, // Parent for 'children' attribute
+                effective_path_for_node_and_children,   // Path prefix for 'named' and 'children' in node
+                type_name_for_registry_buf              // Type name for 'named' registration (e.g. lv_button_t)
+            )) {
+            LOG_ERR_JSON(node, "Failed to apply attributes or process children for node type '%s'.", actual_type_str_for_node);
+            // Decide if this should be fatal and return NULL. For now, log and continue.
+            // If created_entity is a widget, it might need to be deleted if this is considered a hard failure.
         }
-        if (strcmp(prop_name, "named") == 0 && cJSON_IsString(prop)) {
-            char *prop_str = NULL; unmarshal_value(prop, "char *", &prop_str, NULL);
-            char path[256] = { 0 }; snprintf(path, 255, "%s:%s", named_path ? named_path : "", prop_str);
-            named_path = path;
-            lvgl_json_register_ptr(named_path, type_name, created_entity);
-            continue;
-        }
-        // Property value must be an array of arguments
-        cJSON *old_prop = NULL;
-        if (!cJSON_IsArray(prop)) {
-            if (cJSON_IsObject(prop) && strcmp(prop_name, "with") == 0) {
-                cJSON *obj = cJSON_GetObjectItemCaseSensitive(prop, "obj");
-                if (!obj) { LOG_ERR_JSON(prop, "Render Warning: with requires attributes 'obj' and 'do' - with '%s' obj value is missing. Skipping.", prop_name); continue; } 
-                lv_obj_t *new_parent = NULL; unmarshal_value(obj, "lv_obj_t *", &new_parent, created_entity);
-                cJSON *with = cJSON_GetObjectItemCaseSensitive(prop, "do");
-                if (!cJSON_IsObject(with)) { LOG_ERR_JSON(prop, "Render Warning: with requires attributes 'obj' and 'do' - do block must be Object. Skipping."); continue; } 
-                cJSON_AddItemToObject(with, "type", cJSON_CreateString("with"));
-                if (!render_json_node(with, (lv_obj_t*) new_parent, named_path)) {
-                    LOG_ERR("Render Error: Failed to render with node. Skipping.");
-                }
-                continue;
-            }
-            old_prop = prop;
-            prop = cJSON_CreateArray();
-            cJSON_AddItemToArray(prop, cJSON_Duplicate(old_prop, true));
-        }
-
-        // Find the setter function: lv_<type>_set_<prop> or lv_obj_set_<prop>
-        char setter_name[128];
-        const invoke_table_entry_t* setter_entry = NULL;
-
-        // Try specific type setter first (only if it's a widget)
-        if (is_widget) {
-           snprintf(setter_name, sizeof(setter_name), "lv_%s_set_%s", type_str, prop_name);
-           setter_entry = find_invoke_entry(setter_name);
-        }
-
-        // Try generic lv_obj setter if specific not found or not applicable
-        if (!setter_entry && is_widget) { // Only widgets have generic obj setters
-            snprintf(setter_name, sizeof(setter_name), "lv_obj_set_%s", prop_name);
-            setter_entry = find_invoke_entry(setter_name);
-        }
-
-        // Try generic lv_obj method if not found or not applicable
-        if (!setter_entry && is_widget) { // Only widgets have generic obj setters
-            snprintf(setter_name, sizeof(setter_name), "lv_obj_%s", prop_name);
-            setter_entry = find_invoke_entry(setter_name);
-        }
-
-        // Try generic lv_obj style setter if specific not found or not applicable
-        if (!setter_entry && is_widget) { // Only widgets have generic obj setters
-            snprintf(setter_name, sizeof(setter_name), "lv_obj_set_style_%s", prop_name);
-            setter_entry = find_invoke_entry(setter_name);
-            if (setter_entry && cJSON_GetArraySize(prop) == 1) { cJSON_AddItemToArray(prop, cJSON_CreateNumber(0)); }
-        }
-
-        // Try style-setter (e.g., lv_style_set_...)
-        if (!setter_entry) {
-            snprintf(setter_name, sizeof(setter_name), "lv_style_set_%s", prop_name);
-            setter_entry = find_invoke_entry(setter_name);
-            //if (!setter_entry) { LOG_ERR_JSON(node, "no style setter for %s\n", setter_name); }
-        }
-
-        // Try style-method (e.g., lv_style_...)
-        if (!setter_entry) {
-            snprintf(setter_name, sizeof(setter_name), "lv_style_%s", prop_name);
-            setter_entry = find_invoke_entry(setter_name);
-            //if (!setter_entry) { LOG_ERR_JSON(node, "no style setter for %s\n", setter_name); }
-        }
-
-        // Try verbatim 
-        if (!setter_entry) {
-            setter_entry = find_invoke_entry(prop_name);
-            //if (!setter_entry) { LOG_ERR_JSON(node, "no verbatim method for %s\n", setter_name); }
-        }
-
-        if (!setter_entry) {
-            LOG_ERR_JSON(node, "Render Warning: No setter function found for property '%s' on type '%s'. Searched lv_%s_set_..., lv_obj_set_..., lv_obj_set_style_....", prop_name, type_str, type_str);
-            continue;
-        }
-
-        // Invoke the setter
-        // Pass the created_entity as target_obj_ptr, NULL for dest (setters usually return void)
-        // Pass the property's JSON array value as args_array
-        if (!setter_entry->invoke(setter_entry, created_entity, NULL, prop)) {
-             LOG_ERR_JSON(prop, "Render Error: Failed to set property '%s' using %s.", prop_name, setter_name);
-             // Continue or return false? Let's continue for now.
-        }
-        if (old_prop) { cJSON_Delete(prop); prop = old_prop; } // Delete prop if we had to create it (old-prop is set)
+    } else if (strcmp(actual_type_str_for_node, "with") != 0) {
+         // If created_entity is NULL and it wasn't a 'with' node (which doesn't create), it's an error from creation phase.
+         LOG_ERR_JSON(node, "Entity creation failed for type '%s', cannot apply attributes.", actual_type_str_for_node);
+         // Fall through to context restoration and return NULL.
     }
 
-    // 4. Process Children (only for widgets)
-    if (is_widget) {
-        cJSON *children_item = cJSON_GetObjectItemCaseSensitive(node, "children");
-        if (children_item) {
-            if (!cJSON_IsArray(children_item)) {
-                LOG_ERR("Render Error: 'children' property must be an array.");
-                // Cleanup created widget?
-                return false;
-            }
-            cJSON *child_node = NULL;
-            cJSON_ArrayForEach(child_node, children_item) {
-                 if (!render_json_node(child_node, (lv_obj_t*)created_entity, named_path)) {
-                     // Error rendering child, stop processing siblings? Or continue?
-                     LOG_ERR("Render Error: Failed to render child node. Aborting sibling processing for this parent.");
-                     // Cleanup? Difficult to manage partial tree creation.
-                     return false; // Propagate failure
-                 }
-            }
-        }
-    }
-    // --- Context management: Restore context if it was changed at this node's level ---
+    // Context restoration
     if (context_was_locally_changed_by_this_node) {
         set_current_context(original_context_for_this_node_call);
     }
 
-    return true;
+    return created_entity;
 }
 
 // --- Public API --- 
 
-/**
- * @brief Renders a UI described by a cJSON object.
- *
- * @param root_json The root cJSON object (should be an array of UI nodes or a single node object).
- * @param implicit_root_parent The LVGL parent object for top-level UI elements.
- * @return true on success, false on failure.
- */
 bool lvgl_json_render_ui(cJSON *root_json, lv_obj_t *implicit_root_parent) {
     if (!root_json) {
         LOG_ERR("Render Error: root_json is NULL.");
         return false;
     }
-    if (!implicit_root_parent) {
+    lv_obj_t* effective_parent = implicit_root_parent;
+    if (!effective_parent) {
         LOG_WARN("Render Warning: implicit_root_parent is NULL. Using lv_screen_active().");
-        implicit_root_parent = lv_screen_active();
-        if (!implicit_root_parent) {
+        effective_parent = lv_screen_active();
+        if (!effective_parent) {
              LOG_ERR("Render Error: Cannot get active screen.");
              return false;
         }
     }
 
-    // Clear registry before starting? Optional, depends on desired behavior.
-    // lvgl_json_registry_clear();
-
-    bool success = true;
+    bool overall_success = true;
     if (cJSON_IsArray(root_json)) {
-        cJSON *node = NULL;
-        cJSON_ArrayForEach(node, root_json) {
-            if (!render_json_node(node, implicit_root_parent, NULL)) {
-                success = false;
-                LOG_ERR("Render Error: Failed to render top-level node. Aborting.");
-                break; // Stop processing further nodes on failure
+        cJSON *node_in_array = NULL;
+        cJSON_ArrayForEach(node_in_array, root_json) {
+            if (render_json_node(node_in_array, effective_parent, NULL) == NULL) { 
+                // Check if the node was a component definition, which returns non-NULL on success (like (void*)1)
+                // but is not an actual LVGL object. Only true failures (NULL) should stop processing here.
+                cJSON *type_item_check = cJSON_GetObjectItemCaseSensitive(node_in_array, "type");
+                if (type_item_check && cJSON_IsString(type_item_check) && strcmp(type_item_check->valuestring, "component") == 0) {
+                     // If component registration failed, render_json_node returns NULL. This is an error.
+                     LOG_ERR_JSON(node_in_array, "Render Error: Failed to process top-level 'component' definition. Aborting.");
+                     overall_success = false; break;
+                } else {
+                     LOG_ERR_JSON(node_in_array, "Render Error: Failed to render top-level node. Aborting.");
+                     overall_success = false; break;
+                }
             }
         }
     } else if (cJSON_IsObject(root_json)) {
-        success = render_json_node(root_json, implicit_root_parent, NULL);
+        if (render_json_node(root_json, effective_parent, NULL) == NULL) {
+            cJSON *type_item_check = cJSON_GetObjectItemCaseSensitive(root_json, "type");
+            if (!(type_item_check && cJSON_IsString(type_item_check) && strcmp(type_item_check->valuestring, "component") == 0)) {
+                 overall_success = false;
+            } else {
+                 // Component definition failed at root level
+                 LOG_ERR_JSON(root_json, "Render Error: Failed to process root 'component' definition.");
+                 overall_success = false;
+            }
+        }
     } else {
-        LOG_ERR("Render Error: root_json must be a JSON object or array.");
-        success = false;
+        LOG_ERR_JSON(root_json, "Render Error: root_json must be a JSON object or array.");
+        overall_success = false;
     }
 
-    if (!success) {
+    if (!overall_success) {
          LOG_ERR("UI Rendering failed.");
-         // Potential cleanup logic here?
     } else {
          LOG_INFO("UI Rendering completed successfully.");
     }
-    return success;
+    return overall_success;
 }
 
 

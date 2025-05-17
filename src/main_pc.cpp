@@ -380,6 +380,7 @@ int main(int argc, char *argv[]) {
 
     lvgl_json_register_ptr("btn_clicked", "lv_event_cb_t", (void *) &btn_clicked);
 
+#define TRANSPILE
 #ifdef TRANSPILE
     return main_transpiled(argc, argv);
 #else

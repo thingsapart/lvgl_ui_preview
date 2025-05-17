@@ -379,99 +379,178 @@
       do:
         min_width: 200
 
-# Main UI Layout
-- layout: LV_LAYOUT_FLEX
-  flex_flow: LV_FLEX_FLOW_ROW
-  add_style: ['@container', 0]
-  #add_style: ['@bg_gradient', 0]
-  size: [100%, 320]
-  named: main
-  children:
-    # Left main column (axis positions)
-    - layout: LV_LAYOUT_FLEX
-      flex_flow: LV_FLEX_FLOW_COLUMN
-      add_style: ['@container', 0]
-      height: 100%
-      flex_grow: 60
-      border_side: LV_BORDER_SIDE_RIGHT
-      border_width: 2
-      radius: 0
-      border_color: '#ffffff'
-      border_opa: 90
-      #bg_opa: 0
-      children:
-        - type: use-view
-          id: '@axis_pos_display'
-          context:
-            axis: X
-            wcs_pos: '11.000'
-            abs_pos: '51.000'
-            delta_pos: '2.125'
-            name: axis_pos_x
-        - type: use-view
-          id: '@axis_pos_display'
-          context:
-            axis: Y
-            wcs_pos: '22.000'
-            abs_pos: '72.000'
-            delta_pos: '-12.125'
-            name: axis_pos_y
-        - type: use-view
-          id: '@axis_pos_display'
-          context:
-            axis: Z
-            wcs_pos: '1.000'
-            abs_pos: '1.000'
-            delta_pos: '0.125'
-            name: axis_pos_z
-        #- type: use-view
-          id: '@axis_jog_speed_adjust'
-          context:
-            label: 'X/Y'
-            dist_0: '0.05mm'
-            dist_1: '0.1mm'
-            dist_2: '1.0mm'
-            dist_3: '10mm'
-        #- type: use-view
-          id: '@axis_jog_speed_adjust'
-          context:
-            label: 'Z'
-            dist_0: '0.05mm'
-            dist_1: '0.1mm'
-            dist_2: '1.0mm'
-            dist_3: '5.0mm'
+# XYZ position display
+- type: component
+  id: '@xyz_axis_pos_display'
+  root:
+    layout: LV_LAYOUT_FLEX
+    flex_flow: LV_FLEX_FLOW_COLUMN
+    add_style: ['@container', 0]
+    radius: 0
+    size: [100%, 100%]
+    children:
+      - type: use-view
+        id: '@axis_pos_display'
+        context:
+          axis: X
+          wcs_pos: '11.000'
+          abs_pos: '51.000'
+          delta_pos: '2.125'
+          name: axis_pos_x
+      - type: use-view
+        id: '@axis_pos_display'
+        context:
+          axis: Y
+          wcs_pos: '22.000'
+          abs_pos: '72.000'
+          delta_pos: '-12.125'
+          name: axis_pos_y
+      - type: use-view
+        id: '@axis_pos_display'
+        context:
+          axis: Z
+          wcs_pos: '1.000'
+          abs_pos: '1.000'
+          delta_pos: '0.125'
+          name: axis_pos_z
 
-    # Right main column (Feeds & Speeds)
-    - layout: LV_LAYOUT_FLEX
-      flex_flow: LV_FLEX_FLOW_COLUMN
+# Jog View
+- type: component
+  id: '@jog_view'
+  root:
+    layout: LV_LAYOUT_FLEX
+    flex_flow: LV_FLEX_FLOW_ROW
+    add_style: ['@container', 0]
+    #add_style: ['@bg_gradient', 0]
+    size: [100%, 320]
+    named: main
+    children:
+      - layout: LV_LAYOUT_FLEX
+        flex_flow: LV_FLEX_FLOW_COLUMN
+        add_style: ['@container', 0]
+        height: 100%
+        flex_grow: 60
+        border_side: LV_BORDER_SIDE_RIGHT
+        border_width: 2
+        radius: 0
+        border_color: '#ffffff'
+        border_opa: 90
+        #bg_opa: 0
+        children:
+          - type: use-view
+            id: '@xyz_axis_pos_display'
+          #- type: use-view
+            id: '@axis_jog_speed_adjust'
+            context:
+              label: 'X/Y'
+              dist_0: '0.05mm'
+              dist_1: '0.1mm'
+              dist_2: '1.0mm'
+              dist_3: '10mm'
+          #- type: use-view
+            id: '@axis_jog_speed_adjust'
+            context:
+              label: 'Z'
+              dist_0: '0.05mm'
+              dist_1: '0.1mm'
+              dist_2: '1.0mm'
+              dist_3: '5.0mm'
+
+      # Right main column (Feeds & Speeds)
+      - layout: LV_LAYOUT_FLEX
+        flex_flow: LV_FLEX_FLOW_COLUMN
+        add_style: ['@container', 0]
+        height: 100%
+        flex_grow: 45
+        pad_top: 5
+        children:
+          - type: use-view
+            id: '@feed_rate_scale'
+            context:
+              unit: MM/MIN
+              label: FEED
+              letter: F
+              ovr: Feed Ovr
+              pad_bottom: 12
+          - type: use-view
+            id: '@feed_rate_scale'
+            context:
+              unit: /MIN
+              label: SPEED
+              letter: S
+              ovr: Speed Ovr
+              pad_bottom: 12
+          - type: use-view
+            id: '@jog_feed'
+            context:
+              unit: MM
+              label: JOG
+              ovr: Jog Ovr
+              pad_bottom: 0
+
+- type: component
+  id: '@btn_label'
+  root:
+    type: button
+    children:
+      - type: label
+        text: $text
+
+####################
+## Main UI Layout ##
+####################
+
+# - type: grid
+  add_style: ['@container', 0]
+  cols: [LV_GRID_CONTENT, LV_GRID_FR_1]
+  rows: [100%]
+  size: [100%, 100%]
+  pad_row: 0
+  pad_column: 0
+  children:
+    - type: list
       add_style: ['@container', 0]
+      # bg_color: '#cccccc'
+      # bg_opa: LV_OPA_COVER
+      grid_cell: [LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, 0, 1]
+      #width: 130
+      width: 0
       height: 100%
-      flex_grow: 45
-      pad_top: 5
+      # options: "\uF015 Home\n\uF021 Zero\n\uF074 G54\n\uF074 G55\n\uF074 G56\n\uF074 G57\n\uF074 G58"
+      # \uF124 Jog\n\uF019 Probe\n\uF074 Status\n\uF079 X\n\uF079 y\n\uF079 Z\n\uF079 Off
+      add_text: '   Nav'
+      add_button: [ "\uF124", ' Jog' ]
+      add_button: [ "\uF019", ' Probe' ]
+      add_button: [ "\uF074", ' Status' ]
+      add_text: '   Machine'
+      add_button: [ "\uF074", ' Jog X' ]
+      add_button: [ "\uF074", ' Jog Y' ]
+      add_button: [ "\uF074", ' Jog Z' ]
+      add_button: [ "\uF074", ' Jog OFF' ]
+    - type: use-view
+      id: '@jog_view'
+      do:
+        grid_cell: [LV_GRID_ALIGN_START, 1, 1, LV_GRID_ALIGN_CENTER, 0, 1]
+
+- type: tileview
+  add_style: ['@container', 0]
+  size: [100%, 100%]
+  pad_row: 0
+  pad_column: 0
+  with:
+    obj: { call: lv_tileview_add_tile, args: [0, 0, LV_DIR_RIGHT] }
+    do:
+      add_style: ['@container', 0]
       children:
         - type: use-view
-          id: '@feed_rate_scale'
-          context:
-            unit: MM/MIN
-            label: FEED
-            letter: F
-            ovr: Feed Ovr
-            pad_bottom: 12
+          id: '@jog_view'
+  with:
+    obj: { call: lv_tileview_add_tile, args: [1, 0, LV_DIR_LEFT] }
+    do:
+      add_style: ['@container', 0]
+      children:
         - type: use-view
-          id: '@feed_rate_scale'
-          context:
-            unit: /MIN
-            label: SPEED
-            letter: S
-            ovr: Speed Ovr
-            pad_bottom: 12
-        - type: use-view
-          id: '@jog_feed'
-          context:
-            unit: MM
-            label: JOG
-            ovr: Jog Ovr
-            pad_bottom: 0
+          id: '@jog_view'
 
 - type: use-view
   id: '@nav_action_button'

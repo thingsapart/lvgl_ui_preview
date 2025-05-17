@@ -600,8 +600,8 @@ def generate_main_unmarshaler():
     code += "            // return false; // Strict: If it looked like an enum, it must parse as one.\n"
     code += "        }\n\n"
 
-    code += "        // Finally, try as a regular string pointer if expected type is `const char *`\n"
-    code += "        if (strcmp(expected_c_type, \"const char *\") == 0 || strcmp(expected_c_type, \"char *\") == 0) {\n"
+    code += "        // Finally, try as a regular string pointer if expected type is `const char *` (or rarely void * - DANGER!)\n"
+    code += "        if (strcmp(expected_c_type, \"const char *\") == 0 || strcmp(expected_c_type, \"char *\") == 0 || strcmp(expected_c_type, \"void *\") == 0) {\n"
     code += "             return unmarshal_string_ptr(json_value, (const char **)dest);\n"
     code += "        }\n"
 
