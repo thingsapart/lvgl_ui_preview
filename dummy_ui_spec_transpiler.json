@@ -1,0 +1,64 @@
+{
+  "type": "obj",
+  "id": "@screen1",
+  "children": [
+    {
+      "type": "style",
+      "id": "@main_style",
+      "bg_color": "#FF0000"
+    },
+    {
+      "type": "label",
+      "id": "@lbl1",
+      "text": "Hello Transpiled World!",
+      "add_style": [
+        "@main_style",
+        "PART.MAIN"
+      ]
+    },
+    {
+      "type": "button",
+      "id": "@btn1",
+      "width": 120,
+      "height": {
+        "call": "MY_CUSTOM_HEIGHT_MACRO",
+        "args": [
+          50,
+          2
+        ]
+      },
+      "children": [
+        {
+          "type": "label",
+          "text": "Click Static"
+        }
+      ]
+    },
+    {
+      "type": "grid",
+      "id": "@my_grid",
+      "width": 200,
+      "height": 150,
+      "cols": [
+        100,
+        "LV_GRID_FR(1)"
+      ],
+      "rows": [
+        50,
+        "LV_GRID_FR(1)"
+      ],
+      "children": [
+        {
+          "type": "label",
+          "id": "@grid_child1",
+          "text": "G1"
+        },
+        {
+          "type": "label",
+          "id": "@grid_child2",
+          "text": "G2"
+        }
+      ]
+    }
+  ]
+}

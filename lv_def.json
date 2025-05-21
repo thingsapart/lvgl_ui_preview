@@ -1,0 +1,23 @@
+{
+  "type": "obj",
+  "id": "@screen1",
+  "children": [
+    {
+      "type": "label",
+      "id": "@lbl1",
+      "text": "Hello World"
+    },
+    {
+      "type": "button",
+      "id": "@btn1",
+      "width": 100,
+      "height": 50,
+      "children": [
+        {
+          "type": "label",
+          "text": "Click Me"
+        }
+      ]
+    }
+  ]
+}

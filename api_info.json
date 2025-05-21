@@ -1,0 +1,38 @@
+{
+  "lv_label_set_text": {
+    "args": [
+      "lv_obj_t*",
+      "const char*"
+    ]
+  },
+  "lv_obj_set_width": {
+    "args": [
+      "lv_obj_t*",
+      "lv_coord_t"
+    ]
+  },
+  "lv_obj_set_height": {
+    "args": [
+      "lv_obj_t*",
+      "lv_coord_t"
+    ]
+  },
+  "lv_obj_create": {
+    "args": [
+      "lv_obj_t*"
+    ],
+    "return": "lv_obj_t*"
+  },
+  "lv_label_create": {
+    "args": [
+      "lv_obj_t*"
+    ],
+    "return": "lv_obj_t*"
+  },
+  "lv_button_create": {
+    "args": [
+      "lv_obj_t*"
+    ],
+    "return": "lv_obj_t*"
+  }
+}
