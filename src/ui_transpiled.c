@@ -24,6 +24,8 @@
 #ifndef LV_LOG_ERROR
 #define LV_LOG_ERROR(...) // Log stub
 #endif
+#include "data_binding.h" // For action/observes attributes
+extern data_binding_registry_t* REGISTRY; // Global registry for actions and data bindings
 extern void lvgl_json_register_ptr(const char *name, const char *type_name, void *ptr);
 extern void* lvgl_json_get_registered_ptr(const char *name, const char *expected_type_name);
 
@@ -54,165 +56,89 @@ void create_ui_ui_transpiled(lv_obj_t *screen_parent) {
     static lv_style_t c_action_button_13;
     lv_obj_t * c_tileview_14;
     lv_obj_t * c_with_target_15;
-    lv_obj_t * c_obj_16;
-    lv_obj_t * c_obj_17;
+    lv_obj_t * c_label_16;
+    lv_obj_t * c_with_target_17;
     lv_obj_t * c_obj_18;
     lv_obj_t * c_obj_19;
     lv_obj_t * c_obj_20;
-    lv_obj_t * c_label_21;
-    lv_obj_t * c_label_22;
-    lv_obj_t * c_obj_23;
+    lv_obj_t * c_obj_21;
+    lv_obj_t * c_obj_22;
+    lv_obj_t * c_label_23;
     lv_obj_t * c_label_24;
-    lv_obj_t * c_label_25;
+    lv_obj_t * c_obj_25;
     lv_obj_t * c_label_26;
     lv_obj_t * c_label_27;
-    lv_obj_t * c_obj_28;
-    lv_obj_t * c_obj_29;
-    lv_obj_t * c_label_30;
-    lv_obj_t * c_label_31;
-    lv_obj_t * c_obj_32;
+    lv_obj_t * c_label_28;
+    lv_obj_t * c_label_29;
+    lv_obj_t * c_obj_30;
+    lv_obj_t * c_obj_31;
+    lv_obj_t * c_label_32;
     lv_obj_t * c_label_33;
-    lv_obj_t * c_label_34;
+    lv_obj_t * c_obj_34;
     lv_obj_t * c_label_35;
     lv_obj_t * c_label_36;
-    lv_obj_t * c_obj_37;
-    lv_obj_t * c_obj_38;
-    lv_obj_t * c_label_39;
-    lv_obj_t * c_label_40;
-    lv_obj_t * c_obj_41;
+    lv_obj_t * c_label_37;
+    lv_obj_t * c_label_38;
+    lv_obj_t * c_obj_39;
+    lv_obj_t * c_obj_40;
+    lv_obj_t * c_label_41;
     lv_obj_t * c_label_42;
-    lv_obj_t * c_label_43;
+    lv_obj_t * c_obj_43;
     lv_obj_t * c_label_44;
     lv_obj_t * c_label_45;
-    lv_obj_t * c_obj_46;
-    lv_obj_t * c_obj_47;
+    lv_obj_t * c_label_46;
+    lv_obj_t * c_label_47;
     lv_obj_t * c_obj_48;
-    lv_obj_t * c_label_49;
-    lv_obj_t * c_grid_obj_50;
-    static const lv_coord_t c_coord_array_51[] = { LV_GRID_CONTENT, LV_GRID_FR_1, LV_GRID_TEMPLATE_LAST };
-    static const lv_coord_t c_coord_array_52[] = { LV_GRID_CONTENT, LV_GRID_TEMPLATE_LAST };
-    lv_obj_t * c_label_53;
-    lv_obj_t * c_label_54;
-    lv_obj_t * c_obj_55;
-    lv_obj_t * c_bar_56;
-    lv_obj_t * c_scale_57;
-    lv_obj_t * c_obj_58;
-    lv_obj_t * c_label_59;
-    lv_obj_t * c_label_60;
+    lv_obj_t * c_obj_49;
+    lv_obj_t * c_obj_50;
+    lv_obj_t * c_label_51;
+    lv_obj_t * c_grid_obj_52;
+    static const lv_coord_t c_coord_array_53[] = { LV_GRID_CONTENT, LV_GRID_FR_1, LV_GRID_TEMPLATE_LAST };
+    static const lv_coord_t c_coord_array_54[] = { LV_GRID_CONTENT, LV_GRID_TEMPLATE_LAST };
+    lv_obj_t * c_label_55;
+    lv_obj_t * c_label_56;
+    lv_obj_t * c_obj_57;
+    lv_obj_t * c_bar_58;
+    lv_obj_t * c_scale_59;
+    lv_obj_t * c_obj_60;
     lv_obj_t * c_label_61;
     lv_obj_t * c_label_62;
-    lv_obj_t * c_obj_63;
-    lv_obj_t * c_obj_64;
-    lv_obj_t * c_label_65;
-    lv_obj_t * c_grid_obj_66;
-    static const lv_coord_t c_coord_array_67[] = { LV_GRID_CONTENT, LV_GRID_FR_1, LV_GRID_TEMPLATE_LAST };
-    static const lv_coord_t c_coord_array_68[] = { LV_GRID_CONTENT, LV_GRID_TEMPLATE_LAST };
-    lv_obj_t * c_label_69;
-    lv_obj_t * c_label_70;
-    lv_obj_t * c_obj_71;
-    lv_obj_t * c_bar_72;
-    lv_obj_t * c_scale_73;
-    lv_obj_t * c_obj_74;
-    lv_obj_t * c_label_75;
-    lv_obj_t * c_label_76;
+    lv_obj_t * c_label_63;
+    lv_obj_t * c_label_64;
+    lv_obj_t * c_obj_65;
+    lv_obj_t * c_obj_66;
+    lv_obj_t * c_label_67;
+    lv_obj_t * c_grid_obj_68;
+    static const lv_coord_t c_coord_array_69[] = { LV_GRID_CONTENT, LV_GRID_FR_1, LV_GRID_TEMPLATE_LAST };
+    static const lv_coord_t c_coord_array_70[] = { LV_GRID_CONTENT, LV_GRID_TEMPLATE_LAST };
+    lv_obj_t * c_label_71;
+    lv_obj_t * c_label_72;
+    lv_obj_t * c_obj_73;
+    lv_obj_t * c_bar_74;
+    lv_obj_t * c_scale_75;
+    lv_obj_t * c_obj_76;
     lv_obj_t * c_label_77;
     lv_obj_t * c_label_78;
-    lv_obj_t * c_obj_79;
-    lv_obj_t * c_obj_80;
-    lv_obj_t * c_label_81;
-    lv_obj_t * c_grid_obj_82;
-    static const lv_coord_t c_coord_array_83[] = { 35, 45, 20, 40, LV_GRID_TEMPLATE_LAST };
-    static const lv_coord_t c_coord_array_84[] = { LV_GRID_CONTENT, LV_GRID_TEMPLATE_LAST };
-    lv_obj_t * c_label_85;
-    lv_obj_t * c_label_86;
+    lv_obj_t * c_label_79;
+    lv_obj_t * c_label_80;
+    lv_obj_t * c_obj_81;
+    lv_obj_t * c_obj_82;
+    lv_obj_t * c_label_83;
+    lv_obj_t * c_grid_obj_84;
+    static const lv_coord_t c_coord_array_85[] = { 35, 45, 20, 40, LV_GRID_TEMPLATE_LAST };
+    static const lv_coord_t c_coord_array_86[] = { LV_GRID_CONTENT, LV_GRID_TEMPLATE_LAST };
     lv_obj_t * c_label_87;
     lv_obj_t * c_label_88;
-    lv_obj_t * c_obj_89;
+    lv_obj_t * c_label_89;
     lv_obj_t * c_label_90;
-    lv_obj_t * c_label_91;
+    lv_obj_t * c_obj_91;
     lv_obj_t * c_label_92;
-    lv_obj_t * c_with_target_93;
-    lv_obj_t * c_obj_94;
-    lv_obj_t * c_obj_95;
-    lv_obj_t * c_obj_96;
-    lv_obj_t * c_obj_97;
-    lv_obj_t * c_obj_98;
-    lv_obj_t * c_label_99;
-    lv_obj_t * c_label_100;
-    lv_obj_t * c_obj_101;
-    lv_obj_t * c_label_102;
-    lv_obj_t * c_label_103;
-    lv_obj_t * c_label_104;
-    lv_obj_t * c_label_105;
-    lv_obj_t * c_obj_106;
-    lv_obj_t * c_obj_107;
-    lv_obj_t * c_label_108;
-    lv_obj_t * c_label_109;
-    lv_obj_t * c_obj_110;
-    lv_obj_t * c_label_111;
-    lv_obj_t * c_label_112;
-    lv_obj_t * c_label_113;
-    lv_obj_t * c_label_114;
-    lv_obj_t * c_obj_115;
-    lv_obj_t * c_obj_116;
-    lv_obj_t * c_label_117;
-    lv_obj_t * c_label_118;
-    lv_obj_t * c_obj_119;
-    lv_obj_t * c_label_120;
-    lv_obj_t * c_label_121;
-    lv_obj_t * c_label_122;
-    lv_obj_t * c_label_123;
-    lv_obj_t * c_obj_124;
-    lv_obj_t * c_obj_125;
-    lv_obj_t * c_obj_126;
-    lv_obj_t * c_label_127;
-    lv_obj_t * c_grid_obj_128;
-    static const lv_coord_t c_coord_array_129[] = { LV_GRID_CONTENT, LV_GRID_FR_1, LV_GRID_TEMPLATE_LAST };
-    static const lv_coord_t c_coord_array_130[] = { LV_GRID_CONTENT, LV_GRID_TEMPLATE_LAST };
-    lv_obj_t * c_label_131;
-    lv_obj_t * c_label_132;
-    lv_obj_t * c_obj_133;
-    lv_obj_t * c_bar_134;
-    lv_obj_t * c_scale_135;
-    lv_obj_t * c_obj_136;
-    lv_obj_t * c_label_137;
-    lv_obj_t * c_label_138;
-    lv_obj_t * c_label_139;
-    lv_obj_t * c_label_140;
-    lv_obj_t * c_obj_141;
-    lv_obj_t * c_obj_142;
-    lv_obj_t * c_label_143;
-    lv_obj_t * c_grid_obj_144;
-    static const lv_coord_t c_coord_array_145[] = { LV_GRID_CONTENT, LV_GRID_FR_1, LV_GRID_TEMPLATE_LAST };
-    static const lv_coord_t c_coord_array_146[] = { LV_GRID_CONTENT, LV_GRID_TEMPLATE_LAST };
-    lv_obj_t * c_label_147;
-    lv_obj_t * c_label_148;
-    lv_obj_t * c_obj_149;
-    lv_obj_t * c_bar_150;
-    lv_obj_t * c_scale_151;
-    lv_obj_t * c_obj_152;
-    lv_obj_t * c_label_153;
-    lv_obj_t * c_label_154;
-    lv_obj_t * c_label_155;
-    lv_obj_t * c_label_156;
-    lv_obj_t * c_obj_157;
-    lv_obj_t * c_obj_158;
-    lv_obj_t * c_label_159;
-    lv_obj_t * c_grid_obj_160;
-    static const lv_coord_t c_coord_array_161[] = { 35, 45, 20, 40, LV_GRID_TEMPLATE_LAST };
-    static const lv_coord_t c_coord_array_162[] = { LV_GRID_CONTENT, LV_GRID_TEMPLATE_LAST };
-    lv_obj_t * c_label_163;
-    lv_obj_t * c_label_164;
-    lv_obj_t * c_label_165;
-    lv_obj_t * c_label_166;
-    lv_obj_t * c_obj_167;
-    lv_obj_t * c_label_168;
-    lv_obj_t * c_label_169;
-    lv_obj_t * c_label_170;
-    lv_obj_t * c_dropdown_171;
-    lv_obj_t * c_with_target_172;
-    lv_obj_t * c_dropdown_173;
-    lv_obj_t * c_with_target_174;
+    lv_obj_t * c_label_93;
+    lv_obj_t * c_label_94;
+    lv_obj_t * c_dropdown_95;
+    lv_obj_t * c_with_target_96;
+    lv_obj_t * c_dropdown_97;
+    lv_obj_t * c_with_target_98;
     // --- END VARIABLE DECLARATIONS ---
     lv_obj_t *parent_obj = screen_parent ? screen_parent : lv_screen_active();
     if (!parent_obj) {
@@ -306,1117 +232,592 @@ void create_ui_ui_transpiled(lv_obj_t *screen_parent) {
     lv_obj_set_style_pad_row(c_tileview_14, 0, LV_PART_MAIN);
     // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_column on c_tileview_14
     lv_obj_set_style_pad_column(c_tileview_14, 0, LV_PART_MAIN);
+    // ERROR: 'with' block for c_tileview_14 is missing 'do' object or it's not an object. Skipping.
     c_with_target_15 = lv_tileview_add_tile(c_tileview_14, 0, 0, LV_DIR_RIGHT);
     if (c_with_target_15) { // Check if 'with.obj' for c_tileview_14 resolved
         lv_obj_add_style(c_with_target_15, &c_container_2, 0);
+        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_bg_color on c_with_target_15
+        lv_obj_set_style_bg_color(c_with_target_15, lv_color_hex(0xFF0000), LV_PART_MAIN);
+        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_bg_opa on c_with_target_15
+        lv_obj_set_style_bg_opa(c_with_target_15, LV_OPA_COVER, LV_PART_MAIN);
         // Children of c_with_target_15 (obj) with path prefix 'None'
-            // Using view component 'jog_view'
-            c_obj_16 = lv_obj_create(c_with_target_15);
-            lv_obj_set_layout(c_obj_16, LV_LAYOUT_FLEX);
-            lv_obj_set_flex_flow(c_obj_16, LV_FLEX_FLOW_ROW);
-            lv_obj_add_style(c_obj_16, &c_container_2, 0);
-            lv_obj_set_size(c_obj_16, LV_PCT(100), 320);
-            lvgl_json_register_ptr("main", "lv_obj_t", (void*)c_obj_16);
-            // Children of c_obj_16 (obj) with path prefix 'main'
-                c_obj_17 = lv_obj_create(c_obj_16);
-                lv_obj_set_layout(c_obj_17, LV_LAYOUT_FLEX);
-                lv_obj_set_flex_flow(c_obj_17, LV_FLEX_FLOW_COLUMN);
-                lv_obj_add_style(c_obj_17, &c_container_2, 0);
-                lv_obj_set_height(c_obj_17, LV_PCT(100));
-                lv_obj_set_flex_grow(c_obj_17, 60);
-                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_side on c_obj_17
-                lv_obj_set_style_border_side(c_obj_17, LV_BORDER_SIDE_RIGHT, LV_PART_MAIN);
-                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_width on c_obj_17
-                lv_obj_set_style_border_width(c_obj_17, 2, LV_PART_MAIN);
-                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_radius on c_obj_17
-                lv_obj_set_style_radius(c_obj_17, 0, LV_PART_MAIN);
-                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_obj_17
-                lv_obj_set_style_border_color(c_obj_17, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_opa on c_obj_17
-                lv_obj_set_style_border_opa(c_obj_17, 90, LV_PART_MAIN);
-                // Children of c_obj_17 (obj) with path prefix 'main'
-                    // Using view component 'xyz_axis_pos_display'
-                    c_obj_18 = lv_obj_create(c_obj_17);
-                    lv_obj_set_layout(c_obj_18, LV_LAYOUT_FLEX);
-                    lv_obj_set_flex_flow(c_obj_18, LV_FLEX_FLOW_COLUMN);
-                    lv_obj_add_style(c_obj_18, &c_container_2, 0);
-                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_radius on c_obj_18
-                    lv_obj_set_style_radius(c_obj_18, 0, LV_PART_MAIN);
-                    lv_obj_set_size(c_obj_18, LV_PCT(100), LV_PCT(100));
-                    // Children of c_obj_18 (obj) with path prefix 'main'
-                        // Using view component 'axis_pos_display'
-                        c_obj_19 = lv_obj_create(c_obj_18);
-                        lv_obj_add_style(c_obj_19, &c_flex_y_6, 0);
-                        lv_obj_add_style(c_obj_19, &c_container_2, 0);
-                        lv_obj_set_size(c_obj_19, LV_PCT(100), LV_SIZE_CONTENT);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_all on c_obj_19
-                        lv_obj_set_style_pad_all(c_obj_19, 10, LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_bottom on c_obj_19
-                        lv_obj_set_style_pad_bottom(c_obj_19, 18, LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_obj_19
-                        lv_obj_set_style_border_color(c_obj_19, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_opa on c_obj_19
-                        lv_obj_set_style_border_opa(c_obj_19, 40, LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_all on c_obj_19
-                        lv_obj_set_style_margin_all(c_obj_19, 2, LV_PART_MAIN);
-                        lvgl_json_register_ptr("main:axis_pos_x", "lv_obj_t", (void*)c_obj_19);
-                        // Children of c_obj_19 (obj) with path prefix 'main:axis_pos_x'
-                            c_obj_20 = lv_obj_create(c_obj_19);
-                            lv_obj_add_style(c_obj_20, &c_flex_x_5, 0);
-                            lv_obj_add_style(c_obj_20, &c_container_2, 0);
-                            lv_obj_set_size(c_obj_20, LV_PCT(100), LV_SIZE_CONTENT);
-                            // Children of c_obj_20 (obj) with path prefix 'main:axis_pos_x'
-                                c_label_21 = lv_label_create(c_obj_20);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_21
-                                lv_obj_set_style_text_font(c_label_21, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_21, "X");
-                                lv_obj_set_width(c_label_21, LV_SIZE_CONTENT);
-                                lv_obj_add_style(c_label_21, &c_indicator_light_12, 0);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_label_21
-                                lv_obj_set_style_border_color(c_label_21, lv_color_hex(0x55FF55), LV_PART_MAIN);
-                                c_label_22 = lv_label_create(c_obj_20);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_22
-                                lv_obj_set_style_text_font(c_label_22, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_22, "11.000");
-                                lv_obj_set_flex_grow(c_label_22, 1);
-                                lv_obj_add_style(c_label_22, &c_indicator_green_7, 0);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_22
-                                lv_obj_set_style_text_align(c_label_22, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
-                            c_obj_23 = lv_obj_create(c_obj_19);
-                            lv_obj_add_style(c_obj_23, &c_flex_x_5, 0);
-                            lv_obj_add_style(c_obj_23, &c_container_2, 0);
-                            lv_obj_set_size(c_obj_23, LV_PCT(100), LV_SIZE_CONTENT);
-                            // Children of c_obj_23 (obj) with path prefix 'main:axis_pos_x'
-                                c_label_24 = lv_label_create(c_obj_23);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_24
-                                lv_obj_set_style_text_font(c_label_24, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_24, "51.000");
-                                lv_obj_set_flex_grow(c_label_24, 1);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_24
-                                lv_obj_set_style_text_align(c_label_24, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
-                                lv_obj_add_style(c_label_24, &c_indicator_yellow_8, 0);
-                                c_label_25 = lv_label_create(c_obj_23);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_25
-                                lv_obj_set_style_text_font(c_label_25, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_25, "");
-                                lv_obj_set_width(c_label_25, 14);
-                                c_label_26 = lv_label_create(c_obj_23);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_26
-                                lv_obj_set_style_text_font(c_label_26, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_26, "2.125");
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_26
-                                lv_obj_set_style_text_align(c_label_26, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
-                                lv_obj_add_style(c_label_26, &c_indicator_yellow_8, 0);
-                                lv_obj_set_flex_grow(c_label_26, 1);
-                                c_label_27 = lv_label_create(c_obj_23);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_27
-                                lv_obj_set_style_text_font(c_label_27, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_27, "");
-                                lv_obj_set_width(c_label_27, 14);
-                        // Using view component 'axis_pos_display'
-                        c_obj_28 = lv_obj_create(c_obj_18);
-                        lv_obj_add_style(c_obj_28, &c_flex_y_6, 0);
-                        lv_obj_add_style(c_obj_28, &c_container_2, 0);
-                        lv_obj_set_size(c_obj_28, LV_PCT(100), LV_SIZE_CONTENT);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_all on c_obj_28
-                        lv_obj_set_style_pad_all(c_obj_28, 10, LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_bottom on c_obj_28
-                        lv_obj_set_style_pad_bottom(c_obj_28, 18, LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_obj_28
-                        lv_obj_set_style_border_color(c_obj_28, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_opa on c_obj_28
-                        lv_obj_set_style_border_opa(c_obj_28, 40, LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_all on c_obj_28
-                        lv_obj_set_style_margin_all(c_obj_28, 2, LV_PART_MAIN);
-                        lvgl_json_register_ptr("main:axis_pos_y", "lv_obj_t", (void*)c_obj_28);
-                        // Children of c_obj_28 (obj) with path prefix 'main:axis_pos_y'
-                            c_obj_29 = lv_obj_create(c_obj_28);
-                            lv_obj_add_style(c_obj_29, &c_flex_x_5, 0);
-                            lv_obj_add_style(c_obj_29, &c_container_2, 0);
-                            lv_obj_set_size(c_obj_29, LV_PCT(100), LV_SIZE_CONTENT);
-                            // Children of c_obj_29 (obj) with path prefix 'main:axis_pos_y'
-                                c_label_30 = lv_label_create(c_obj_29);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_30
-                                lv_obj_set_style_text_font(c_label_30, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_30, "Y");
-                                lv_obj_set_width(c_label_30, LV_SIZE_CONTENT);
-                                lv_obj_add_style(c_label_30, &c_indicator_light_12, 0);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_label_30
-                                lv_obj_set_style_border_color(c_label_30, lv_color_hex(0x55FF55), LV_PART_MAIN);
-                                c_label_31 = lv_label_create(c_obj_29);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_31
-                                lv_obj_set_style_text_font(c_label_31, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_31, "22.000");
-                                lv_obj_set_flex_grow(c_label_31, 1);
-                                lv_obj_add_style(c_label_31, &c_indicator_green_7, 0);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_31
-                                lv_obj_set_style_text_align(c_label_31, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
-                            c_obj_32 = lv_obj_create(c_obj_28);
-                            lv_obj_add_style(c_obj_32, &c_flex_x_5, 0);
-                            lv_obj_add_style(c_obj_32, &c_container_2, 0);
-                            lv_obj_set_size(c_obj_32, LV_PCT(100), LV_SIZE_CONTENT);
-                            // Children of c_obj_32 (obj) with path prefix 'main:axis_pos_y'
-                                c_label_33 = lv_label_create(c_obj_32);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_33
-                                lv_obj_set_style_text_font(c_label_33, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_33, "72.000");
-                                lv_obj_set_flex_grow(c_label_33, 1);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_33
-                                lv_obj_set_style_text_align(c_label_33, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
-                                lv_obj_add_style(c_label_33, &c_indicator_yellow_8, 0);
-                                c_label_34 = lv_label_create(c_obj_32);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_34
-                                lv_obj_set_style_text_font(c_label_34, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_34, "");
-                                lv_obj_set_width(c_label_34, 14);
-                                c_label_35 = lv_label_create(c_obj_32);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_35
-                                lv_obj_set_style_text_font(c_label_35, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_35, "-12.125");
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_35
-                                lv_obj_set_style_text_align(c_label_35, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
-                                lv_obj_add_style(c_label_35, &c_indicator_yellow_8, 0);
-                                lv_obj_set_flex_grow(c_label_35, 1);
-                                c_label_36 = lv_label_create(c_obj_32);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_36
-                                lv_obj_set_style_text_font(c_label_36, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_36, "");
-                                lv_obj_set_width(c_label_36, 14);
-                        // Using view component 'axis_pos_display'
-                        c_obj_37 = lv_obj_create(c_obj_18);
-                        lv_obj_add_style(c_obj_37, &c_flex_y_6, 0);
-                        lv_obj_add_style(c_obj_37, &c_container_2, 0);
-                        lv_obj_set_size(c_obj_37, LV_PCT(100), LV_SIZE_CONTENT);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_all on c_obj_37
-                        lv_obj_set_style_pad_all(c_obj_37, 10, LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_bottom on c_obj_37
-                        lv_obj_set_style_pad_bottom(c_obj_37, 18, LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_obj_37
-                        lv_obj_set_style_border_color(c_obj_37, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_opa on c_obj_37
-                        lv_obj_set_style_border_opa(c_obj_37, 40, LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_all on c_obj_37
-                        lv_obj_set_style_margin_all(c_obj_37, 2, LV_PART_MAIN);
-                        lvgl_json_register_ptr("main:axis_pos_z", "lv_obj_t", (void*)c_obj_37);
-                        // Children of c_obj_37 (obj) with path prefix 'main:axis_pos_z'
-                            c_obj_38 = lv_obj_create(c_obj_37);
-                            lv_obj_add_style(c_obj_38, &c_flex_x_5, 0);
-                            lv_obj_add_style(c_obj_38, &c_container_2, 0);
-                            lv_obj_set_size(c_obj_38, LV_PCT(100), LV_SIZE_CONTENT);
-                            // Children of c_obj_38 (obj) with path prefix 'main:axis_pos_z'
-                                c_label_39 = lv_label_create(c_obj_38);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_39
-                                lv_obj_set_style_text_font(c_label_39, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_39, "Z");
-                                lv_obj_set_width(c_label_39, LV_SIZE_CONTENT);
-                                lv_obj_add_style(c_label_39, &c_indicator_light_12, 0);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_label_39
-                                lv_obj_set_style_border_color(c_label_39, lv_color_hex(0x55FF55), LV_PART_MAIN);
-                                c_label_40 = lv_label_create(c_obj_38);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_40
-                                lv_obj_set_style_text_font(c_label_40, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_40, "1.000");
-                                lv_obj_set_flex_grow(c_label_40, 1);
-                                lv_obj_add_style(c_label_40, &c_indicator_green_7, 0);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_40
-                                lv_obj_set_style_text_align(c_label_40, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
-                            c_obj_41 = lv_obj_create(c_obj_37);
-                            lv_obj_add_style(c_obj_41, &c_flex_x_5, 0);
-                            lv_obj_add_style(c_obj_41, &c_container_2, 0);
-                            lv_obj_set_size(c_obj_41, LV_PCT(100), LV_SIZE_CONTENT);
-                            // Children of c_obj_41 (obj) with path prefix 'main:axis_pos_z'
-                                c_label_42 = lv_label_create(c_obj_41);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_42
-                                lv_obj_set_style_text_font(c_label_42, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_42, "1.000");
-                                lv_obj_set_flex_grow(c_label_42, 1);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_42
-                                lv_obj_set_style_text_align(c_label_42, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
-                                lv_obj_add_style(c_label_42, &c_indicator_yellow_8, 0);
-                                c_label_43 = lv_label_create(c_obj_41);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_43
-                                lv_obj_set_style_text_font(c_label_43, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_43, "");
-                                lv_obj_set_width(c_label_43, 14);
-                                c_label_44 = lv_label_create(c_obj_41);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_44
-                                lv_obj_set_style_text_font(c_label_44, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_44, "0.125");
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_44
-                                lv_obj_set_style_text_align(c_label_44, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
-                                lv_obj_add_style(c_label_44, &c_indicator_yellow_8, 0);
-                                lv_obj_set_flex_grow(c_label_44, 1);
-                                c_label_45 = lv_label_create(c_obj_41);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_45
-                                lv_obj_set_style_text_font(c_label_45, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_45, "");
-                                lv_obj_set_width(c_label_45, 14);
-                c_obj_46 = lv_obj_create(c_obj_16);
-                lv_obj_set_layout(c_obj_46, LV_LAYOUT_FLEX);
-                lv_obj_set_flex_flow(c_obj_46, LV_FLEX_FLOW_COLUMN);
-                lv_obj_add_style(c_obj_46, &c_container_2, 0);
-                lv_obj_set_height(c_obj_46, LV_PCT(100));
-                lv_obj_set_flex_grow(c_obj_46, 45);
-                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_top on c_obj_46
-                lv_obj_set_style_pad_top(c_obj_46, 5, LV_PART_MAIN);
-                // Children of c_obj_46 (obj) with path prefix 'main'
-                    // Using view component 'feed_rate_scale'
-                    c_obj_47 = lv_obj_create(c_obj_46);
-                    lv_obj_set_size(c_obj_47, LV_PCT(100), LV_PCT(100));
-                    lv_obj_add_style(c_obj_47, &c_container_2, 0);
-                    lv_obj_set_layout(c_obj_47, LV_LAYOUT_FLEX);
-                    lv_obj_set_flex_flow(c_obj_47, LV_FLEX_FLOW_ROW);
-                    lv_obj_set_height(c_obj_47, LV_SIZE_CONTENT);
-                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_column on c_obj_47
-                    lv_obj_set_style_pad_column(c_obj_47, 0, LV_PART_MAIN);
-                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_bottom on c_obj_47
-                    lv_obj_set_style_pad_bottom(c_obj_47, 12, LV_PART_MAIN);
-                    // Children of c_obj_47 (obj) with path prefix 'main'
-                        c_obj_48 = lv_obj_create(c_obj_47);
-                        lv_obj_set_layout(c_obj_48, LV_LAYOUT_FLEX);
-                        lv_obj_add_style(c_obj_48, &c_container_2, 0);
-                        lv_obj_set_flex_flow(c_obj_48, LV_FLEX_FLOW_COLUMN);
-                        lv_obj_set_width(c_obj_48, LV_PCT(100));
-                        lv_obj_set_height(c_obj_48, LV_SIZE_CONTENT);
-                        lv_obj_set_flex_grow(c_obj_48, 1);
-                        // Children of c_obj_48 (obj) with path prefix 'main'
-                            c_label_49 = lv_label_create(c_obj_48);
-                            lv_label_set_text(c_label_49, "FEED");
-                            lv_obj_set_height(c_label_49, LV_SIZE_CONTENT);
-                            lv_obj_set_width(c_label_49, LV_PCT(100));
-                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_49
-                            lv_obj_set_style_text_font(c_label_49, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_20", "lv_font_t")), LV_PART_MAIN);
-                            lv_obj_add_style(c_label_49, &c_border_top_btm_10, 0);
-                            c_grid_obj_50 = lv_obj_create(c_obj_48);
-                            lv_obj_add_style(c_grid_obj_50, &c_container_2, 0);
-                            lv_obj_set_width(c_grid_obj_50, LV_PCT(100));
-                            lv_obj_set_height(c_grid_obj_50, LV_SIZE_CONTENT);
-                            // Children of c_grid_obj_50 (obj) with path prefix 'main'
-                                c_label_53 = lv_label_create(c_grid_obj_50);
-                                lv_label_set_text(c_label_53, "F");
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_53
-                                lv_obj_set_style_text_font(c_label_53, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
-                                lv_obj_set_grid_cell(c_label_53, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, 0, 1);
-                                lv_obj_set_height(c_label_53, LV_SIZE_CONTENT);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_left on c_label_53
-                                lv_obj_set_style_pad_left(c_label_53, 10, LV_PART_MAIN);
-                                c_label_54 = lv_label_create(c_grid_obj_50);
-                                lv_obj_set_grid_cell(c_label_54, LV_GRID_ALIGN_END, 1, 1, LV_GRID_ALIGN_END, 0, 1);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_54
-                                lv_obj_set_style_text_font(c_label_54, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
-                                lv_obj_set_height(c_label_54, LV_SIZE_CONTENT);
-                                lv_label_set_text(c_label_54, "1000");
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_right on c_label_54
-                                lv_obj_set_style_pad_right(c_label_54, 10, LV_PART_MAIN);
-                            lv_obj_set_grid_dsc_array(c_grid_obj_50, c_coord_array_51, c_coord_array_52);
-                            c_obj_55 = lv_obj_create(c_obj_48);
-                            lv_obj_set_layout(c_obj_55, LV_LAYOUT_FLEX);
-                            lv_obj_set_flex_flow(c_obj_55, LV_FLEX_FLOW_COLUMN);
-                            lv_obj_add_style(c_obj_55, &c_container_2, 0);
-                            lv_obj_set_width(c_obj_55, LV_PCT(100));
-                            lv_obj_set_height(c_obj_55, LV_SIZE_CONTENT);
-                            // Children of c_obj_55 (obj) with path prefix 'main'
-                                c_bar_56 = lv_bar_create(c_obj_55);
-                                lv_obj_set_width(c_bar_56, LV_PCT(100));
-                                lv_obj_set_height(c_bar_56, 15);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_left on c_bar_56
-                                lv_obj_set_style_margin_left(c_bar_56, 15, LV_PART_MAIN);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_right on c_bar_56
-                                lv_obj_set_style_margin_right(c_bar_56, 15, LV_PART_MAIN);
-                                lv_obj_add_style(c_bar_56, &c_bar_indicator_3, LV_PART_MAIN);
-                                lv_obj_add_style(c_bar_56, &c_bar_indicator_3, LV_PART_INDICATOR);
-                                lv_bar_set_value(c_bar_56, 65, 0);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_bg_color on c_bar_56
-                                lv_obj_set_style_bg_color(c_bar_56, lv_color_hex(0x5DD555), LV_PART_MAIN);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_bg_opa on c_bar_56
-                                lv_obj_set_style_bg_opa(c_bar_56, 255, LV_PART_MAIN);
-                                c_scale_57 = lv_scale_create(c_obj_55);
-                                lv_obj_set_width(c_scale_57, LV_PCT(100));
-                                lv_obj_set_height(c_scale_57, 18);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_left on c_scale_57
-                                lv_obj_set_style_margin_left(c_scale_57, 15, LV_PART_MAIN);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_right on c_scale_57
-                                lv_obj_set_style_margin_right(c_scale_57, 15, LV_PART_MAIN);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_scale_57
-                                lv_obj_set_style_text_font(c_scale_57, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_12", "lv_font_t")), LV_PART_MAIN);
-                        c_obj_58 = lv_obj_create(c_obj_47);
-                        lv_obj_set_layout(c_obj_58, LV_LAYOUT_FLEX);
-                        lv_obj_add_style(c_obj_58, &c_container_2, 0);
-                        lv_obj_set_flex_flow(c_obj_58, LV_FLEX_FLOW_COLUMN);
-                        lv_obj_set_width(c_obj_58, LV_SIZE_CONTENT);
-                        lv_obj_set_height(c_obj_58, LV_SIZE_CONTENT);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_right on c_obj_58
-                        lv_obj_set_style_pad_right(c_obj_58, 0, LV_PART_MAIN);
-                        lv_obj_set_flex_align(c_obj_58, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_CENTER);
-                        // Children of c_obj_58 (obj) with path prefix 'main'
-                            c_label_59 = lv_label_create(c_obj_58);
-                            lv_label_set_text(c_label_59, "MM/MIN");
-                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_59
-                            lv_obj_set_style_text_font(c_label_59, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_20", "lv_font_t")), LV_PART_MAIN);
-                            lv_obj_add_style(c_label_59, &c_border_top_btm_10, 0);
-                            c_label_60 = lv_label_create(c_obj_58);
-                            lv_label_set_text(c_label_60, "Feed Ovr");
-                            c_label_61 = lv_label_create(c_obj_58);
-                            lv_label_set_text(c_label_61, "100%%");
-                            c_label_62 = lv_label_create(c_obj_58);
-                            lv_label_set_text(c_label_62, "65%%");
-                    // Using view component 'feed_rate_scale'
-                    c_obj_63 = lv_obj_create(c_obj_46);
-                    lv_obj_set_size(c_obj_63, LV_PCT(100), LV_PCT(100));
-                    lv_obj_add_style(c_obj_63, &c_container_2, 0);
-                    lv_obj_set_layout(c_obj_63, LV_LAYOUT_FLEX);
-                    lv_obj_set_flex_flow(c_obj_63, LV_FLEX_FLOW_ROW);
-                    lv_obj_set_height(c_obj_63, LV_SIZE_CONTENT);
-                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_column on c_obj_63
-                    lv_obj_set_style_pad_column(c_obj_63, 0, LV_PART_MAIN);
-                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_bottom on c_obj_63
-                    lv_obj_set_style_pad_bottom(c_obj_63, 12, LV_PART_MAIN);
-                    // Children of c_obj_63 (obj) with path prefix 'main'
-                        c_obj_64 = lv_obj_create(c_obj_63);
-                        lv_obj_set_layout(c_obj_64, LV_LAYOUT_FLEX);
-                        lv_obj_add_style(c_obj_64, &c_container_2, 0);
-                        lv_obj_set_flex_flow(c_obj_64, LV_FLEX_FLOW_COLUMN);
-                        lv_obj_set_width(c_obj_64, LV_PCT(100));
-                        lv_obj_set_height(c_obj_64, LV_SIZE_CONTENT);
-                        lv_obj_set_flex_grow(c_obj_64, 1);
-                        // Children of c_obj_64 (obj) with path prefix 'main'
-                            c_label_65 = lv_label_create(c_obj_64);
-                            lv_label_set_text(c_label_65, "SPEED");
-                            lv_obj_set_height(c_label_65, LV_SIZE_CONTENT);
-                            lv_obj_set_width(c_label_65, LV_PCT(100));
-                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_65
-                            lv_obj_set_style_text_font(c_label_65, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_20", "lv_font_t")), LV_PART_MAIN);
-                            lv_obj_add_style(c_label_65, &c_border_top_btm_10, 0);
-                            c_grid_obj_66 = lv_obj_create(c_obj_64);
-                            lv_obj_add_style(c_grid_obj_66, &c_container_2, 0);
-                            lv_obj_set_width(c_grid_obj_66, LV_PCT(100));
-                            lv_obj_set_height(c_grid_obj_66, LV_SIZE_CONTENT);
-                            // Children of c_grid_obj_66 (obj) with path prefix 'main'
-                                c_label_69 = lv_label_create(c_grid_obj_66);
-                                lv_label_set_text(c_label_69, "S");
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_69
-                                lv_obj_set_style_text_font(c_label_69, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
-                                lv_obj_set_grid_cell(c_label_69, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, 0, 1);
-                                lv_obj_set_height(c_label_69, LV_SIZE_CONTENT);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_left on c_label_69
-                                lv_obj_set_style_pad_left(c_label_69, 10, LV_PART_MAIN);
-                                c_label_70 = lv_label_create(c_grid_obj_66);
-                                lv_obj_set_grid_cell(c_label_70, LV_GRID_ALIGN_END, 1, 1, LV_GRID_ALIGN_END, 0, 1);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_70
-                                lv_obj_set_style_text_font(c_label_70, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
-                                lv_obj_set_height(c_label_70, LV_SIZE_CONTENT);
-                                lv_label_set_text(c_label_70, "1000");
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_right on c_label_70
-                                lv_obj_set_style_pad_right(c_label_70, 10, LV_PART_MAIN);
-                            lv_obj_set_grid_dsc_array(c_grid_obj_66, c_coord_array_67, c_coord_array_68);
-                            c_obj_71 = lv_obj_create(c_obj_64);
-                            lv_obj_set_layout(c_obj_71, LV_LAYOUT_FLEX);
-                            lv_obj_set_flex_flow(c_obj_71, LV_FLEX_FLOW_COLUMN);
-                            lv_obj_add_style(c_obj_71, &c_container_2, 0);
-                            lv_obj_set_width(c_obj_71, LV_PCT(100));
-                            lv_obj_set_height(c_obj_71, LV_SIZE_CONTENT);
-                            // Children of c_obj_71 (obj) with path prefix 'main'
-                                c_bar_72 = lv_bar_create(c_obj_71);
-                                lv_obj_set_width(c_bar_72, LV_PCT(100));
-                                lv_obj_set_height(c_bar_72, 15);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_left on c_bar_72
-                                lv_obj_set_style_margin_left(c_bar_72, 15, LV_PART_MAIN);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_right on c_bar_72
-                                lv_obj_set_style_margin_right(c_bar_72, 15, LV_PART_MAIN);
-                                lv_obj_add_style(c_bar_72, &c_bar_indicator_3, LV_PART_MAIN);
-                                lv_obj_add_style(c_bar_72, &c_bar_indicator_3, LV_PART_INDICATOR);
-                                lv_bar_set_value(c_bar_72, 65, 0);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_bg_color on c_bar_72
-                                lv_obj_set_style_bg_color(c_bar_72, lv_color_hex(0x5DD555), LV_PART_MAIN);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_bg_opa on c_bar_72
-                                lv_obj_set_style_bg_opa(c_bar_72, 255, LV_PART_MAIN);
-                                c_scale_73 = lv_scale_create(c_obj_71);
-                                lv_obj_set_width(c_scale_73, LV_PCT(100));
-                                lv_obj_set_height(c_scale_73, 18);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_left on c_scale_73
-                                lv_obj_set_style_margin_left(c_scale_73, 15, LV_PART_MAIN);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_right on c_scale_73
-                                lv_obj_set_style_margin_right(c_scale_73, 15, LV_PART_MAIN);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_scale_73
-                                lv_obj_set_style_text_font(c_scale_73, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_12", "lv_font_t")), LV_PART_MAIN);
-                        c_obj_74 = lv_obj_create(c_obj_63);
-                        lv_obj_set_layout(c_obj_74, LV_LAYOUT_FLEX);
-                        lv_obj_add_style(c_obj_74, &c_container_2, 0);
-                        lv_obj_set_flex_flow(c_obj_74, LV_FLEX_FLOW_COLUMN);
-                        lv_obj_set_width(c_obj_74, LV_SIZE_CONTENT);
-                        lv_obj_set_height(c_obj_74, LV_SIZE_CONTENT);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_right on c_obj_74
-                        lv_obj_set_style_pad_right(c_obj_74, 0, LV_PART_MAIN);
-                        lv_obj_set_flex_align(c_obj_74, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_CENTER);
-                        // Children of c_obj_74 (obj) with path prefix 'main'
-                            c_label_75 = lv_label_create(c_obj_74);
-                            lv_label_set_text(c_label_75, "/MIN");
-                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_75
-                            lv_obj_set_style_text_font(c_label_75, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_20", "lv_font_t")), LV_PART_MAIN);
-                            lv_obj_add_style(c_label_75, &c_border_top_btm_10, 0);
-                            c_label_76 = lv_label_create(c_obj_74);
-                            lv_label_set_text(c_label_76, "Speed Ovr");
-                            c_label_77 = lv_label_create(c_obj_74);
-                            lv_label_set_text(c_label_77, "100%%");
-                            c_label_78 = lv_label_create(c_obj_74);
-                            lv_label_set_text(c_label_78, "65%%");
-                    // Using view component 'jog_feed'
-                    c_obj_79 = lv_obj_create(c_obj_46);
-                    lv_obj_set_size(c_obj_79, LV_PCT(100), LV_PCT(100));
-                    lv_obj_add_style(c_obj_79, &c_container_2, 0);
-                    lv_obj_set_layout(c_obj_79, LV_LAYOUT_FLEX);
-                    lv_obj_set_flex_flow(c_obj_79, LV_FLEX_FLOW_ROW);
-                    lv_obj_set_height(c_obj_79, LV_SIZE_CONTENT);
-                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_column on c_obj_79
-                    lv_obj_set_style_pad_column(c_obj_79, 0, LV_PART_MAIN);
-                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_bottom on c_obj_79
-                    lv_obj_set_style_pad_bottom(c_obj_79, 0, LV_PART_MAIN);
-                    // Children of c_obj_79 (obj) with path prefix 'main'
-                        c_obj_80 = lv_obj_create(c_obj_79);
-                        lv_obj_set_layout(c_obj_80, LV_LAYOUT_FLEX);
-                        lv_obj_add_style(c_obj_80, &c_container_2, 0);
-                        lv_obj_set_flex_flow(c_obj_80, LV_FLEX_FLOW_COLUMN);
-                        lv_obj_set_width(c_obj_80, LV_PCT(100));
-                        lv_obj_set_height(c_obj_80, LV_SIZE_CONTENT);
-                        lv_obj_set_flex_grow(c_obj_80, 1);
-                        // Children of c_obj_80 (obj) with path prefix 'main'
-                            c_label_81 = lv_label_create(c_obj_80);
-                            lv_label_set_text(c_label_81, "JOG");
-                            lv_obj_set_height(c_label_81, LV_SIZE_CONTENT);
-                            lv_obj_set_width(c_label_81, LV_PCT(100));
-                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_81
-                            lv_obj_set_style_text_font(c_label_81, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_20", "lv_font_t")), LV_PART_MAIN);
-                            lv_obj_add_style(c_label_81, &c_border_top_btm_10, 0);
-                            c_grid_obj_82 = lv_obj_create(c_obj_80);
-                            lv_obj_add_style(c_grid_obj_82, &c_container_2, 0);
-                            lv_obj_set_width(c_grid_obj_82, LV_PCT(100));
-                            lv_obj_set_height(c_grid_obj_82, LV_SIZE_CONTENT);
-                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_left on c_grid_obj_82
-                            lv_obj_set_style_pad_left(c_grid_obj_82, 10, LV_PART_MAIN);
-                            // Children of c_grid_obj_82 (obj) with path prefix 'main'
-                                c_label_85 = lv_label_create(c_grid_obj_82);
-                                lv_label_set_text(c_label_85, "XY");
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_85
-                                lv_obj_set_style_text_font(c_label_85, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_24", "lv_font_t")), LV_PART_MAIN);
-                                lv_obj_set_grid_cell(c_label_85, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_START, 0, 1);
-                                lv_obj_set_height(c_label_85, LV_SIZE_CONTENT);
-                                c_label_86 = lv_label_create(c_grid_obj_82);
-                                lv_obj_set_grid_cell(c_label_86, LV_GRID_ALIGN_START, 1, 1, LV_GRID_ALIGN_START, 0, 1);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_86
-                                lv_obj_set_style_text_font(c_label_86, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_24", "lv_font_t")), LV_PART_MAIN);
-                                lv_obj_set_height(c_label_86, LV_SIZE_CONTENT);
-                                lv_label_set_text(c_label_86, "10");
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_right on c_label_86
-                                lv_obj_set_style_pad_right(c_label_86, 10, LV_PART_MAIN);
-                                lv_obj_add_style(c_label_86, &c_border_right_11, 0);
-                                lv_obj_add_style(c_label_86, &c_indicator_yellow_8, 0);
-                                c_label_87 = lv_label_create(c_grid_obj_82);
-                                lv_label_set_text(c_label_87, "Z");
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_87
-                                lv_obj_set_style_text_font(c_label_87, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_24", "lv_font_t")), LV_PART_MAIN);
-                                lv_obj_set_grid_cell(c_label_87, LV_GRID_ALIGN_START, 2, 1, LV_GRID_ALIGN_START, 0, 1);
-                                lv_obj_set_height(c_label_87, LV_SIZE_CONTENT);
-                                c_label_88 = lv_label_create(c_grid_obj_82);
-                                lv_obj_set_grid_cell(c_label_88, LV_GRID_ALIGN_START, 3, 1, LV_GRID_ALIGN_START, 0, 1);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_88
-                                lv_obj_set_style_text_font(c_label_88, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_24", "lv_font_t")), LV_PART_MAIN);
-                                lv_obj_set_height(c_label_88, LV_SIZE_CONTENT);
-                                lv_label_set_text(c_label_88, " 5");
-                                lv_obj_add_style(c_label_88, &c_indicator_yellow_8, 0);
-                                lv_obj_add_event_cb(c_label_88, ((lv_event_cb_t)lvgl_json_get_registered_ptr("btn_clicked", "lv_event_cb_t")), LV_EVENT_CLICKED, NULL);
-                            lv_obj_set_grid_dsc_array(c_grid_obj_82, c_coord_array_83, c_coord_array_84);
-                        c_obj_89 = lv_obj_create(c_obj_79);
-                        lv_obj_set_layout(c_obj_89, LV_LAYOUT_FLEX);
-                        lv_obj_add_style(c_obj_89, &c_container_2, 0);
-                        lv_obj_set_flex_flow(c_obj_89, LV_FLEX_FLOW_COLUMN);
-                        lv_obj_set_width(c_obj_89, LV_SIZE_CONTENT);
-                        lv_obj_set_height(c_obj_89, LV_SIZE_CONTENT);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_right on c_obj_89
-                        lv_obj_set_style_pad_right(c_obj_89, 0, LV_PART_MAIN);
-                        // Children of c_obj_89 (obj) with path prefix 'main'
-                            c_label_90 = lv_label_create(c_obj_89);
-                            lv_label_set_text(c_label_90, "MM");
-                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_90
-                            lv_obj_set_style_text_font(c_label_90, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_20", "lv_font_t")), LV_PART_MAIN);
-                            lv_obj_add_style(c_label_90, &c_border_top_btm_10, 0);
-                            c_label_91 = lv_label_create(c_obj_89);
-                            lv_label_set_text(c_label_91, "Jog Ovr");
-                            c_label_92 = lv_label_create(c_obj_89);
-                            lv_label_set_text(c_label_92, "100%%");
+            c_label_16 = lv_label_create(c_with_target_15);
+            lv_obj_center(c_label_16);
+            lv_label_set_text(c_label_16, "Scroll right");
     } else {
         // WARNING: 'with.obj' for c_tileview_14 resolved to NULL. 'do' block not applied.
     }
-    c_with_target_93 = lv_tileview_add_tile(c_tileview_14, 1, 0, LV_DIR_LEFT);
-    if (c_with_target_93) { // Check if 'with.obj' for c_tileview_14 resolved
-        lv_obj_add_style(c_with_target_93, &c_container_2, 0);
-        // Children of c_with_target_93 (obj) with path prefix 'None'
+    c_with_target_17 = lv_tileview_add_tile(c_tileview_14, 1, 0, LV_DIR_LEFT);
+    if (c_with_target_17) { // Check if 'with.obj' for c_tileview_14 resolved
+        lv_obj_add_style(c_with_target_17, &c_container_2, 0);
+        // Children of c_with_target_17 (obj) with path prefix 'None'
             // Using view component 'jog_view'
-            c_obj_94 = lv_obj_create(c_with_target_93);
-            lv_obj_set_layout(c_obj_94, LV_LAYOUT_FLEX);
-            lv_obj_set_flex_flow(c_obj_94, LV_FLEX_FLOW_ROW);
-            lv_obj_add_style(c_obj_94, &c_container_2, 0);
-            lv_obj_set_size(c_obj_94, LV_PCT(100), 320);
-            lvgl_json_register_ptr("main", "lv_obj_t", (void*)c_obj_94);
-            // Children of c_obj_94 (obj) with path prefix 'main'
-                c_obj_95 = lv_obj_create(c_obj_94);
-                lv_obj_set_layout(c_obj_95, LV_LAYOUT_FLEX);
-                lv_obj_set_flex_flow(c_obj_95, LV_FLEX_FLOW_COLUMN);
-                lv_obj_add_style(c_obj_95, &c_container_2, 0);
-                lv_obj_set_height(c_obj_95, LV_PCT(100));
-                lv_obj_set_flex_grow(c_obj_95, 60);
-                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_side on c_obj_95
-                lv_obj_set_style_border_side(c_obj_95, LV_BORDER_SIDE_RIGHT, LV_PART_MAIN);
-                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_width on c_obj_95
-                lv_obj_set_style_border_width(c_obj_95, 2, LV_PART_MAIN);
-                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_radius on c_obj_95
-                lv_obj_set_style_radius(c_obj_95, 0, LV_PART_MAIN);
-                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_obj_95
-                lv_obj_set_style_border_color(c_obj_95, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_opa on c_obj_95
-                lv_obj_set_style_border_opa(c_obj_95, 90, LV_PART_MAIN);
-                // Children of c_obj_95 (obj) with path prefix 'main'
+            c_obj_18 = lv_obj_create(c_with_target_17);
+            lv_obj_set_layout(c_obj_18, LV_LAYOUT_FLEX);
+            lv_obj_set_flex_flow(c_obj_18, LV_FLEX_FLOW_ROW);
+            lv_obj_add_style(c_obj_18, &c_container_2, 0);
+            lv_obj_set_size(c_obj_18, LV_PCT(100), 320);
+            lvgl_json_register_ptr("main", "lv_obj_t", (void*)c_obj_18);
+            // Children of c_obj_18 (obj) with path prefix 'main'
+                c_obj_19 = lv_obj_create(c_obj_18);
+                lv_obj_set_layout(c_obj_19, LV_LAYOUT_FLEX);
+                lv_obj_set_flex_flow(c_obj_19, LV_FLEX_FLOW_COLUMN);
+                lv_obj_add_style(c_obj_19, &c_container_2, 0);
+                lv_obj_set_height(c_obj_19, LV_PCT(100));
+                lv_obj_set_flex_grow(c_obj_19, 60);
+                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_side on c_obj_19
+                lv_obj_set_style_border_side(c_obj_19, LV_BORDER_SIDE_RIGHT, LV_PART_MAIN);
+                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_width on c_obj_19
+                lv_obj_set_style_border_width(c_obj_19, 2, LV_PART_MAIN);
+                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_radius on c_obj_19
+                lv_obj_set_style_radius(c_obj_19, 0, LV_PART_MAIN);
+                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_obj_19
+                lv_obj_set_style_border_color(c_obj_19, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_opa on c_obj_19
+                lv_obj_set_style_border_opa(c_obj_19, 90, LV_PART_MAIN);
+                // Children of c_obj_19 (obj) with path prefix 'main'
                     // Using view component 'xyz_axis_pos_display'
-                    c_obj_96 = lv_obj_create(c_obj_95);
-                    lv_obj_set_layout(c_obj_96, LV_LAYOUT_FLEX);
-                    lv_obj_set_flex_flow(c_obj_96, LV_FLEX_FLOW_COLUMN);
-                    lv_obj_add_style(c_obj_96, &c_container_2, 0);
-                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_radius on c_obj_96
-                    lv_obj_set_style_radius(c_obj_96, 0, LV_PART_MAIN);
-                    lv_obj_set_size(c_obj_96, LV_PCT(100), LV_PCT(100));
-                    // Children of c_obj_96 (obj) with path prefix 'main'
+                    c_obj_20 = lv_obj_create(c_obj_19);
+                    lv_obj_set_layout(c_obj_20, LV_LAYOUT_FLEX);
+                    lv_obj_set_flex_flow(c_obj_20, LV_FLEX_FLOW_COLUMN);
+                    lv_obj_add_style(c_obj_20, &c_container_2, 0);
+                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_radius on c_obj_20
+                    lv_obj_set_style_radius(c_obj_20, 0, LV_PART_MAIN);
+                    lv_obj_set_size(c_obj_20, LV_PCT(100), LV_PCT(100));
+                    // Children of c_obj_20 (obj) with path prefix 'main'
                         // Using view component 'axis_pos_display'
-                        c_obj_97 = lv_obj_create(c_obj_96);
-                        lv_obj_add_style(c_obj_97, &c_flex_y_6, 0);
-                        lv_obj_add_style(c_obj_97, &c_container_2, 0);
-                        lv_obj_set_size(c_obj_97, LV_PCT(100), LV_SIZE_CONTENT);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_all on c_obj_97
-                        lv_obj_set_style_pad_all(c_obj_97, 10, LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_bottom on c_obj_97
-                        lv_obj_set_style_pad_bottom(c_obj_97, 18, LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_obj_97
-                        lv_obj_set_style_border_color(c_obj_97, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_opa on c_obj_97
-                        lv_obj_set_style_border_opa(c_obj_97, 40, LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_all on c_obj_97
-                        lv_obj_set_style_margin_all(c_obj_97, 2, LV_PART_MAIN);
-                        lvgl_json_register_ptr("main:axis_pos_x", "lv_obj_t", (void*)c_obj_97);
-                        // Children of c_obj_97 (obj) with path prefix 'main:axis_pos_x'
-                            c_obj_98 = lv_obj_create(c_obj_97);
-                            lv_obj_add_style(c_obj_98, &c_flex_x_5, 0);
-                            lv_obj_add_style(c_obj_98, &c_container_2, 0);
-                            lv_obj_set_size(c_obj_98, LV_PCT(100), LV_SIZE_CONTENT);
-                            // Children of c_obj_98 (obj) with path prefix 'main:axis_pos_x'
-                                c_label_99 = lv_label_create(c_obj_98);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_99
-                                lv_obj_set_style_text_font(c_label_99, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_99, "X");
-                                lv_obj_set_width(c_label_99, LV_SIZE_CONTENT);
-                                lv_obj_add_style(c_label_99, &c_indicator_light_12, 0);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_label_99
-                                lv_obj_set_style_border_color(c_label_99, lv_color_hex(0x55FF55), LV_PART_MAIN);
-                                c_label_100 = lv_label_create(c_obj_98);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_100
-                                lv_obj_set_style_text_font(c_label_100, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_100, "11.000");
-                                lv_obj_set_flex_grow(c_label_100, 1);
-                                lv_obj_add_style(c_label_100, &c_indicator_green_7, 0);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_100
-                                lv_obj_set_style_text_align(c_label_100, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
-                            c_obj_101 = lv_obj_create(c_obj_97);
-                            lv_obj_add_style(c_obj_101, &c_flex_x_5, 0);
-                            lv_obj_add_style(c_obj_101, &c_container_2, 0);
-                            lv_obj_set_size(c_obj_101, LV_PCT(100), LV_SIZE_CONTENT);
-                            // Children of c_obj_101 (obj) with path prefix 'main:axis_pos_x'
-                                c_label_102 = lv_label_create(c_obj_101);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_102
-                                lv_obj_set_style_text_font(c_label_102, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_102, "51.000");
-                                lv_obj_set_flex_grow(c_label_102, 1);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_102
-                                lv_obj_set_style_text_align(c_label_102, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
-                                lv_obj_add_style(c_label_102, &c_indicator_yellow_8, 0);
-                                c_label_103 = lv_label_create(c_obj_101);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_103
-                                lv_obj_set_style_text_font(c_label_103, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_103, "");
-                                lv_obj_set_width(c_label_103, 14);
-                                c_label_104 = lv_label_create(c_obj_101);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_104
-                                lv_obj_set_style_text_font(c_label_104, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_104, "2.125");
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_104
-                                lv_obj_set_style_text_align(c_label_104, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
-                                lv_obj_add_style(c_label_104, &c_indicator_yellow_8, 0);
-                                lv_obj_set_flex_grow(c_label_104, 1);
-                                c_label_105 = lv_label_create(c_obj_101);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_105
-                                lv_obj_set_style_text_font(c_label_105, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_105, "");
-                                lv_obj_set_width(c_label_105, 14);
+                        c_obj_21 = lv_obj_create(c_obj_20);
+                        lv_obj_add_style(c_obj_21, &c_flex_y_6, 0);
+                        lv_obj_add_style(c_obj_21, &c_container_2, 0);
+                        lv_obj_set_size(c_obj_21, LV_PCT(100), LV_SIZE_CONTENT);
+                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_all on c_obj_21
+                        lv_obj_set_style_pad_all(c_obj_21, 10, LV_PART_MAIN);
+                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_bottom on c_obj_21
+                        lv_obj_set_style_pad_bottom(c_obj_21, 18, LV_PART_MAIN);
+                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_obj_21
+                        lv_obj_set_style_border_color(c_obj_21, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_opa on c_obj_21
+                        lv_obj_set_style_border_opa(c_obj_21, 40, LV_PART_MAIN);
+                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_all on c_obj_21
+                        lv_obj_set_style_margin_all(c_obj_21, 2, LV_PART_MAIN);
+                        lvgl_json_register_ptr("main:axis_pos_x", "lv_obj_t", (void*)c_obj_21);
+                        // Children of c_obj_21 (obj) with path prefix 'main:axis_pos_x'
+                            c_obj_22 = lv_obj_create(c_obj_21);
+                            lv_obj_add_style(c_obj_22, &c_flex_x_5, 0);
+                            lv_obj_add_style(c_obj_22, &c_container_2, 0);
+                            lv_obj_set_size(c_obj_22, LV_PCT(100), LV_SIZE_CONTENT);
+                            // Children of c_obj_22 (obj) with path prefix 'main:axis_pos_x'
+                                c_label_23 = lv_label_create(c_obj_22);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_23
+                                lv_obj_set_style_text_font(c_label_23, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
+                                lv_label_set_text(c_label_23, "X");
+                                lv_obj_set_width(c_label_23, LV_SIZE_CONTENT);
+                                lv_obj_add_style(c_label_23, &c_indicator_light_12, 0);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_label_23
+                                lv_obj_set_style_border_color(c_label_23, lv_color_hex(0x55FF55), LV_PART_MAIN);
+                                c_label_24 = lv_label_create(c_obj_22);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_24
+                                lv_obj_set_style_text_font(c_label_24, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
+                                lv_label_set_text(c_label_24, "11.000");
+                                lv_obj_set_flex_grow(c_label_24, 1);
+                                lv_obj_add_style(c_label_24, &c_indicator_green_7, 0);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_24
+                                lv_obj_set_style_text_align(c_label_24, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
+                            c_obj_25 = lv_obj_create(c_obj_21);
+                            lv_obj_add_style(c_obj_25, &c_flex_x_5, 0);
+                            lv_obj_add_style(c_obj_25, &c_container_2, 0);
+                            lv_obj_set_size(c_obj_25, LV_PCT(100), LV_SIZE_CONTENT);
+                            // Children of c_obj_25 (obj) with path prefix 'main:axis_pos_x'
+                                c_label_26 = lv_label_create(c_obj_25);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_26
+                                lv_obj_set_style_text_font(c_label_26, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_14", "lv_font_t")), LV_PART_MAIN);
+                                lv_label_set_text(c_label_26, "51.000");
+                                lv_obj_set_flex_grow(c_label_26, 1);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_26
+                                lv_obj_set_style_text_align(c_label_26, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
+                                lv_obj_add_style(c_label_26, &c_indicator_yellow_8, 0);
+                                c_label_27 = lv_label_create(c_obj_25);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_27
+                                lv_obj_set_style_text_font(c_label_27, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_14", "lv_font_t")), LV_PART_MAIN);
+                                lv_label_set_text(c_label_27, "");
+                                lv_obj_set_width(c_label_27, 14);
+                                c_label_28 = lv_label_create(c_obj_25);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_28
+                                lv_obj_set_style_text_font(c_label_28, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_14", "lv_font_t")), LV_PART_MAIN);
+                                lv_label_set_text(c_label_28, "2.125");
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_28
+                                lv_obj_set_style_text_align(c_label_28, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
+                                lv_obj_add_style(c_label_28, &c_indicator_yellow_8, 0);
+                                lv_obj_set_flex_grow(c_label_28, 1);
+                                c_label_29 = lv_label_create(c_obj_25);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_29
+                                lv_obj_set_style_text_font(c_label_29, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_14", "lv_font_t")), LV_PART_MAIN);
+                                lv_label_set_text(c_label_29, "");
+                                lv_obj_set_width(c_label_29, 14);
                         // Using view component 'axis_pos_display'
-                        c_obj_106 = lv_obj_create(c_obj_96);
-                        lv_obj_add_style(c_obj_106, &c_flex_y_6, 0);
-                        lv_obj_add_style(c_obj_106, &c_container_2, 0);
-                        lv_obj_set_size(c_obj_106, LV_PCT(100), LV_SIZE_CONTENT);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_all on c_obj_106
-                        lv_obj_set_style_pad_all(c_obj_106, 10, LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_bottom on c_obj_106
-                        lv_obj_set_style_pad_bottom(c_obj_106, 18, LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_obj_106
-                        lv_obj_set_style_border_color(c_obj_106, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_opa on c_obj_106
-                        lv_obj_set_style_border_opa(c_obj_106, 40, LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_all on c_obj_106
-                        lv_obj_set_style_margin_all(c_obj_106, 2, LV_PART_MAIN);
-                        lvgl_json_register_ptr("main:axis_pos_y", "lv_obj_t", (void*)c_obj_106);
-                        // Children of c_obj_106 (obj) with path prefix 'main:axis_pos_y'
-                            c_obj_107 = lv_obj_create(c_obj_106);
-                            lv_obj_add_style(c_obj_107, &c_flex_x_5, 0);
-                            lv_obj_add_style(c_obj_107, &c_container_2, 0);
-                            lv_obj_set_size(c_obj_107, LV_PCT(100), LV_SIZE_CONTENT);
-                            // Children of c_obj_107 (obj) with path prefix 'main:axis_pos_y'
-                                c_label_108 = lv_label_create(c_obj_107);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_108
-                                lv_obj_set_style_text_font(c_label_108, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_108, "Y");
-                                lv_obj_set_width(c_label_108, LV_SIZE_CONTENT);
-                                lv_obj_add_style(c_label_108, &c_indicator_light_12, 0);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_label_108
-                                lv_obj_set_style_border_color(c_label_108, lv_color_hex(0x55FF55), LV_PART_MAIN);
-                                c_label_109 = lv_label_create(c_obj_107);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_109
-                                lv_obj_set_style_text_font(c_label_109, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_109, "22.000");
-                                lv_obj_set_flex_grow(c_label_109, 1);
-                                lv_obj_add_style(c_label_109, &c_indicator_green_7, 0);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_109
-                                lv_obj_set_style_text_align(c_label_109, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
-                            c_obj_110 = lv_obj_create(c_obj_106);
-                            lv_obj_add_style(c_obj_110, &c_flex_x_5, 0);
-                            lv_obj_add_style(c_obj_110, &c_container_2, 0);
-                            lv_obj_set_size(c_obj_110, LV_PCT(100), LV_SIZE_CONTENT);
-                            // Children of c_obj_110 (obj) with path prefix 'main:axis_pos_y'
-                                c_label_111 = lv_label_create(c_obj_110);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_111
-                                lv_obj_set_style_text_font(c_label_111, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_111, "72.000");
-                                lv_obj_set_flex_grow(c_label_111, 1);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_111
-                                lv_obj_set_style_text_align(c_label_111, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
-                                lv_obj_add_style(c_label_111, &c_indicator_yellow_8, 0);
-                                c_label_112 = lv_label_create(c_obj_110);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_112
-                                lv_obj_set_style_text_font(c_label_112, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_112, "");
-                                lv_obj_set_width(c_label_112, 14);
-                                c_label_113 = lv_label_create(c_obj_110);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_113
-                                lv_obj_set_style_text_font(c_label_113, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_113, "-12.125");
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_113
-                                lv_obj_set_style_text_align(c_label_113, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
-                                lv_obj_add_style(c_label_113, &c_indicator_yellow_8, 0);
-                                lv_obj_set_flex_grow(c_label_113, 1);
-                                c_label_114 = lv_label_create(c_obj_110);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_114
-                                lv_obj_set_style_text_font(c_label_114, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_114, "");
-                                lv_obj_set_width(c_label_114, 14);
+                        c_obj_30 = lv_obj_create(c_obj_20);
+                        lv_obj_add_style(c_obj_30, &c_flex_y_6, 0);
+                        lv_obj_add_style(c_obj_30, &c_container_2, 0);
+                        lv_obj_set_size(c_obj_30, LV_PCT(100), LV_SIZE_CONTENT);
+                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_all on c_obj_30
+                        lv_obj_set_style_pad_all(c_obj_30, 10, LV_PART_MAIN);
+                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_bottom on c_obj_30
+                        lv_obj_set_style_pad_bottom(c_obj_30, 18, LV_PART_MAIN);
+                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_obj_30
+                        lv_obj_set_style_border_color(c_obj_30, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_opa on c_obj_30
+                        lv_obj_set_style_border_opa(c_obj_30, 40, LV_PART_MAIN);
+                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_all on c_obj_30
+                        lv_obj_set_style_margin_all(c_obj_30, 2, LV_PART_MAIN);
+                        lvgl_json_register_ptr("main:axis_pos_y", "lv_obj_t", (void*)c_obj_30);
+                        // Children of c_obj_30 (obj) with path prefix 'main:axis_pos_y'
+                            c_obj_31 = lv_obj_create(c_obj_30);
+                            lv_obj_add_style(c_obj_31, &c_flex_x_5, 0);
+                            lv_obj_add_style(c_obj_31, &c_container_2, 0);
+                            lv_obj_set_size(c_obj_31, LV_PCT(100), LV_SIZE_CONTENT);
+                            // Children of c_obj_31 (obj) with path prefix 'main:axis_pos_y'
+                                c_label_32 = lv_label_create(c_obj_31);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_32
+                                lv_obj_set_style_text_font(c_label_32, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
+                                lv_label_set_text(c_label_32, "Y");
+                                lv_obj_set_width(c_label_32, LV_SIZE_CONTENT);
+                                lv_obj_add_style(c_label_32, &c_indicator_light_12, 0);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_label_32
+                                lv_obj_set_style_border_color(c_label_32, lv_color_hex(0x55FF55), LV_PART_MAIN);
+                                c_label_33 = lv_label_create(c_obj_31);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_33
+                                lv_obj_set_style_text_font(c_label_33, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
+                                lv_label_set_text(c_label_33, "22.000");
+                                lv_obj_set_flex_grow(c_label_33, 1);
+                                lv_obj_add_style(c_label_33, &c_indicator_green_7, 0);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_33
+                                lv_obj_set_style_text_align(c_label_33, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
+                            c_obj_34 = lv_obj_create(c_obj_30);
+                            lv_obj_add_style(c_obj_34, &c_flex_x_5, 0);
+                            lv_obj_add_style(c_obj_34, &c_container_2, 0);
+                            lv_obj_set_size(c_obj_34, LV_PCT(100), LV_SIZE_CONTENT);
+                            // Children of c_obj_34 (obj) with path prefix 'main:axis_pos_y'
+                                c_label_35 = lv_label_create(c_obj_34);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_35
+                                lv_obj_set_style_text_font(c_label_35, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_14", "lv_font_t")), LV_PART_MAIN);
+                                lv_label_set_text(c_label_35, "72.000");
+                                lv_obj_set_flex_grow(c_label_35, 1);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_35
+                                lv_obj_set_style_text_align(c_label_35, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
+                                lv_obj_add_style(c_label_35, &c_indicator_yellow_8, 0);
+                                c_label_36 = lv_label_create(c_obj_34);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_36
+                                lv_obj_set_style_text_font(c_label_36, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_14", "lv_font_t")), LV_PART_MAIN);
+                                lv_label_set_text(c_label_36, "");
+                                lv_obj_set_width(c_label_36, 14);
+                                c_label_37 = lv_label_create(c_obj_34);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_37
+                                lv_obj_set_style_text_font(c_label_37, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_14", "lv_font_t")), LV_PART_MAIN);
+                                lv_label_set_text(c_label_37, "-12.125");
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_37
+                                lv_obj_set_style_text_align(c_label_37, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
+                                lv_obj_add_style(c_label_37, &c_indicator_yellow_8, 0);
+                                lv_obj_set_flex_grow(c_label_37, 1);
+                                c_label_38 = lv_label_create(c_obj_34);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_38
+                                lv_obj_set_style_text_font(c_label_38, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_14", "lv_font_t")), LV_PART_MAIN);
+                                lv_label_set_text(c_label_38, "");
+                                lv_obj_set_width(c_label_38, 14);
                         // Using view component 'axis_pos_display'
-                        c_obj_115 = lv_obj_create(c_obj_96);
-                        lv_obj_add_style(c_obj_115, &c_flex_y_6, 0);
-                        lv_obj_add_style(c_obj_115, &c_container_2, 0);
-                        lv_obj_set_size(c_obj_115, LV_PCT(100), LV_SIZE_CONTENT);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_all on c_obj_115
-                        lv_obj_set_style_pad_all(c_obj_115, 10, LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_bottom on c_obj_115
-                        lv_obj_set_style_pad_bottom(c_obj_115, 18, LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_obj_115
-                        lv_obj_set_style_border_color(c_obj_115, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_opa on c_obj_115
-                        lv_obj_set_style_border_opa(c_obj_115, 40, LV_PART_MAIN);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_all on c_obj_115
-                        lv_obj_set_style_margin_all(c_obj_115, 2, LV_PART_MAIN);
-                        lvgl_json_register_ptr("main:axis_pos_z", "lv_obj_t", (void*)c_obj_115);
-                        // Children of c_obj_115 (obj) with path prefix 'main:axis_pos_z'
-                            c_obj_116 = lv_obj_create(c_obj_115);
-                            lv_obj_add_style(c_obj_116, &c_flex_x_5, 0);
-                            lv_obj_add_style(c_obj_116, &c_container_2, 0);
-                            lv_obj_set_size(c_obj_116, LV_PCT(100), LV_SIZE_CONTENT);
-                            // Children of c_obj_116 (obj) with path prefix 'main:axis_pos_z'
-                                c_label_117 = lv_label_create(c_obj_116);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_117
-                                lv_obj_set_style_text_font(c_label_117, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_117, "Z");
-                                lv_obj_set_width(c_label_117, LV_SIZE_CONTENT);
-                                lv_obj_add_style(c_label_117, &c_indicator_light_12, 0);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_label_117
-                                lv_obj_set_style_border_color(c_label_117, lv_color_hex(0x55FF55), LV_PART_MAIN);
-                                c_label_118 = lv_label_create(c_obj_116);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_118
-                                lv_obj_set_style_text_font(c_label_118, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_118, "1.000");
-                                lv_obj_set_flex_grow(c_label_118, 1);
-                                lv_obj_add_style(c_label_118, &c_indicator_green_7, 0);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_118
-                                lv_obj_set_style_text_align(c_label_118, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
-                            c_obj_119 = lv_obj_create(c_obj_115);
-                            lv_obj_add_style(c_obj_119, &c_flex_x_5, 0);
-                            lv_obj_add_style(c_obj_119, &c_container_2, 0);
-                            lv_obj_set_size(c_obj_119, LV_PCT(100), LV_SIZE_CONTENT);
-                            // Children of c_obj_119 (obj) with path prefix 'main:axis_pos_z'
-                                c_label_120 = lv_label_create(c_obj_119);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_120
-                                lv_obj_set_style_text_font(c_label_120, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_120, "1.000");
-                                lv_obj_set_flex_grow(c_label_120, 1);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_120
-                                lv_obj_set_style_text_align(c_label_120, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
-                                lv_obj_add_style(c_label_120, &c_indicator_yellow_8, 0);
-                                c_label_121 = lv_label_create(c_obj_119);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_121
-                                lv_obj_set_style_text_font(c_label_121, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_121, "");
-                                lv_obj_set_width(c_label_121, 14);
-                                c_label_122 = lv_label_create(c_obj_119);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_122
-                                lv_obj_set_style_text_font(c_label_122, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_122, "0.125");
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_122
-                                lv_obj_set_style_text_align(c_label_122, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
-                                lv_obj_add_style(c_label_122, &c_indicator_yellow_8, 0);
-                                lv_obj_set_flex_grow(c_label_122, 1);
-                                c_label_123 = lv_label_create(c_obj_119);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_123
-                                lv_obj_set_style_text_font(c_label_123, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_14", "lv_font_t")), LV_PART_MAIN);
-                                lv_label_set_text(c_label_123, "");
-                                lv_obj_set_width(c_label_123, 14);
-                c_obj_124 = lv_obj_create(c_obj_94);
-                lv_obj_set_layout(c_obj_124, LV_LAYOUT_FLEX);
-                lv_obj_set_flex_flow(c_obj_124, LV_FLEX_FLOW_COLUMN);
-                lv_obj_add_style(c_obj_124, &c_container_2, 0);
-                lv_obj_set_height(c_obj_124, LV_PCT(100));
-                lv_obj_set_flex_grow(c_obj_124, 45);
-                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_top on c_obj_124
-                lv_obj_set_style_pad_top(c_obj_124, 5, LV_PART_MAIN);
-                // Children of c_obj_124 (obj) with path prefix 'main'
+                        c_obj_39 = lv_obj_create(c_obj_20);
+                        lv_obj_add_style(c_obj_39, &c_flex_y_6, 0);
+                        lv_obj_add_style(c_obj_39, &c_container_2, 0);
+                        lv_obj_set_size(c_obj_39, LV_PCT(100), LV_SIZE_CONTENT);
+                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_all on c_obj_39
+                        lv_obj_set_style_pad_all(c_obj_39, 10, LV_PART_MAIN);
+                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_bottom on c_obj_39
+                        lv_obj_set_style_pad_bottom(c_obj_39, 18, LV_PART_MAIN);
+                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_obj_39
+                        lv_obj_set_style_border_color(c_obj_39, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_opa on c_obj_39
+                        lv_obj_set_style_border_opa(c_obj_39, 40, LV_PART_MAIN);
+                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_all on c_obj_39
+                        lv_obj_set_style_margin_all(c_obj_39, 2, LV_PART_MAIN);
+                        lvgl_json_register_ptr("main:axis_pos_z", "lv_obj_t", (void*)c_obj_39);
+                        // Children of c_obj_39 (obj) with path prefix 'main:axis_pos_z'
+                            c_obj_40 = lv_obj_create(c_obj_39);
+                            lv_obj_add_style(c_obj_40, &c_flex_x_5, 0);
+                            lv_obj_add_style(c_obj_40, &c_container_2, 0);
+                            lv_obj_set_size(c_obj_40, LV_PCT(100), LV_SIZE_CONTENT);
+                            // Children of c_obj_40 (obj) with path prefix 'main:axis_pos_z'
+                                c_label_41 = lv_label_create(c_obj_40);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_41
+                                lv_obj_set_style_text_font(c_label_41, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
+                                lv_label_set_text(c_label_41, "Z");
+                                lv_obj_set_width(c_label_41, LV_SIZE_CONTENT);
+                                lv_obj_add_style(c_label_41, &c_indicator_light_12, 0);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_border_color on c_label_41
+                                lv_obj_set_style_border_color(c_label_41, lv_color_hex(0x55FF55), LV_PART_MAIN);
+                                c_label_42 = lv_label_create(c_obj_40);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_42
+                                lv_obj_set_style_text_font(c_label_42, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
+                                lv_label_set_text(c_label_42, "1.000");
+                                lv_obj_set_flex_grow(c_label_42, 1);
+                                lv_obj_add_style(c_label_42, &c_indicator_green_7, 0);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_42
+                                lv_obj_set_style_text_align(c_label_42, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
+                            c_obj_43 = lv_obj_create(c_obj_39);
+                            lv_obj_add_style(c_obj_43, &c_flex_x_5, 0);
+                            lv_obj_add_style(c_obj_43, &c_container_2, 0);
+                            lv_obj_set_size(c_obj_43, LV_PCT(100), LV_SIZE_CONTENT);
+                            // Children of c_obj_43 (obj) with path prefix 'main:axis_pos_z'
+                                c_label_44 = lv_label_create(c_obj_43);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_44
+                                lv_obj_set_style_text_font(c_label_44, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_14", "lv_font_t")), LV_PART_MAIN);
+                                lv_label_set_text(c_label_44, "1.000");
+                                lv_obj_set_flex_grow(c_label_44, 1);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_44
+                                lv_obj_set_style_text_align(c_label_44, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
+                                lv_obj_add_style(c_label_44, &c_indicator_yellow_8, 0);
+                                c_label_45 = lv_label_create(c_obj_43);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_45
+                                lv_obj_set_style_text_font(c_label_45, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_14", "lv_font_t")), LV_PART_MAIN);
+                                lv_label_set_text(c_label_45, "");
+                                lv_obj_set_width(c_label_45, 14);
+                                c_label_46 = lv_label_create(c_obj_43);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_46
+                                lv_obj_set_style_text_font(c_label_46, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_14", "lv_font_t")), LV_PART_MAIN);
+                                lv_label_set_text(c_label_46, "0.125");
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_align on c_label_46
+                                lv_obj_set_style_text_align(c_label_46, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
+                                lv_obj_add_style(c_label_46, &c_indicator_yellow_8, 0);
+                                lv_obj_set_flex_grow(c_label_46, 1);
+                                c_label_47 = lv_label_create(c_obj_43);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_47
+                                lv_obj_set_style_text_font(c_label_47, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_14", "lv_font_t")), LV_PART_MAIN);
+                                lv_label_set_text(c_label_47, "");
+                                lv_obj_set_width(c_label_47, 14);
+                c_obj_48 = lv_obj_create(c_obj_18);
+                lv_obj_set_layout(c_obj_48, LV_LAYOUT_FLEX);
+                lv_obj_set_flex_flow(c_obj_48, LV_FLEX_FLOW_COLUMN);
+                lv_obj_add_style(c_obj_48, &c_container_2, 0);
+                lv_obj_set_height(c_obj_48, LV_PCT(100));
+                lv_obj_set_flex_grow(c_obj_48, 45);
+                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_top on c_obj_48
+                lv_obj_set_style_pad_top(c_obj_48, 5, LV_PART_MAIN);
+                // Children of c_obj_48 (obj) with path prefix 'main'
                     // Using view component 'feed_rate_scale'
-                    c_obj_125 = lv_obj_create(c_obj_124);
-                    lv_obj_set_size(c_obj_125, LV_PCT(100), LV_PCT(100));
-                    lv_obj_add_style(c_obj_125, &c_container_2, 0);
-                    lv_obj_set_layout(c_obj_125, LV_LAYOUT_FLEX);
-                    lv_obj_set_flex_flow(c_obj_125, LV_FLEX_FLOW_ROW);
-                    lv_obj_set_height(c_obj_125, LV_SIZE_CONTENT);
-                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_column on c_obj_125
-                    lv_obj_set_style_pad_column(c_obj_125, 0, LV_PART_MAIN);
-                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_bottom on c_obj_125
-                    lv_obj_set_style_pad_bottom(c_obj_125, 12, LV_PART_MAIN);
-                    // Children of c_obj_125 (obj) with path prefix 'main'
-                        c_obj_126 = lv_obj_create(c_obj_125);
-                        lv_obj_set_layout(c_obj_126, LV_LAYOUT_FLEX);
-                        lv_obj_add_style(c_obj_126, &c_container_2, 0);
-                        lv_obj_set_flex_flow(c_obj_126, LV_FLEX_FLOW_COLUMN);
-                        lv_obj_set_width(c_obj_126, LV_PCT(100));
-                        lv_obj_set_height(c_obj_126, LV_SIZE_CONTENT);
-                        lv_obj_set_flex_grow(c_obj_126, 1);
-                        // Children of c_obj_126 (obj) with path prefix 'main'
-                            c_label_127 = lv_label_create(c_obj_126);
-                            lv_label_set_text(c_label_127, "FEED");
-                            lv_obj_set_height(c_label_127, LV_SIZE_CONTENT);
-                            lv_obj_set_width(c_label_127, LV_PCT(100));
-                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_127
-                            lv_obj_set_style_text_font(c_label_127, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_20", "lv_font_t")), LV_PART_MAIN);
-                            lv_obj_add_style(c_label_127, &c_border_top_btm_10, 0);
-                            c_grid_obj_128 = lv_obj_create(c_obj_126);
-                            lv_obj_add_style(c_grid_obj_128, &c_container_2, 0);
-                            lv_obj_set_width(c_grid_obj_128, LV_PCT(100));
-                            lv_obj_set_height(c_grid_obj_128, LV_SIZE_CONTENT);
-                            // Children of c_grid_obj_128 (obj) with path prefix 'main'
-                                c_label_131 = lv_label_create(c_grid_obj_128);
-                                lv_label_set_text(c_label_131, "F");
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_131
-                                lv_obj_set_style_text_font(c_label_131, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
-                                lv_obj_set_grid_cell(c_label_131, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, 0, 1);
-                                lv_obj_set_height(c_label_131, LV_SIZE_CONTENT);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_left on c_label_131
-                                lv_obj_set_style_pad_left(c_label_131, 10, LV_PART_MAIN);
-                                c_label_132 = lv_label_create(c_grid_obj_128);
-                                lv_obj_set_grid_cell(c_label_132, LV_GRID_ALIGN_END, 1, 1, LV_GRID_ALIGN_END, 0, 1);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_132
-                                lv_obj_set_style_text_font(c_label_132, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
-                                lv_obj_set_height(c_label_132, LV_SIZE_CONTENT);
-                                lv_label_set_text(c_label_132, "1000");
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_right on c_label_132
-                                lv_obj_set_style_pad_right(c_label_132, 10, LV_PART_MAIN);
-                            lv_obj_set_grid_dsc_array(c_grid_obj_128, c_coord_array_129, c_coord_array_130);
-                            c_obj_133 = lv_obj_create(c_obj_126);
-                            lv_obj_set_layout(c_obj_133, LV_LAYOUT_FLEX);
-                            lv_obj_set_flex_flow(c_obj_133, LV_FLEX_FLOW_COLUMN);
-                            lv_obj_add_style(c_obj_133, &c_container_2, 0);
-                            lv_obj_set_width(c_obj_133, LV_PCT(100));
-                            lv_obj_set_height(c_obj_133, LV_SIZE_CONTENT);
-                            // Children of c_obj_133 (obj) with path prefix 'main'
-                                c_bar_134 = lv_bar_create(c_obj_133);
-                                lv_obj_set_width(c_bar_134, LV_PCT(100));
-                                lv_obj_set_height(c_bar_134, 15);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_left on c_bar_134
-                                lv_obj_set_style_margin_left(c_bar_134, 15, LV_PART_MAIN);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_right on c_bar_134
-                                lv_obj_set_style_margin_right(c_bar_134, 15, LV_PART_MAIN);
-                                lv_obj_add_style(c_bar_134, &c_bar_indicator_3, LV_PART_MAIN);
-                                lv_obj_add_style(c_bar_134, &c_bar_indicator_3, LV_PART_INDICATOR);
-                                lv_bar_set_value(c_bar_134, 65, 0);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_bg_color on c_bar_134
-                                lv_obj_set_style_bg_color(c_bar_134, lv_color_hex(0x5DD555), LV_PART_MAIN);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_bg_opa on c_bar_134
-                                lv_obj_set_style_bg_opa(c_bar_134, 255, LV_PART_MAIN);
-                                c_scale_135 = lv_scale_create(c_obj_133);
-                                lv_obj_set_width(c_scale_135, LV_PCT(100));
-                                lv_obj_set_height(c_scale_135, 18);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_left on c_scale_135
-                                lv_obj_set_style_margin_left(c_scale_135, 15, LV_PART_MAIN);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_right on c_scale_135
-                                lv_obj_set_style_margin_right(c_scale_135, 15, LV_PART_MAIN);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_scale_135
-                                lv_obj_set_style_text_font(c_scale_135, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_12", "lv_font_t")), LV_PART_MAIN);
-                        c_obj_136 = lv_obj_create(c_obj_125);
-                        lv_obj_set_layout(c_obj_136, LV_LAYOUT_FLEX);
-                        lv_obj_add_style(c_obj_136, &c_container_2, 0);
-                        lv_obj_set_flex_flow(c_obj_136, LV_FLEX_FLOW_COLUMN);
-                        lv_obj_set_width(c_obj_136, LV_SIZE_CONTENT);
-                        lv_obj_set_height(c_obj_136, LV_SIZE_CONTENT);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_right on c_obj_136
-                        lv_obj_set_style_pad_right(c_obj_136, 0, LV_PART_MAIN);
-                        lv_obj_set_flex_align(c_obj_136, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_CENTER);
-                        // Children of c_obj_136 (obj) with path prefix 'main'
-                            c_label_137 = lv_label_create(c_obj_136);
-                            lv_label_set_text(c_label_137, "MM/MIN");
-                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_137
-                            lv_obj_set_style_text_font(c_label_137, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_20", "lv_font_t")), LV_PART_MAIN);
-                            lv_obj_add_style(c_label_137, &c_border_top_btm_10, 0);
-                            c_label_138 = lv_label_create(c_obj_136);
-                            lv_label_set_text(c_label_138, "Feed Ovr");
-                            c_label_139 = lv_label_create(c_obj_136);
-                            lv_label_set_text(c_label_139, "100%%");
-                            c_label_140 = lv_label_create(c_obj_136);
-                            lv_label_set_text(c_label_140, "65%%");
+                    c_obj_49 = lv_obj_create(c_obj_48);
+                    lv_obj_set_size(c_obj_49, LV_PCT(100), LV_PCT(100));
+                    lv_obj_add_style(c_obj_49, &c_container_2, 0);
+                    lv_obj_set_layout(c_obj_49, LV_LAYOUT_FLEX);
+                    lv_obj_set_flex_flow(c_obj_49, LV_FLEX_FLOW_ROW);
+                    lv_obj_set_height(c_obj_49, LV_SIZE_CONTENT);
+                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_column on c_obj_49
+                    lv_obj_set_style_pad_column(c_obj_49, 0, LV_PART_MAIN);
+                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_bottom on c_obj_49
+                    lv_obj_set_style_pad_bottom(c_obj_49, 12, LV_PART_MAIN);
+                    // Children of c_obj_49 (obj) with path prefix 'main'
+                        c_obj_50 = lv_obj_create(c_obj_49);
+                        lv_obj_set_layout(c_obj_50, LV_LAYOUT_FLEX);
+                        lv_obj_add_style(c_obj_50, &c_container_2, 0);
+                        lv_obj_set_flex_flow(c_obj_50, LV_FLEX_FLOW_COLUMN);
+                        lv_obj_set_width(c_obj_50, LV_PCT(100));
+                        lv_obj_set_height(c_obj_50, LV_SIZE_CONTENT);
+                        lv_obj_set_flex_grow(c_obj_50, 1);
+                        // Children of c_obj_50 (obj) with path prefix 'main'
+                            c_label_51 = lv_label_create(c_obj_50);
+                            lv_label_set_text(c_label_51, "FEED");
+                            lv_obj_set_height(c_label_51, LV_SIZE_CONTENT);
+                            lv_obj_set_width(c_label_51, LV_PCT(100));
+                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_51
+                            lv_obj_set_style_text_font(c_label_51, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_20", "lv_font_t")), LV_PART_MAIN);
+                            lv_obj_add_style(c_label_51, &c_border_top_btm_10, 0);
+                            c_grid_obj_52 = lv_obj_create(c_obj_50);
+                            lv_obj_add_style(c_grid_obj_52, &c_container_2, 0);
+                            lv_obj_set_width(c_grid_obj_52, LV_PCT(100));
+                            lv_obj_set_height(c_grid_obj_52, LV_SIZE_CONTENT);
+                            // Children of c_grid_obj_52 (obj) with path prefix 'main'
+                                c_label_55 = lv_label_create(c_grid_obj_52);
+                                lv_label_set_text(c_label_55, "F");
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_55
+                                lv_obj_set_style_text_font(c_label_55, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
+                                lv_obj_set_grid_cell(c_label_55, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, 0, 1);
+                                lv_obj_set_height(c_label_55, LV_SIZE_CONTENT);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_left on c_label_55
+                                lv_obj_set_style_pad_left(c_label_55, 10, LV_PART_MAIN);
+                                c_label_56 = lv_label_create(c_grid_obj_52);
+                                lv_obj_set_grid_cell(c_label_56, LV_GRID_ALIGN_END, 1, 1, LV_GRID_ALIGN_END, 0, 1);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_56
+                                lv_obj_set_style_text_font(c_label_56, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
+                                lv_obj_set_height(c_label_56, LV_SIZE_CONTENT);
+                                lv_label_set_text(c_label_56, "1000");
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_right on c_label_56
+                                lv_obj_set_style_pad_right(c_label_56, 10, LV_PART_MAIN);
+                            lv_obj_set_grid_dsc_array(c_grid_obj_52, c_coord_array_53, c_coord_array_54);
+                            c_obj_57 = lv_obj_create(c_obj_50);
+                            lv_obj_set_layout(c_obj_57, LV_LAYOUT_FLEX);
+                            lv_obj_set_flex_flow(c_obj_57, LV_FLEX_FLOW_COLUMN);
+                            lv_obj_add_style(c_obj_57, &c_container_2, 0);
+                            lv_obj_set_width(c_obj_57, LV_PCT(100));
+                            lv_obj_set_height(c_obj_57, LV_SIZE_CONTENT);
+                            // Children of c_obj_57 (obj) with path prefix 'main'
+                                c_bar_58 = lv_bar_create(c_obj_57);
+                                lv_obj_set_width(c_bar_58, LV_PCT(100));
+                                lv_obj_set_height(c_bar_58, 15);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_left on c_bar_58
+                                lv_obj_set_style_margin_left(c_bar_58, 15, LV_PART_MAIN);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_right on c_bar_58
+                                lv_obj_set_style_margin_right(c_bar_58, 15, LV_PART_MAIN);
+                                lv_obj_add_style(c_bar_58, &c_bar_indicator_3, LV_PART_MAIN);
+                                lv_obj_add_style(c_bar_58, &c_bar_indicator_3, LV_PART_INDICATOR);
+                                lv_bar_set_value(c_bar_58, 65, 0);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_bg_color on c_bar_58
+                                lv_obj_set_style_bg_color(c_bar_58, lv_color_hex(0x5DD555), LV_PART_MAIN);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_bg_opa on c_bar_58
+                                lv_obj_set_style_bg_opa(c_bar_58, 255, LV_PART_MAIN);
+                                c_scale_59 = lv_scale_create(c_obj_57);
+                                lv_obj_set_width(c_scale_59, LV_PCT(100));
+                                lv_obj_set_height(c_scale_59, 18);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_left on c_scale_59
+                                lv_obj_set_style_margin_left(c_scale_59, 15, LV_PART_MAIN);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_right on c_scale_59
+                                lv_obj_set_style_margin_right(c_scale_59, 15, LV_PART_MAIN);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_scale_59
+                                lv_obj_set_style_text_font(c_scale_59, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_12", "lv_font_t")), LV_PART_MAIN);
+                        c_obj_60 = lv_obj_create(c_obj_49);
+                        lv_obj_set_layout(c_obj_60, LV_LAYOUT_FLEX);
+                        lv_obj_add_style(c_obj_60, &c_container_2, 0);
+                        lv_obj_set_flex_flow(c_obj_60, LV_FLEX_FLOW_COLUMN);
+                        lv_obj_set_width(c_obj_60, LV_SIZE_CONTENT);
+                        lv_obj_set_height(c_obj_60, LV_SIZE_CONTENT);
+                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_right on c_obj_60
+                        lv_obj_set_style_pad_right(c_obj_60, 0, LV_PART_MAIN);
+                        lv_obj_set_flex_align(c_obj_60, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_CENTER);
+                        // Children of c_obj_60 (obj) with path prefix 'main'
+                            c_label_61 = lv_label_create(c_obj_60);
+                            lv_label_set_text(c_label_61, "MM/MIN");
+                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_61
+                            lv_obj_set_style_text_font(c_label_61, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_20", "lv_font_t")), LV_PART_MAIN);
+                            lv_obj_add_style(c_label_61, &c_border_top_btm_10, 0);
+                            c_label_62 = lv_label_create(c_obj_60);
+                            lv_label_set_text(c_label_62, "Feed Ovr");
+                            c_label_63 = lv_label_create(c_obj_60);
+                            lv_label_set_text(c_label_63, "100%%");
+                            c_label_64 = lv_label_create(c_obj_60);
+                            lv_label_set_text(c_label_64, "65%%");
                     // Using view component 'feed_rate_scale'
-                    c_obj_141 = lv_obj_create(c_obj_124);
-                    lv_obj_set_size(c_obj_141, LV_PCT(100), LV_PCT(100));
-                    lv_obj_add_style(c_obj_141, &c_container_2, 0);
-                    lv_obj_set_layout(c_obj_141, LV_LAYOUT_FLEX);
-                    lv_obj_set_flex_flow(c_obj_141, LV_FLEX_FLOW_ROW);
-                    lv_obj_set_height(c_obj_141, LV_SIZE_CONTENT);
-                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_column on c_obj_141
-                    lv_obj_set_style_pad_column(c_obj_141, 0, LV_PART_MAIN);
-                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_bottom on c_obj_141
-                    lv_obj_set_style_pad_bottom(c_obj_141, 12, LV_PART_MAIN);
-                    // Children of c_obj_141 (obj) with path prefix 'main'
-                        c_obj_142 = lv_obj_create(c_obj_141);
-                        lv_obj_set_layout(c_obj_142, LV_LAYOUT_FLEX);
-                        lv_obj_add_style(c_obj_142, &c_container_2, 0);
-                        lv_obj_set_flex_flow(c_obj_142, LV_FLEX_FLOW_COLUMN);
-                        lv_obj_set_width(c_obj_142, LV_PCT(100));
-                        lv_obj_set_height(c_obj_142, LV_SIZE_CONTENT);
-                        lv_obj_set_flex_grow(c_obj_142, 1);
-                        // Children of c_obj_142 (obj) with path prefix 'main'
-                            c_label_143 = lv_label_create(c_obj_142);
-                            lv_label_set_text(c_label_143, "SPEED");
-                            lv_obj_set_height(c_label_143, LV_SIZE_CONTENT);
-                            lv_obj_set_width(c_label_143, LV_PCT(100));
-                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_143
-                            lv_obj_set_style_text_font(c_label_143, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_20", "lv_font_t")), LV_PART_MAIN);
-                            lv_obj_add_style(c_label_143, &c_border_top_btm_10, 0);
-                            c_grid_obj_144 = lv_obj_create(c_obj_142);
-                            lv_obj_add_style(c_grid_obj_144, &c_container_2, 0);
-                            lv_obj_set_width(c_grid_obj_144, LV_PCT(100));
-                            lv_obj_set_height(c_grid_obj_144, LV_SIZE_CONTENT);
-                            // Children of c_grid_obj_144 (obj) with path prefix 'main'
-                                c_label_147 = lv_label_create(c_grid_obj_144);
-                                lv_label_set_text(c_label_147, "S");
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_147
-                                lv_obj_set_style_text_font(c_label_147, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
-                                lv_obj_set_grid_cell(c_label_147, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, 0, 1);
-                                lv_obj_set_height(c_label_147, LV_SIZE_CONTENT);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_left on c_label_147
-                                lv_obj_set_style_pad_left(c_label_147, 10, LV_PART_MAIN);
-                                c_label_148 = lv_label_create(c_grid_obj_144);
-                                lv_obj_set_grid_cell(c_label_148, LV_GRID_ALIGN_END, 1, 1, LV_GRID_ALIGN_END, 0, 1);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_148
-                                lv_obj_set_style_text_font(c_label_148, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
-                                lv_obj_set_height(c_label_148, LV_SIZE_CONTENT);
-                                lv_label_set_text(c_label_148, "1000");
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_right on c_label_148
-                                lv_obj_set_style_pad_right(c_label_148, 10, LV_PART_MAIN);
-                            lv_obj_set_grid_dsc_array(c_grid_obj_144, c_coord_array_145, c_coord_array_146);
-                            c_obj_149 = lv_obj_create(c_obj_142);
-                            lv_obj_set_layout(c_obj_149, LV_LAYOUT_FLEX);
-                            lv_obj_set_flex_flow(c_obj_149, LV_FLEX_FLOW_COLUMN);
-                            lv_obj_add_style(c_obj_149, &c_container_2, 0);
-                            lv_obj_set_width(c_obj_149, LV_PCT(100));
-                            lv_obj_set_height(c_obj_149, LV_SIZE_CONTENT);
-                            // Children of c_obj_149 (obj) with path prefix 'main'
-                                c_bar_150 = lv_bar_create(c_obj_149);
-                                lv_obj_set_width(c_bar_150, LV_PCT(100));
-                                lv_obj_set_height(c_bar_150, 15);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_left on c_bar_150
-                                lv_obj_set_style_margin_left(c_bar_150, 15, LV_PART_MAIN);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_right on c_bar_150
-                                lv_obj_set_style_margin_right(c_bar_150, 15, LV_PART_MAIN);
-                                lv_obj_add_style(c_bar_150, &c_bar_indicator_3, LV_PART_MAIN);
-                                lv_obj_add_style(c_bar_150, &c_bar_indicator_3, LV_PART_INDICATOR);
-                                lv_bar_set_value(c_bar_150, 65, 0);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_bg_color on c_bar_150
-                                lv_obj_set_style_bg_color(c_bar_150, lv_color_hex(0x5DD555), LV_PART_MAIN);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_bg_opa on c_bar_150
-                                lv_obj_set_style_bg_opa(c_bar_150, 255, LV_PART_MAIN);
-                                c_scale_151 = lv_scale_create(c_obj_149);
-                                lv_obj_set_width(c_scale_151, LV_PCT(100));
-                                lv_obj_set_height(c_scale_151, 18);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_left on c_scale_151
-                                lv_obj_set_style_margin_left(c_scale_151, 15, LV_PART_MAIN);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_right on c_scale_151
-                                lv_obj_set_style_margin_right(c_scale_151, 15, LV_PART_MAIN);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_scale_151
-                                lv_obj_set_style_text_font(c_scale_151, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_12", "lv_font_t")), LV_PART_MAIN);
-                        c_obj_152 = lv_obj_create(c_obj_141);
-                        lv_obj_set_layout(c_obj_152, LV_LAYOUT_FLEX);
-                        lv_obj_add_style(c_obj_152, &c_container_2, 0);
-                        lv_obj_set_flex_flow(c_obj_152, LV_FLEX_FLOW_COLUMN);
-                        lv_obj_set_width(c_obj_152, LV_SIZE_CONTENT);
-                        lv_obj_set_height(c_obj_152, LV_SIZE_CONTENT);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_right on c_obj_152
-                        lv_obj_set_style_pad_right(c_obj_152, 0, LV_PART_MAIN);
-                        lv_obj_set_flex_align(c_obj_152, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_CENTER);
-                        // Children of c_obj_152 (obj) with path prefix 'main'
-                            c_label_153 = lv_label_create(c_obj_152);
-                            lv_label_set_text(c_label_153, "/MIN");
-                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_153
-                            lv_obj_set_style_text_font(c_label_153, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_20", "lv_font_t")), LV_PART_MAIN);
-                            lv_obj_add_style(c_label_153, &c_border_top_btm_10, 0);
-                            c_label_154 = lv_label_create(c_obj_152);
-                            lv_label_set_text(c_label_154, "Speed Ovr");
-                            c_label_155 = lv_label_create(c_obj_152);
-                            lv_label_set_text(c_label_155, "100%%");
-                            c_label_156 = lv_label_create(c_obj_152);
-                            lv_label_set_text(c_label_156, "65%%");
+                    c_obj_65 = lv_obj_create(c_obj_48);
+                    lv_obj_set_size(c_obj_65, LV_PCT(100), LV_PCT(100));
+                    lv_obj_add_style(c_obj_65, &c_container_2, 0);
+                    lv_obj_set_layout(c_obj_65, LV_LAYOUT_FLEX);
+                    lv_obj_set_flex_flow(c_obj_65, LV_FLEX_FLOW_ROW);
+                    lv_obj_set_height(c_obj_65, LV_SIZE_CONTENT);
+                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_column on c_obj_65
+                    lv_obj_set_style_pad_column(c_obj_65, 0, LV_PART_MAIN);
+                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_bottom on c_obj_65
+                    lv_obj_set_style_pad_bottom(c_obj_65, 12, LV_PART_MAIN);
+                    // Children of c_obj_65 (obj) with path prefix 'main'
+                        c_obj_66 = lv_obj_create(c_obj_65);
+                        lv_obj_set_layout(c_obj_66, LV_LAYOUT_FLEX);
+                        lv_obj_add_style(c_obj_66, &c_container_2, 0);
+                        lv_obj_set_flex_flow(c_obj_66, LV_FLEX_FLOW_COLUMN);
+                        lv_obj_set_width(c_obj_66, LV_PCT(100));
+                        lv_obj_set_height(c_obj_66, LV_SIZE_CONTENT);
+                        lv_obj_set_flex_grow(c_obj_66, 1);
+                        // Children of c_obj_66 (obj) with path prefix 'main'
+                            c_label_67 = lv_label_create(c_obj_66);
+                            lv_label_set_text(c_label_67, "SPEED");
+                            lv_obj_set_height(c_label_67, LV_SIZE_CONTENT);
+                            lv_obj_set_width(c_label_67, LV_PCT(100));
+                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_67
+                            lv_obj_set_style_text_font(c_label_67, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_20", "lv_font_t")), LV_PART_MAIN);
+                            lv_obj_add_style(c_label_67, &c_border_top_btm_10, 0);
+                            c_grid_obj_68 = lv_obj_create(c_obj_66);
+                            lv_obj_add_style(c_grid_obj_68, &c_container_2, 0);
+                            lv_obj_set_width(c_grid_obj_68, LV_PCT(100));
+                            lv_obj_set_height(c_grid_obj_68, LV_SIZE_CONTENT);
+                            // Children of c_grid_obj_68 (obj) with path prefix 'main'
+                                c_label_71 = lv_label_create(c_grid_obj_68);
+                                lv_label_set_text(c_label_71, "S");
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_71
+                                lv_obj_set_style_text_font(c_label_71, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
+                                lv_obj_set_grid_cell(c_label_71, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, 0, 1);
+                                lv_obj_set_height(c_label_71, LV_SIZE_CONTENT);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_left on c_label_71
+                                lv_obj_set_style_pad_left(c_label_71, 10, LV_PART_MAIN);
+                                c_label_72 = lv_label_create(c_grid_obj_68);
+                                lv_obj_set_grid_cell(c_label_72, LV_GRID_ALIGN_END, 1, 1, LV_GRID_ALIGN_END, 0, 1);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_72
+                                lv_obj_set_style_text_font(c_label_72, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_30", "lv_font_t")), LV_PART_MAIN);
+                                lv_obj_set_height(c_label_72, LV_SIZE_CONTENT);
+                                lv_label_set_text(c_label_72, "1000");
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_right on c_label_72
+                                lv_obj_set_style_pad_right(c_label_72, 10, LV_PART_MAIN);
+                            lv_obj_set_grid_dsc_array(c_grid_obj_68, c_coord_array_69, c_coord_array_70);
+                            c_obj_73 = lv_obj_create(c_obj_66);
+                            lv_obj_set_layout(c_obj_73, LV_LAYOUT_FLEX);
+                            lv_obj_set_flex_flow(c_obj_73, LV_FLEX_FLOW_COLUMN);
+                            lv_obj_add_style(c_obj_73, &c_container_2, 0);
+                            lv_obj_set_width(c_obj_73, LV_PCT(100));
+                            lv_obj_set_height(c_obj_73, LV_SIZE_CONTENT);
+                            // Children of c_obj_73 (obj) with path prefix 'main'
+                                c_bar_74 = lv_bar_create(c_obj_73);
+                                lv_obj_set_width(c_bar_74, LV_PCT(100));
+                                lv_obj_set_height(c_bar_74, 15);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_left on c_bar_74
+                                lv_obj_set_style_margin_left(c_bar_74, 15, LV_PART_MAIN);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_right on c_bar_74
+                                lv_obj_set_style_margin_right(c_bar_74, 15, LV_PART_MAIN);
+                                lv_obj_add_style(c_bar_74, &c_bar_indicator_3, LV_PART_MAIN);
+                                lv_obj_add_style(c_bar_74, &c_bar_indicator_3, LV_PART_INDICATOR);
+                                lv_bar_set_value(c_bar_74, 65, 0);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_bg_color on c_bar_74
+                                lv_obj_set_style_bg_color(c_bar_74, lv_color_hex(0x5DD555), LV_PART_MAIN);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_bg_opa on c_bar_74
+                                lv_obj_set_style_bg_opa(c_bar_74, 255, LV_PART_MAIN);
+                                c_scale_75 = lv_scale_create(c_obj_73);
+                                lv_obj_set_width(c_scale_75, LV_PCT(100));
+                                lv_obj_set_height(c_scale_75, 18);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_left on c_scale_75
+                                lv_obj_set_style_margin_left(c_scale_75, 15, LV_PART_MAIN);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_margin_right on c_scale_75
+                                lv_obj_set_style_margin_right(c_scale_75, 15, LV_PART_MAIN);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_scale_75
+                                lv_obj_set_style_text_font(c_scale_75, ((lv_font_t *)lvgl_json_get_registered_ptr("font_montserrat_12", "lv_font_t")), LV_PART_MAIN);
+                        c_obj_76 = lv_obj_create(c_obj_65);
+                        lv_obj_set_layout(c_obj_76, LV_LAYOUT_FLEX);
+                        lv_obj_add_style(c_obj_76, &c_container_2, 0);
+                        lv_obj_set_flex_flow(c_obj_76, LV_FLEX_FLOW_COLUMN);
+                        lv_obj_set_width(c_obj_76, LV_SIZE_CONTENT);
+                        lv_obj_set_height(c_obj_76, LV_SIZE_CONTENT);
+                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_right on c_obj_76
+                        lv_obj_set_style_pad_right(c_obj_76, 0, LV_PART_MAIN);
+                        lv_obj_set_flex_align(c_obj_76, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_CENTER);
+                        // Children of c_obj_76 (obj) with path prefix 'main'
+                            c_label_77 = lv_label_create(c_obj_76);
+                            lv_label_set_text(c_label_77, "/MIN");
+                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_77
+                            lv_obj_set_style_text_font(c_label_77, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_20", "lv_font_t")), LV_PART_MAIN);
+                            lv_obj_add_style(c_label_77, &c_border_top_btm_10, 0);
+                            c_label_78 = lv_label_create(c_obj_76);
+                            lv_label_set_text(c_label_78, "Speed Ovr");
+                            c_label_79 = lv_label_create(c_obj_76);
+                            lv_label_set_text(c_label_79, "100%%");
+                            c_label_80 = lv_label_create(c_obj_76);
+                            lv_label_set_text(c_label_80, "65%%");
                     // Using view component 'jog_feed'
-                    c_obj_157 = lv_obj_create(c_obj_124);
-                    lv_obj_set_size(c_obj_157, LV_PCT(100), LV_PCT(100));
-                    lv_obj_add_style(c_obj_157, &c_container_2, 0);
-                    lv_obj_set_layout(c_obj_157, LV_LAYOUT_FLEX);
-                    lv_obj_set_flex_flow(c_obj_157, LV_FLEX_FLOW_ROW);
-                    lv_obj_set_height(c_obj_157, LV_SIZE_CONTENT);
-                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_column on c_obj_157
-                    lv_obj_set_style_pad_column(c_obj_157, 0, LV_PART_MAIN);
-                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_bottom on c_obj_157
-                    lv_obj_set_style_pad_bottom(c_obj_157, 0, LV_PART_MAIN);
-                    // Children of c_obj_157 (obj) with path prefix 'main'
-                        c_obj_158 = lv_obj_create(c_obj_157);
-                        lv_obj_set_layout(c_obj_158, LV_LAYOUT_FLEX);
-                        lv_obj_add_style(c_obj_158, &c_container_2, 0);
-                        lv_obj_set_flex_flow(c_obj_158, LV_FLEX_FLOW_COLUMN);
-                        lv_obj_set_width(c_obj_158, LV_PCT(100));
-                        lv_obj_set_height(c_obj_158, LV_SIZE_CONTENT);
-                        lv_obj_set_flex_grow(c_obj_158, 1);
-                        // Children of c_obj_158 (obj) with path prefix 'main'
-                            c_label_159 = lv_label_create(c_obj_158);
-                            lv_label_set_text(c_label_159, "JOG");
-                            lv_obj_set_height(c_label_159, LV_SIZE_CONTENT);
-                            lv_obj_set_width(c_label_159, LV_PCT(100));
-                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_159
-                            lv_obj_set_style_text_font(c_label_159, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_20", "lv_font_t")), LV_PART_MAIN);
-                            lv_obj_add_style(c_label_159, &c_border_top_btm_10, 0);
-                            c_grid_obj_160 = lv_obj_create(c_obj_158);
-                            lv_obj_add_style(c_grid_obj_160, &c_container_2, 0);
-                            lv_obj_set_width(c_grid_obj_160, LV_PCT(100));
-                            lv_obj_set_height(c_grid_obj_160, LV_SIZE_CONTENT);
-                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_left on c_grid_obj_160
-                            lv_obj_set_style_pad_left(c_grid_obj_160, 10, LV_PART_MAIN);
-                            // Children of c_grid_obj_160 (obj) with path prefix 'main'
-                                c_label_163 = lv_label_create(c_grid_obj_160);
-                                lv_label_set_text(c_label_163, "XY");
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_163
-                                lv_obj_set_style_text_font(c_label_163, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_24", "lv_font_t")), LV_PART_MAIN);
-                                lv_obj_set_grid_cell(c_label_163, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_START, 0, 1);
-                                lv_obj_set_height(c_label_163, LV_SIZE_CONTENT);
-                                c_label_164 = lv_label_create(c_grid_obj_160);
-                                lv_obj_set_grid_cell(c_label_164, LV_GRID_ALIGN_START, 1, 1, LV_GRID_ALIGN_START, 0, 1);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_164
-                                lv_obj_set_style_text_font(c_label_164, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_24", "lv_font_t")), LV_PART_MAIN);
-                                lv_obj_set_height(c_label_164, LV_SIZE_CONTENT);
-                                lv_label_set_text(c_label_164, "10");
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_right on c_label_164
-                                lv_obj_set_style_pad_right(c_label_164, 10, LV_PART_MAIN);
-                                lv_obj_add_style(c_label_164, &c_border_right_11, 0);
-                                lv_obj_add_style(c_label_164, &c_indicator_yellow_8, 0);
-                                c_label_165 = lv_label_create(c_grid_obj_160);
-                                lv_label_set_text(c_label_165, "Z");
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_165
-                                lv_obj_set_style_text_font(c_label_165, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_24", "lv_font_t")), LV_PART_MAIN);
-                                lv_obj_set_grid_cell(c_label_165, LV_GRID_ALIGN_START, 2, 1, LV_GRID_ALIGN_START, 0, 1);
-                                lv_obj_set_height(c_label_165, LV_SIZE_CONTENT);
-                                c_label_166 = lv_label_create(c_grid_obj_160);
-                                lv_obj_set_grid_cell(c_label_166, LV_GRID_ALIGN_START, 3, 1, LV_GRID_ALIGN_START, 0, 1);
-                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_166
-                                lv_obj_set_style_text_font(c_label_166, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_24", "lv_font_t")), LV_PART_MAIN);
-                                lv_obj_set_height(c_label_166, LV_SIZE_CONTENT);
-                                lv_label_set_text(c_label_166, " 5");
-                                lv_obj_add_style(c_label_166, &c_indicator_yellow_8, 0);
-                                lv_obj_add_event_cb(c_label_166, ((lv_event_cb_t)lvgl_json_get_registered_ptr("btn_clicked", "lv_event_cb_t")), LV_EVENT_CLICKED, NULL);
-                            lv_obj_set_grid_dsc_array(c_grid_obj_160, c_coord_array_161, c_coord_array_162);
-                        c_obj_167 = lv_obj_create(c_obj_157);
-                        lv_obj_set_layout(c_obj_167, LV_LAYOUT_FLEX);
-                        lv_obj_add_style(c_obj_167, &c_container_2, 0);
-                        lv_obj_set_flex_flow(c_obj_167, LV_FLEX_FLOW_COLUMN);
-                        lv_obj_set_width(c_obj_167, LV_SIZE_CONTENT);
-                        lv_obj_set_height(c_obj_167, LV_SIZE_CONTENT);
-                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_right on c_obj_167
-                        lv_obj_set_style_pad_right(c_obj_167, 0, LV_PART_MAIN);
-                        // Children of c_obj_167 (obj) with path prefix 'main'
-                            c_label_168 = lv_label_create(c_obj_167);
-                            lv_label_set_text(c_label_168, "MM");
-                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_168
-                            lv_obj_set_style_text_font(c_label_168, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_20", "lv_font_t")), LV_PART_MAIN);
-                            lv_obj_add_style(c_label_168, &c_border_top_btm_10, 0);
-                            c_label_169 = lv_label_create(c_obj_167);
-                            lv_label_set_text(c_label_169, "Jog Ovr");
-                            c_label_170 = lv_label_create(c_obj_167);
-                            lv_label_set_text(c_label_170, "100%%");
+                    c_obj_81 = lv_obj_create(c_obj_48);
+                    lv_obj_set_size(c_obj_81, LV_PCT(100), LV_PCT(100));
+                    lv_obj_add_style(c_obj_81, &c_container_2, 0);
+                    lv_obj_set_layout(c_obj_81, LV_LAYOUT_FLEX);
+                    lv_obj_set_flex_flow(c_obj_81, LV_FLEX_FLOW_ROW);
+                    lv_obj_set_height(c_obj_81, LV_SIZE_CONTENT);
+                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_column on c_obj_81
+                    lv_obj_set_style_pad_column(c_obj_81, 0, LV_PART_MAIN);
+                    // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_bottom on c_obj_81
+                    lv_obj_set_style_pad_bottom(c_obj_81, 0, LV_PART_MAIN);
+                    // Children of c_obj_81 (obj) with path prefix 'main'
+                        c_obj_82 = lv_obj_create(c_obj_81);
+                        lv_obj_set_layout(c_obj_82, LV_LAYOUT_FLEX);
+                        lv_obj_add_style(c_obj_82, &c_container_2, 0);
+                        lv_obj_set_flex_flow(c_obj_82, LV_FLEX_FLOW_COLUMN);
+                        lv_obj_set_width(c_obj_82, LV_PCT(100));
+                        lv_obj_set_height(c_obj_82, LV_SIZE_CONTENT);
+                        lv_obj_set_flex_grow(c_obj_82, 1);
+                        // Children of c_obj_82 (obj) with path prefix 'main'
+                            c_label_83 = lv_label_create(c_obj_82);
+                            lv_label_set_text(c_label_83, "JOG");
+                            lv_obj_set_height(c_label_83, LV_SIZE_CONTENT);
+                            lv_obj_set_width(c_label_83, LV_PCT(100));
+                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_83
+                            lv_obj_set_style_text_font(c_label_83, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_20", "lv_font_t")), LV_PART_MAIN);
+                            lv_obj_add_style(c_label_83, &c_border_top_btm_10, 0);
+                            c_grid_obj_84 = lv_obj_create(c_obj_82);
+                            lv_obj_add_style(c_grid_obj_84, &c_container_2, 0);
+                            lv_obj_set_width(c_grid_obj_84, LV_PCT(100));
+                            lv_obj_set_height(c_grid_obj_84, LV_SIZE_CONTENT);
+                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_left on c_grid_obj_84
+                            lv_obj_set_style_pad_left(c_grid_obj_84, 10, LV_PART_MAIN);
+                            // Children of c_grid_obj_84 (obj) with path prefix 'main'
+                                c_label_87 = lv_label_create(c_grid_obj_84);
+                                lv_label_set_text(c_label_87, "XY");
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_87
+                                lv_obj_set_style_text_font(c_label_87, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_24", "lv_font_t")), LV_PART_MAIN);
+                                lv_obj_set_grid_cell(c_label_87, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_START, 0, 1);
+                                lv_obj_set_height(c_label_87, LV_SIZE_CONTENT);
+                                c_label_88 = lv_label_create(c_grid_obj_84);
+                                lv_obj_set_grid_cell(c_label_88, LV_GRID_ALIGN_START, 1, 1, LV_GRID_ALIGN_START, 0, 1);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_88
+                                lv_obj_set_style_text_font(c_label_88, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_24", "lv_font_t")), LV_PART_MAIN);
+                                lv_obj_set_height(c_label_88, LV_SIZE_CONTENT);
+                                lv_label_set_text(c_label_88, "10");
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_right on c_label_88
+                                lv_obj_set_style_pad_right(c_label_88, 10, LV_PART_MAIN);
+                                lv_obj_add_style(c_label_88, &c_border_right_11, 0);
+                                lv_obj_add_style(c_label_88, &c_indicator_yellow_8, 0);
+                                c_label_89 = lv_label_create(c_grid_obj_84);
+                                lv_label_set_text(c_label_89, "Z");
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_89
+                                lv_obj_set_style_text_font(c_label_89, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_24", "lv_font_t")), LV_PART_MAIN);
+                                lv_obj_set_grid_cell(c_label_89, LV_GRID_ALIGN_START, 2, 1, LV_GRID_ALIGN_START, 0, 1);
+                                lv_obj_set_height(c_label_89, LV_SIZE_CONTENT);
+                                c_label_90 = lv_label_create(c_grid_obj_84);
+                                lv_obj_set_grid_cell(c_label_90, LV_GRID_ALIGN_START, 3, 1, LV_GRID_ALIGN_START, 0, 1);
+                                // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_90
+                                lv_obj_set_style_text_font(c_label_90, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_24", "lv_font_t")), LV_PART_MAIN);
+                                lv_obj_set_height(c_label_90, LV_SIZE_CONTENT);
+                                lv_label_set_text(c_label_90, " 5");
+                                lv_obj_add_style(c_label_90, &c_indicator_yellow_8, 0);
+                                lv_obj_add_event_cb(c_label_90, ((lv_event_cb_t)lvgl_json_get_registered_ptr("btn_clicked", "lv_event_cb_t")), LV_EVENT_CLICKED, NULL);
+                            lv_obj_set_grid_dsc_array(c_grid_obj_84, c_coord_array_85, c_coord_array_86);
+                        c_obj_91 = lv_obj_create(c_obj_81);
+                        lv_obj_set_layout(c_obj_91, LV_LAYOUT_FLEX);
+                        lv_obj_add_style(c_obj_91, &c_container_2, 0);
+                        lv_obj_set_flex_flow(c_obj_91, LV_FLEX_FLOW_COLUMN);
+                        lv_obj_set_width(c_obj_91, LV_SIZE_CONTENT);
+                        lv_obj_set_height(c_obj_91, LV_SIZE_CONTENT);
+                        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_pad_right on c_obj_91
+                        lv_obj_set_style_pad_right(c_obj_91, 0, LV_PART_MAIN);
+                        // Children of c_obj_91 (obj) with path prefix 'main'
+                            c_label_92 = lv_label_create(c_obj_91);
+                            lv_label_set_text(c_label_92, "MM");
+                            // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_text_font on c_label_92
+                            lv_obj_set_style_text_font(c_label_92, ((lv_font_t *)lvgl_json_get_registered_ptr("font_kode_20", "lv_font_t")), LV_PART_MAIN);
+                            lv_obj_add_style(c_label_92, &c_border_top_btm_10, 0);
+                            c_label_93 = lv_label_create(c_obj_91);
+                            lv_label_set_text(c_label_93, "Jog Ovr");
+                            c_label_94 = lv_label_create(c_obj_91);
+                            lv_label_set_text(c_label_94, "100%%");
     } else {
         // WARNING: 'with.obj' for c_tileview_14 resolved to NULL. 'do' block not applied.
     }
     // Using view component 'nav_action_button'
-    c_dropdown_171 = lv_dropdown_create(parent_obj);
-    lv_obj_add_style(c_dropdown_171, &c_action_button_13, 0);
-    lv_dropdown_set_options(c_dropdown_171, " Jog\n Probe\n Status\n X\n y\n Z\n Off");
-    lv_obj_align(c_dropdown_171, LV_ALIGN_BOTTOM_LEFT, 20, -10);
-    lv_obj_add_flag(c_dropdown_171, LV_OBJ_FLAG_FLOATING);
-    lv_dropdown_set_text(c_dropdown_171, "");
-    lv_dropdown_set_symbol(c_dropdown_171, NULL);
-    lv_obj_move_foreground(c_dropdown_171);
-    c_with_target_172 = lv_dropdown_get_list(c_dropdown_171);
-    if (c_with_target_172) { // Check if 'with.obj' for c_dropdown_171 resolved
-        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_min_width on c_with_target_172
-        lv_obj_set_style_min_width(c_with_target_172, 200, LV_PART_MAIN);
+    c_dropdown_95 = lv_dropdown_create(parent_obj);
+    lv_obj_add_style(c_dropdown_95, &c_action_button_13, 0);
+    lv_dropdown_set_options(c_dropdown_95, " Jog\n Probe\n Status\n X\n y\n Z\n Off");
+    lv_obj_align(c_dropdown_95, LV_ALIGN_BOTTOM_LEFT, 20, -10);
+    lv_obj_add_flag(c_dropdown_95, LV_OBJ_FLAG_FLOATING);
+    lv_dropdown_set_text(c_dropdown_95, "");
+    lv_dropdown_set_symbol(c_dropdown_95, NULL);
+    lv_obj_move_foreground(c_dropdown_95);
+    c_with_target_96 = lv_dropdown_get_list(c_dropdown_95);
+    if (c_with_target_96) { // Check if 'with.obj' for c_dropdown_95 resolved
+        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_min_width on c_with_target_96
+        lv_obj_set_style_min_width(c_with_target_96, 200, LV_PART_MAIN);
     } else {
-        // WARNING: 'with.obj' for c_dropdown_171 resolved to NULL. 'do' block not applied.
+        // WARNING: 'with.obj' for c_dropdown_95 resolved to NULL. 'do' block not applied.
     }
     // Using view component 'jog_action_button'
-    c_dropdown_173 = lv_dropdown_create(parent_obj);
-    lv_dropdown_set_options(c_dropdown_173, " Home\n Zero\n G54\n G55\n G56\n G57\n G58");
-    lv_obj_add_style(c_dropdown_173, &c_action_button_13, 0);
-    lv_obj_align(c_dropdown_173, LV_ALIGN_BOTTOM_LEFT, 90, -10);
-    lv_obj_add_flag(c_dropdown_173, LV_OBJ_FLAG_FLOATING);
-    lv_dropdown_set_text(c_dropdown_173, "");
-    lv_dropdown_set_symbol(c_dropdown_173, NULL);
-    lv_obj_move_foreground(c_dropdown_173);
-    lvgl_json_register_ptr("jog_action_button", "lv_dropdown_t", (void*)c_dropdown_173);
-    c_with_target_174 = lv_dropdown_get_list(c_dropdown_173);
-    if (c_with_target_174) { // Check if 'with.obj' for c_dropdown_173 resolved
-        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_min_width on c_with_target_174
-        lv_obj_set_style_min_width(c_with_target_174, 200, LV_PART_MAIN);
+    c_dropdown_97 = lv_dropdown_create(parent_obj);
+    lv_dropdown_set_options(c_dropdown_97, " Home\n Zero\n G54\n G55\n G56\n G57\n G58");
+    lv_obj_add_style(c_dropdown_97, &c_action_button_13, 0);
+    lv_obj_align(c_dropdown_97, LV_ALIGN_BOTTOM_LEFT, 90, -10);
+    lv_obj_add_flag(c_dropdown_97, LV_OBJ_FLAG_FLOATING);
+    lv_dropdown_set_text(c_dropdown_97, "");
+    lv_dropdown_set_symbol(c_dropdown_97, NULL);
+    lv_obj_move_foreground(c_dropdown_97);
+    lvgl_json_register_ptr("jog_action_button", "lv_dropdown_t", (void*)c_dropdown_97);
+    c_with_target_98 = lv_dropdown_get_list(c_dropdown_97);
+    if (c_with_target_98) { // Check if 'with.obj' for c_dropdown_97 resolved
+        // INFO: Adding default selector LV_PART_MAIN (0) for lv_obj_set_style_min_width on c_with_target_98
+        lv_obj_set_style_min_width(c_with_target_98, 200, LV_PART_MAIN);
     } else {
-        // WARNING: 'with.obj' for c_dropdown_173 resolved to NULL. 'do' block not applied.
+        // WARNING: 'with.obj' for c_dropdown_97 resolved to NULL. 'do' block not applied.
     }
 }

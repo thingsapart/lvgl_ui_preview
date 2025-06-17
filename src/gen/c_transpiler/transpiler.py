@@ -428,6 +428,62 @@ class CTranspiler:
                 self._add_impl(f"}}")
                 continue
 
+            # --- Action Attribute ---
+            if prop_json_name == "action":
+                if target_is_widget:
+                    if isinstance(prop_value_node, str):
+                        action_val_c_str = self._format_c_value(prop_value_node, "const char *", target_c_entity_var_name, current_context)
+                        self._add_impl(f"if (REGISTRY) {{")
+                        self.current_indent_level += 1
+                        self._add_impl(f"lv_event_cb_t evt_cb = action_registry_get_handler_s(REGISTRY, {action_val_c_str});")
+                        self._add_impl(f"if (evt_cb) {{")
+                        self.current_indent_level += 1
+                        self._add_impl(f"lv_obj_add_event_cb({target_c_entity_var_name}, evt_cb, LV_EVENT_ALL, NULL);")
+                        self.current_indent_level -= 1
+                        self._add_impl(f"}} else {{")
+                        self.current_indent_level += 1
+                        self._add_impl(f"LV_LOG_WARN(\"Action '%s' not found in registry.\", {action_val_c_str});")
+                        self.current_indent_level -= 1
+                        self._add_impl(f"}}")
+                        self.current_indent_level -= 1
+                        self._add_impl(f"}} else {{")
+                        self.current_indent_level += 1
+                        self._add_impl(f"LV_LOG_ERROR(\"REGISTRY is NULL, cannot process 'action' for {target_c_entity_var_name}.\");")
+                        self.current_indent_level -= 1
+                        self._add_impl(f"}}")
+                    else:
+                        self._add_impl(f"// WARNING: 'action' property for {target_c_entity_var_name} is not a string. Value: {prop_value_node}")
+                else:
+                    self._add_impl(f"// WARNING: 'action' property can only be applied to widgets. Target: {target_c_entity_var_name}")
+                continue
+
+            # --- Observes Attribute ---
+            if prop_json_name == "observes":
+                if target_is_widget:
+                    if isinstance(prop_value_node, CJSONObject):
+                        obs_value_item_node = prop_value_node.get("value")
+                        obs_format_item_node = prop_value_node.get("format")
+                        if obs_value_item_node is not None and obs_format_item_node is not None and \
+                           isinstance(obs_value_item_node, str) and isinstance(obs_format_item_node, str):
+                            obs_value_c_str = self._format_c_value(obs_value_item_node, "const char *", target_c_entity_var_name, current_context)
+                            obs_format_c_str = self._format_c_value(obs_format_item_node, "const char *", target_c_entity_var_name, current_context)
+                            self._add_impl(f"if (REGISTRY) {{")
+                            self.current_indent_level += 1
+                            self._add_impl(f"data_binding_register_widget_s(REGISTRY, {obs_value_c_str}, {target_c_entity_var_name}, {obs_format_c_str});")
+                            self.current_indent_level -= 1
+                            self._add_impl(f"}} else {{")
+                            self.current_indent_level += 1
+                            self._add_impl(f"LV_LOG_ERROR(\"REGISTRY is NULL, cannot process 'observes' for {target_c_entity_var_name}.\");")
+                            self.current_indent_level -= 1
+                            self._add_impl(f"}}")
+                        else:
+                            self._add_impl(f"// WARNING: 'observes' object for {target_c_entity_var_name} must have string properties 'value' and 'format'. Found value: '{obs_value_item_node}', format: '{obs_format_item_node}'.")
+                    else:
+                        self._add_impl(f"// WARNING: 'observes' property for {target_c_entity_var_name} is not an object. Value: {prop_value_node}")
+                else:
+                    self._add_impl(f"// WARNING: 'observes' property can only be applied to widgets. Target: {target_c_entity_var_name}")
+                continue
+
             # --- Standard Setter Logic ---
             setter_func_name = None
             found_setter_api_def = None
@@ -793,6 +849,8 @@ class CTranspiler:
         self._add_predecl(f"#define LV_LOG_ERROR(...) // Log stub", indent=False)
         self._add_predecl(f"#endif", indent=False)
 
+        self._add_predecl(f"#include \"data_binding.h\" // For action/observes attributes", indent=False)
+        self._add_predecl(f"extern data_binding_registry_t* REGISTRY; // Global registry for actions and data bindings", indent=False)
         self._add_predecl(f"extern void lvgl_json_register_ptr(const char *name, const char *type_name, void *ptr);", indent=False)
         self._add_predecl(f"extern void* lvgl_json_get_registered_ptr(const char *name, const char *expected_type_name);", indent=False)
         self._add_predecl(f"", indent=False)

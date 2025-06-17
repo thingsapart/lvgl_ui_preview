@@ -540,10 +540,16 @@
   with:
     obj: { call: lv_tileview_add_tile, args: [0, 0, LV_DIR_RIGHT] }
     do:
+  with:
+    obj: { call: lv_tileview_add_tile, args: [0, 0, LV_DIR_RIGHT] }
+    do:
       add_style: ['@container', 0]
+      bg_color: '#ff0000'
+      bg_opa: LV_OPA_COVER
       children:
-        - type: use-view
-          id: '@jog_view'
+        - type: label
+          center: []
+          text: 'Scroll right'
   with:
     obj: { call: lv_tileview_add_tile, args: [1, 0, LV_DIR_LEFT] }
     do:

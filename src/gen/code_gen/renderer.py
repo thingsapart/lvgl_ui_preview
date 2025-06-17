@@ -9,8 +9,9 @@ def generate_renderer(custom_creators_map):
     # custom_creators_map: {'style': 'lv_style_create_managed', ...}
 
     c_code = "// --- JSON UI Renderer ---\n\n"
-    c_code += "#include <stdio.h> // For debug prints\n\n"
-
+    c_code += "#include <stdio.h> // For debug prints\n"
+    c_code += "#include \"data_binding.h\" // For action/observes attributes\n\n"
+    c_code += "extern data_binding_registry_t* REGISTRY; // Global registry for actions and data bindings\n\n"
     c_code += "// Forward declarations\n"
     c_code += "static void* render_json_node(cJSON *node, lv_obj_t *parent, const char *named_path_prefix);\n" # Return void*
     c_code += "static bool apply_setters_and_attributes(cJSON *attributes_json_obj, void *target_entity, const char *target_actual_type_str, const char *target_create_type_str, bool target_is_widget, lv_obj_t *parent_for_children_attr, const char *path_prefix_for_named_and_children, const char *default_type_name_for_registry_if_named);\n"
@@ -80,6 +81,67 @@ static bool apply_setters_and_attributes(
             continue;
         }
 
+        // Handle "action" attribute
+        if (strcmp(prop_name, "action") == 0) {
+            if (target_is_widget) {
+                if (cJSON_IsString(prop_item)) {
+                    char* action_val_str = NULL;
+                    // Use unmarshal_value to resolve potential context variables like $action_name
+                    if (unmarshal_value(prop_item, "char *", &action_val_str, target_entity)) {
+                        if (REGISTRY) {
+                            lv_event_cb_t evt_cb = action_registry_get_handler_s(REGISTRY, action_val_str);
+                            if (evt_cb) {
+                                lv_obj_add_event_cb((lv_obj_t*)target_entity, evt_cb, LV_EVENT_ALL, NULL);
+                            } else {
+                                LOG_WARN_JSON(prop_item, "Action '%s' not found in registry.", action_val_str);
+                            }
+                        } else {
+                            LOG_ERR_JSON(prop_item, "REGISTRY is NULL, cannot process 'action': %s", action_val_str);
+                        }
+                    } else {
+                        LOG_ERR_JSON(prop_item, "Failed to unmarshal 'action' string value.");
+                    }
+                } else {
+                    LOG_WARN_JSON(prop_item, "'action' property must be a string.");
+                }
+            } else {
+                LOG_WARN_JSON(prop_item, "'action' property can only be applied to widgets.");
+            }
+            continue;
+        }
+
+        // Handle "observes" attribute
+        if (strcmp(prop_name, "observes") == 0) {
+            if (target_is_widget) {
+                if (cJSON_IsObject(prop_item)) {
+                    cJSON* obs_value_item = cJSON_GetObjectItemCaseSensitive(prop_item, "value");
+                    cJSON* obs_format_item = cJSON_GetObjectItemCaseSensitive(prop_item, "format");
+                    if (obs_value_item && cJSON_IsString(obs_value_item) && obs_format_item && cJSON_IsString(obs_format_item)) {
+                        char* obs_value_str = NULL;
+                        char* obs_format_str = NULL;
+                        // Use unmarshal_value to resolve potential context variables
+                        bool val_ok = unmarshal_value(obs_value_item, "char *", &obs_value_str, target_entity);
+                        bool fmt_ok = unmarshal_value(obs_format_item, "char *", &obs_format_str, target_entity);
+                        if (val_ok && fmt_ok && obs_value_str && obs_format_str) {
+                            if (REGISTRY) {
+                                data_binding_register_widget_s(REGISTRY, obs_value_str, (lv_obj_t*)target_entity, obs_format_str);
+                            } else {
+                                LOG_ERR_JSON(prop_item, "REGISTRY is NULL, cannot process 'observes' for value: %s", obs_value_str);
+                            }
+                        } else {
+                            LOG_ERR_JSON(prop_item, "Failed to unmarshal 'value' or 'format' for 'observes'. val_ok:%d fmt_ok:%d", val_ok, fmt_ok);
+                        }
+                    } else {
+                        LOG_WARN_JSON(prop_item, "'observes' object must have string properties 'value' and 'format'.");
+                    }
+                } else {
+                    LOG_WARN_JSON(prop_item, "'observes' property must be an object.");
+                }
+            } else {
+                LOG_WARN_JSON(prop_item, "'observes' property can only be applied to widgets.");
+            }
+            continue;
+        }
 
         if (strcmp(prop_name, "named") == 0 && cJSON_IsString(prop_item)) {
             char *named_value_str = NULL;
