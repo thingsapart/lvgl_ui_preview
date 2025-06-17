@@ -606,17 +606,16 @@ def generate_unmarshal_value_to_c_string():
     c_code += "        // Fall through to general error handling for strings not meeting criteria.\n"
     c_code += "    }\n\n" // End of cJSON_IsString block
 
+    c_code += "    if (cJSON_IsObject(json_value) && cJSON_GetObjectItemCaseSensitive(json_value, \"call\")) {\n"
+    c_code += "        LOG_ERR_JSON(json_value, \"Transpile Error: 'call' object should be handled by invoker, not unmarshal_value_to_c_string directly when it's a direct argument.\");\n"
+    c_code += "        *dest_c_code_str = lv_strdup(\"/* ERROR_CALL_OBJ_UNEXPECTED_IN_UNMARSHAL_TO_C_STRING */\");\n"
+    c_code += "        return false;\n"
+    c_code += "    }\n\n"
+    // If it's an object but not a "call" object, it's an unhandled case for direct C string conversion.
     c_code += "    if (cJSON_IsObject(json_value)) {\n"
-    c_code += "        cJSON *call_item = cJSON_GetObjectItemCaseSensitive(json_value, \"call\");\n"
-    c_code += "        cJSON *args_item = cJSON_GetObjectItemCaseSensitive(json_value, \"args\");\n"
-    c_code += "        if (call_item && cJSON_IsString(call_item) && args_item && cJSON_IsArray(args_item)) {\n"
-    c_code += "            const char *func_name = call_item->valuestring;\n"
-    c_code += "            // Basic placeholder for call syntax. Full transpilation is complex.\n"
-    c_code += "            // TODO: Need to look up func_name in invoke_table, get arg types, recurse for each arg, then format call.\n"
-    c_code += "            snprintf(temp_buf, sizeof(temp_buf), \"/* TODO: Transpile call: %s(...) */\", func_name);\n"
-    c_code += "            *dest_c_code_str = lv_strdup(temp_buf);\n"
-    c_code += "            return (*dest_c_code_str != NULL);\n"
-    c_code += "        }\n"
+    c_code += "        LOG_ERR_JSON(json_value, \"Transpile Unmarshal Error: Cannot convert generic JSON object to C string for type '%s' unless it's a 'call' handled by invoker.\", expected_c_type);\n"
+    c_code += "        *dest_c_code_str = lv_strdup(\"/* ERROR_GENERIC_OBJECT_UNEXPECTED */\");\n"
+    c_code += "        return false;\n"
     c_code += "    }\n\n"
 
     c_code += "    LOG_ERR_JSON(json_value, \"Transpile Unmarshal Error: Could not format value to C string for type '%s' (JSON type %d)\", expected_c_type, json_value->type);\n"

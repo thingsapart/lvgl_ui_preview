@@ -23,6 +23,73 @@ def generate_renderer(custom_creators_map):
     c_code += "static void set_current_context(cJSON* new_context);\n"
     c_code += "static cJSON* get_current_context(void); // Already declared in source template, but good for clarity\n"
 
+    c_code += """
+// Helper function to sanitize a base filename for C identifiers and header guards
+static void sanitize_output_base_name_for_c_ids(
+    const char* output_c_filename_base,
+    char* sanitized_name_out, size_t sanitized_name_out_len,
+    char* sanitized_name_upper_out, size_t sanitized_name_upper_out_len
+) {
+    if (!output_c_filename_base || !sanitized_name_out || !sanitized_name_upper_out || sanitized_name_out_len == 0 || sanitized_name_upper_out_len == 0) {
+        if (sanitized_name_out && sanitized_name_out_len > 0) { strncpy(sanitized_name_out, "default_ui_name", sanitized_name_out_len -1); sanitized_name_out[sanitized_name_out_len-1] = '\\0'; }
+        if (sanitized_name_upper_out && sanitized_name_upper_out_len > 0) { strncpy(sanitized_name_upper_out, "DEFAULT_UI_NAME", sanitized_name_upper_out_len -1); sanitized_name_upper_out[sanitized_name_upper_out_len-1] = '\\0';}
+        return;
+    }
+
+    char base_name_no_suffix[256];
+    const char *last_slash = strrchr(output_c_filename_base, '/');
+    const char *last_backslash = strrchr(output_c_filename_base, '\\\\'); // Escaped for C
+    const char *base_ptr = output_c_filename_base;
+
+    if (last_slash && (last_backslash == NULL || last_slash > last_backslash)) {
+        base_ptr = last_slash + 1;
+    } else if (last_backslash) {
+        base_ptr = last_backslash + 1;
+    }
+
+    strncpy(base_name_no_suffix, base_ptr, sizeof(base_name_no_suffix) - 1);
+    base_name_no_suffix[sizeof(base_name_no_suffix) - 1] = '\\0';
+
+    char *dot = strrchr(base_name_no_suffix, '.');
+    // More robust suffix stripping for common extensions
+    if (dot) {
+        const char* known_extensions[] = {".json", ".JSON", ".yaml", ".YAML", ".yml", ".YML", ".c", ".C", ".h", ".H", NULL};
+        for (int k=0; known_extensions[k] != NULL; ++k) {
+            if (strcmp(dot, known_extensions[k]) == 0) {
+                *dot = '\\0';
+                break;
+            }
+        }
+    }
+    base_ptr = base_name_no_suffix; // Use the (potentially) suffix-stripped name
+
+    int j = 0;
+    if (base_ptr[0] && isdigit((unsigned char)base_ptr[0]) && j < sanitized_name_out_len -1) {
+        sanitized_name_out[j++] = '_';
+    }
+    for (int i = 0; base_ptr[i] && j < sanitized_name_out_len - 1; ++i) {
+        if (isalnum((unsigned char)base_ptr[i]) || base_ptr[i] == '_') { // Allow underscore
+            sanitized_name_out[j++] = base_ptr[i];
+        } else {
+            sanitized_name_out[j++] = '_'; // Replace others with underscore
+        }
+    }
+    sanitized_name_out[j] = '\\0';
+
+    if (j == 0 || (j == 1 && sanitized_name_out[0] == '_')) { // Handle empty or all-invalid-char names
+        strncpy(sanitized_name_out, "default_ui_name", sanitized_name_out_len -1);
+        sanitized_name_out[sanitized_name_out_len-1] = '\\0';
+        j = strlen(sanitized_name_out); // Update j to new length
+    }
+
+    // Create uppercase version for header guard
+    int k_upper = 0;
+    for (int i_upper = 0; sanitized_name_out[i_upper] && k_upper < sanitized_name_upper_out_len - 1; ++i_upper) {
+        sanitized_name_upper_out[k_upper++] = toupper((unsigned char)sanitized_name_out[i_upper]);
+    }
+    sanitized_name_upper_out[k_upper] = '\\0';
+}
+"""
 
     # Include custom creator function prototypes
     for type_name, creator_func in custom_creators_map.items():
