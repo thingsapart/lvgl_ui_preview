@@ -34,38 +34,45 @@ def _generate_widget_create_invoker():
     """Generates the specific C invoker for lv_widget_create(parent) functions."""
     sig_c_name = "invoke_widget_create"
     # Updated signature: takes entry pointer
+    sig_c_name = "invoke_widget_create"
     c_code = f"// Specific Invoker for functions like lv_widget_create(lv_obj_t *parent)\n"
-    c_code += f"// Signature: expects target_obj_ptr = parent, dest = lv_obj_t**, args_array = NULL\n"
-    c_code += f"static bool {sig_c_name}(const invoke_table_entry_t *entry, void *target_obj_ptr, void *dest, cJSON *args_array) {{\n"
-    c_code += f"    if (!entry || !entry->func_ptr) {{ LOG_ERR(\"Invoke Error: NULL entry or func_ptr for {sig_c_name}\"); return false; }}\n"
-    c_code += f"    if (!dest) {{ LOG_ERR(\"Invoke Error: dest is NULL for {sig_c_name} (needed for result)\"); return false; }}\n"
-
-    c_code += f"    // Although args_array should be NULL, add a warning if it's not.\n"
-    c_code += f"    if (args_array != NULL && cJSON_GetArraySize(args_array) > 0) {{\n"
-    c_code += f"       LOG_WARN_JSON(args_array, \"Invoke Warning: {sig_c_name} expected 0 JSON args, got %d for func '%s'. Ignoring JSON args.\", cJSON_GetArraySize(args_array), entry->name);\n"
-    c_code += f"    }}\n\n"
-
-    # Cast arguments and function pointer
-    c_code += f"    lv_obj_t* parent = (lv_obj_t*)target_obj_ptr;\n"
-
-    c_code += f"    // Define the specific function pointer type (always lv_obj_t*(lv_obj_t*) for this invoker)\n"
-    c_code += f"    typedef lv_obj_t* (*specific_lv_create_func_type)(lv_obj_t*);\n"
-    c_code += f"    specific_lv_create_func_type target_func = (specific_lv_create_func_type)entry->func_ptr;\n\n"
-
-    # Call the actual LVGL create function
-    c_code += f"    // Call the target LVGL create function\n"
-    c_code += f"    lv_obj_t* result = target_func(parent);\n\n"
-
-    # Store the result
-    c_code += f"    // Store result widget pointer into *dest\n"
-    c_code += f"    *(lv_obj_t**)dest = result;\n\n"
-
-    # Check if result is NULL (optional, LVGL create might return NULL on failure)
-    c_code += f"    if (!result) {{\n"
-    c_code += f"        LOG_WARN(\"Invoke Warning: Create function '%s' returned NULL.\", entry->name);\n"
-    c_code += f"        // Return true because the invoker itself succeeded.\n"
-    c_code += f"    }}\n\n"
-
+    c_code += f"// Signature: expects target_obj_ptr_render_mode = parent, result_dest_render_mode = lv_obj_t**, args_array = NULL\n"
+    c_code += f"static bool {sig_c_name}(const invoke_table_entry_t *entry, void *target_obj_ptr_render_mode, const char *target_obj_c_name_transpile, void *result_dest_render_mode, char **result_c_name_transpile, cJSON *args_array) {{\n"
+    c_code += f"    if (g_current_operation_mode == RENDER_MODE) {{\n"
+    c_code += f"        if (!entry || !entry->func_ptr) {{ LOG_ERR(\"Invoke Error: NULL entry or func_ptr for {sig_c_name}\"); return false; }}\n"
+    c_code += f"        if (!result_dest_render_mode) {{ LOG_ERR(\"Invoke Error: result_dest_render_mode is NULL for {sig_c_name} (needed for result)\"); return false; }}\n"
+    c_code += f"        if (args_array != NULL && cJSON_GetArraySize(args_array) > 0) {{\n"
+    c_code += f"           LOG_WARN_JSON(args_array, \"Invoke Warning: {sig_c_name} expected 0 JSON args, got %d for func '%s'. Ignoring JSON args.\", cJSON_GetArraySize(args_array), entry->name);\n"
+    c_code += f"        }}\n\n"
+    c_code += f"        lv_obj_t* parent = (lv_obj_t*)target_obj_ptr_render_mode;\n"
+    c_code += f"        typedef lv_obj_t* (*specific_lv_create_func_type)(lv_obj_t*);\n"
+    c_code += f"        specific_lv_create_func_type target_func = (specific_lv_create_func_type)entry->func_ptr;\n"
+    c_code += f"        lv_obj_t* result = target_func(parent);\n"
+    c_code += f"        *(lv_obj_t**)result_dest_render_mode = result;\n"
+    c_code += f"        if (!result) {{\n"
+    c_code += f"            LOG_WARN(\"Invoke Warning: Create function '%s' returned NULL.\", entry->name);\n"
+    c_code += f"        }}\n"
+    c_code += f"    }} else {{ // TRANSPILE_MODE\n"
+    c_code += f"        // This invoker should ideally not be called for widget creation in transpile mode,\n"
+    c_code += f"        // as render_json_node_internal handles it directly by generating lv_..._create(...) calls.\n"
+    c_code += f"        // If it IS called, it means a JSON like {{ \"invoke\": \"lv_obj_create\", \"args\": [] }} was processed by apply_setters_and_attributes.\n"
+    c_code += f"        // This is unusual for create functions which are normally part of node's 'type'.\n"
+    c_code += f"        LOG_WARN(\"invoke_widget_create called in TRANSPILE_MODE for %s. Creation is usually handled by render_json_node_internal. This implies an 'invoke' attribute was used for a create function.\", entry->name);\n"
+    c_code += f"        // We need to generate a C variable for the result.\n"
+    c_code += f"        if (result_c_name_transpile && strcmp(entry->ret_type, \"void\") != 0) {{\n"
+    c_code += "             g_transpile_var_counter++;\n"
+    c_code += f"            *result_c_name_transpile = transpile_generate_c_var_name(NULL, entry->ret_type, g_transpile_var_counter);\n"
+    c_code += f"            if (!*result_c_name_transpile) {{ LOG_ERR(\"TRANSPILE_MODE: Failed to generate result C name for %s\", entry->name); return false; }}\n"
+    c_code += f"            // No extern for H file here as it's assumed to be a local var in the create_ui function.\n"
+    c_code += f"            // The parent for creation in this invoked scenario is target_obj_c_name_transpile (if it's the parent obj var name)\n"
+    c_code += f"            // or more generically, it should be explicitly passed if this pattern is to be supported.\n"
+    c_code += f"            const char* parent_c_var = target_obj_c_name_transpile ? target_obj_c_name_transpile : \"NULL\"; // Assuming target_obj_c_name_transpile is the parent C var.\n"
+    c_code += f"            transpile_write_line(g_output_c_file, \"    %s *%s = %s(%s);\", entry->ret_type, *result_c_name_transpile, entry->name, parent_c_var);\n"
+    c_code += f"        }} else if (result_c_name_transpile) {{\n"
+    c_code += f"            *result_c_name_transpile = NULL;\n"
+    c_code += f"        }}\n"
+    c_code += f"        // No actual call, just C code generation. Assume success unless name generation failed.\n"
+    c_code += f"    }}\n"
     c_code += f"    return true;\n"
     c_code += f"}}\n\n"
     return sig_c_name, c_code
@@ -216,114 +223,134 @@ def _generate_generic_invoke_fn(signature_category, sig_c_name, function_list, a
     # We cannot dynamically create a C typedef from strings at runtime easily.
     # The C code must CAST the generic function pointer directly.
 
-    # Revert: We *must* cast the generic void* func_ptr to the specific type *known at C compile time*.
-    # This means the invoker *cannot* be fully generic based on the entry struct alone
-    # without using libffi or similar.
-
-    # --- Backtrack: Simpler approach that might work for common cases ---
-    # Assume the simplified signature grouping is good enough for the function pointer *cast*.
-    # This is the original flawed assumption, but let's try making the *call* work.
-
     c_code = f"// Generic Invoker for signature category: {signature_category}\n"
     c_code += f"// Handles {len(function_list)} functions like '{representative_func['name']}'\n"
-    c_code += f"// WARNING: Uses simplified signature for casting func_ptr, relies on compatible calling conventions.\n"
-    c_code += f"static bool {sig_c_name}(const invoke_table_entry_t *entry, void *target_obj_ptr, void *dest, cJSON *args_array) {{\n"
+    c_code += f"// WARNING: Uses simplified signature for casting func_ptr in RENDER_MODE, relies on compatible calling conventions.\n"
+    c_code += f"static bool {sig_c_name}(const invoke_table_entry_t *entry, void *target_obj_ptr_render_mode, const char *target_obj_c_name_transpile, void *result_dest_render_mode, char **result_c_name_transpile, cJSON *args_array) {{\n"
     c_code += f"    if (!entry || !entry->func_ptr || !entry->ret_type) {{ LOG_ERR(\"Invoke Error: Invalid entry passed to {sig_c_name} (for func '%s')\", entry ? entry->name : \"NULL_ENTRY\"); return false; }}\n"
-
-    # Declare stack buffers based on simplified signature
-    c_code += "    // Declare stack buffers for arguments (sized based on signature category)\n"
-    arg_buffers = [] # Store names of buffer variables
+    c_code += f"    if (g_current_operation_mode == RENDER_MODE) {{\n"
+    # RENDER_MODE: Existing logic, using target_obj_ptr_render_mode and result_dest_render_mode
+    arg_buffers = []
     for i in range(num_c_args):
         buffer_type = _get_buffer_type_for_sig_component(sig_arg_comps[i])
         if buffer_type != "void":
-           c_code += f"    {buffer_type} arg_buf{i};\n"
+           c_code += f"        {buffer_type} arg_buf{i};\n"
            arg_buffers.append(f"arg_buf{i}")
-
     result_buffer_type = "void"
     result_buffer_name = None
     if sig_ret_comp != 'void':
         result_buffer_type = _get_buffer_type_for_sig_component(sig_ret_comp)
         result_buffer_name = "result_buf"
-        c_code += f"    {result_buffer_type} {result_buffer_name};\n"
+        c_code += f"        {result_buffer_type} {result_buffer_name};\n"
     c_code += "\n"
-
-    # --- Unmarshal using specific types from entry ---
     num_json_args_expected = num_c_args
     first_arg_is_target = False
     if num_c_args > 0 and (sig_arg_comps[0] == 'POINTER' or sig_arg_comps[0].endswith('*')):
         first_arg_is_target = True
         num_json_args_expected = num_c_args - 1
-        c_code += f"    if (!entry->arg_types[0]) {{ LOG_ERR(\"Invoke Error: Missing type string for target arg 0 of '%s'\", entry->name); return false; }}\n"
-        c_code += f"    arg_buf0 = (void*)target_obj_ptr;\n"
-
-    # Check JSON array validity and size (same as before)
-    c_code += f"    // Expecting {num_json_args_expected} arguments from JSON array for function '{representative_func}'\n"
-    c_code += f"    if (!cJSON_IsArray(args_array)) {{\n"
-    c_code += f"       if ({num_json_args_expected} == 0 && args_array == NULL) {{ /* Okay */ }}\n"
-    c_code += f"       else {{ LOG_ERR_JSON(args_array, \"Invoke Error: args_array is not a valid array for {sig_c_name} (func '%s')\", entry->name); return false; }}\n"
-    c_code += f"    }}\n"
-    c_code += f"    int arg_count = (args_array == NULL) ? 0 : cJSON_GetArraySize(args_array);\n"
-    c_code += f"    if (arg_count != {num_json_args_expected}) {{ LOG_ERR_JSON(args_array, \"Invoke Error: Expected {num_json_args_expected} JSON args for func '%s', got %d for {sig_c_name}\", entry->name, arg_count); return false; }}\n\n"
-
-    # Unmarshal into buffers using specific types from entry
-    c_code += "    // Unmarshal arguments from JSON into stack buffers using specific types from entry\n"
+        c_code += f"        if (!entry->arg_types[0]) {{ LOG_ERR(\"Invoke Error: Missing type string for target arg 0 of '%s'\", entry->name); return false; }}\n"
+        c_code += f"        arg_buf0 = (void*)target_obj_ptr_render_mode;\n"
+    c_code += f"        if (!cJSON_IsArray(args_array)) {{\n"
+    c_code += f"           if ({num_json_args_expected} == 0 && args_array == NULL) {{ /* Okay */ }}\n"
+    c_code += f"           else {{ LOG_ERR_JSON(args_array, \"Invoke Error: args_array is not a valid array for {sig_c_name} (func '%s')\", entry->name); return false; }}\n"
+    c_code += f"        }}\n"
+    c_code += f"        int arg_count = (args_array == NULL) ? 0 : cJSON_GetArraySize(args_array);\n"
+    c_code += f"        if (arg_count != {num_json_args_expected}) {{ LOG_ERR_JSON(args_array, \"Invoke Error: Expected {num_json_args_expected} JSON args for func '%s', got %d for {sig_c_name}\", entry->name, arg_count); return false; }}\n\n"
     for i in range(num_json_args_expected):
         c_arg_index = i + (1 if first_arg_is_target else 0)
-        c_code += f"    const char* specific_type_str{c_arg_index} = entry->arg_types[{c_arg_index}];\n"
-        c_code += f"    if (!specific_type_str{c_arg_index}) {{ LOG_ERR(\"Invoke Error: Internal setup error - missing type for arg {c_arg_index} of '%s'\", entry->name); return false; }}\n"
+        c_code += f"        const char* specific_type_str{c_arg_index} = entry->arg_types[{c_arg_index}];\n"
+        c_code += f"        if (!specific_type_str{c_arg_index}) {{ LOG_ERR(\"Invoke Error: Internal setup error - missing type for arg {c_arg_index} of '%s'\", entry->name); return false; }}\n"
         buffer_ptr = f"&arg_buf{c_arg_index}"
-        c_code += f"    cJSON *json_arg{i} = cJSON_GetArrayItem(args_array, {i});\n"
-        c_code += f"    if (!json_arg{i}) {{ LOG_ERR(\"Invoke Error: Failed to get JSON arg {i} for func '%s' ({sig_c_name})\", entry->name); return false; }}\n"
-        unmarshal_call = f"unmarshal_value(json_arg{i}, specific_type_str{c_arg_index}, (void*){buffer_ptr}, target_obj_ptr)"
-        c_code += f"    // Unmarshal JSON arg {i} into C arg buffer {c_arg_index} (using specific type 'specific_type_str{c_arg_index}')\n"
-        c_code += f"    if (!({unmarshal_call})) {{\n"
-        c_code += f"        LOG_ERR_JSON(json_arg{i}, \"Invoke Error: Failed to unmarshal JSON arg {i} as type '%s' for func '%s' ({sig_c_name})\", specific_type_str{c_arg_index}, entry->name);\n"
-        c_code += f"        return false;\n"
-        c_code += f"    }}\n"
-    c_code += "\n"
-
-    # --- Function Call ---
-    # Cast func_ptr based on the SIMPLIFIED signature category. This is the weak point.
-    c_code += "    // Cast function pointer based on simplified signature category\n"
-    simplified_ret_type = _get_buffer_type_for_sig_component(sig_ret_comp)
-    simplified_arg_types = []
-    for i in range(num_c_args):
-        simplified_arg_types.append(_get_buffer_type_for_sig_component(sig_arg_comps[i]))
-    simplified_args_str = ", ".join(simplified_arg_types) if simplified_arg_types else "void"
-
-    c_code += f"    typedef {simplified_ret_type} (*invoker_func_type)({simplified_args_str});\n"
-    c_code += f"    invoker_func_type target_func = (invoker_func_type)entry->func_ptr;\n\n"
-
-    c_code += "    // Call the target LVGL function using values from stack buffers\n"
-    call_args_str = ", ".join(arg_buffers)
-
-    if sig_ret_comp == 'void':
-        c_code += f"    target_func({call_args_str});\n"
-    else:
-        c_code += f"    {result_buffer_name} = target_func({call_args_str});\n"
-    c_code += "\n"
-
-    # --- Store Result ---
-    if sig_ret_comp != 'void':
-        c_code += "    // Store result (from result_buf) if dest is provided\n"
-        c_code += "    if (dest) {\n"
-        # Copy result buffer to destination. Size mismatch IS possible here.
-        # Use specific type string from entry for casting the destination pointer.
-        c_code += f"        const char* specific_ret_type_str = entry->ret_type ? entry->ret_type : \"void\";\n"
-        c_code += f"        // Copy result from buffer to dest (casting dest based on specific return type '{sig_ret_comp}')\n"
-        c_code += f"        // WARNING: Assumes calling convention compatibility & sufficient space at dest!\n"
-        # Simple assignment cast (assuming primitive/pointer returns)
-        c_code += f"        if (strchr(specific_ret_type_str, '*')) {{ // Pointer type\n"
-        c_code += f"             *(void**)dest = (void*){result_buffer_name};\n"
-        c_code += f"        }} else if (strcmp(specific_ret_type_str, \"float\") == 0 || strcmp(specific_ret_type_str, \"double\") == 0) {{ // Float/Double\n"
-        c_code += f"             *({result_buffer_type} *)dest = ({result_buffer_type}){result_buffer_name};\n" # Assumes result_buffer_type is double
-        c_code += f"        }} else if (strcmp(specific_ret_type_str, \"void\") != 0) {{ // Integer/Enum/Bool/Color?\n"
-        c_code += f"             *({result_buffer_type} *)dest = ({result_buffer_type}){result_buffer_name};\n" # Assumes result_buffer_type is int64_t
-        c_code += f"             // TODO: Potential truncation/sign issues if specific_ret_type is smaller than {result_buffer_type}\n"
+        c_code += f"        cJSON *json_arg{i} = cJSON_GetArrayItem(args_array, {i});\n"
+        c_code += f"        if (!json_arg{i}) {{ LOG_ERR(\"Invoke Error: Failed to get JSON arg {i} for func '%s' ({sig_c_name})\", entry->name); return false; }}\n"
+        unmarshal_call = f"unmarshal_value(json_arg{i}, specific_type_str{c_arg_index}, (void*){buffer_ptr}, target_obj_ptr_render_mode)"
+        c_code += f"        if (!({unmarshal_call})) {{\n"
+        c_code += f"            LOG_ERR_JSON(json_arg{i}, \"Invoke Error: Failed to unmarshal JSON arg {i} as type '%s' for func '%s' ({sig_c_name})\", specific_type_str{c_arg_index}, entry->name);\n"
+        c_code += f"            return false;\n"
         c_code += f"        }}\n"
-        c_code += "    }\n"
+    c_code += "\n"
+    simplified_ret_type = _get_buffer_type_for_sig_component(sig_ret_comp)
+    simplified_arg_types_render = []
+    for i_render in range(num_c_args): # Use a different loop variable
+        simplified_arg_types_render.append(_get_buffer_type_for_sig_component(sig_arg_comps[i_render]))
+    simplified_args_str = ", ".join(simplified_arg_types_render) if simplified_arg_types_render else "void"
+    c_code += f"        typedef {simplified_ret_type} (*invoker_func_type)({simplified_args_str});\n"
+    c_code += f"        invoker_func_type target_func = (invoker_func_type)entry->func_ptr;\n"
+    call_args_str = ", ".join(arg_buffers)
+    if sig_ret_comp == 'void':
+        c_code += f"        target_func({call_args_str});\n"
+    else:
+        c_code += f"        {result_buffer_name} = target_func({call_args_str});\n"
+    c_code += "\n"
+    if sig_ret_comp != 'void':
+        c_code += "        if (result_dest_render_mode) {\n"
+        c_code += f"            const char* specific_ret_type_str = entry->ret_type ? entry->ret_type : \"void\";\n"
+        c_code += f"            if (strchr(specific_ret_type_str, '*')) {{ *(void**)result_dest_render_mode = (void*){result_buffer_name}; }}\n"
+        c_code += f"            else if (strcmp(specific_ret_type_str, \"float\") == 0 || strcmp(specific_ret_type_str, \"double\") == 0) {{ *({result_buffer_type} *)result_dest_render_mode = ({result_buffer_type}){result_buffer_name}; }}\n"
+        c_code += f"            else if (strcmp(specific_ret_type_str, \"void\") != 0) {{ *({result_buffer_type} *)result_dest_render_mode = ({result_buffer_type}){result_buffer_name}; }}\n"
+        c_code += "        }\n"
+    c_code += f"    }} else {{ // TRANSPILE_MODE\n"
+    c_code += f"        char* c_code_args[{MAX_ARGS_SUPPORTED}];\n"
+    c_code += f"        int c_code_arg_count = 0;\n"
+    c_code += f"        bool transpile_arg_ok = true;\n"
+    c_code += f"        int num_json_args_expected_transpile = {num_c_args} - ({1 if first_arg_is_target else 0});\n"
+    c_code += f"        int current_arg_count_transpile = (args_array == NULL) ? 0 : cJSON_GetArraySize(args_array);\n"
+    c_code += f"        if (current_arg_count_transpile != num_json_args_expected_transpile) {{ LOG_ERR_JSON(args_array, \"TRANSPILE Error: Expected %d JSON args for func '%s', got %d\", num_json_args_expected_transpile, entry->name, current_arg_count_transpile); return false; }}\n\n"
 
-    c_code += "\n    return true;\n"
+    c_code += f"        for (int i = 0; i < num_json_args_expected_transpile; ++i) {{\n"
+    c_code += f"            cJSON *json_arg = cJSON_GetArrayItem(args_array, i);\n"
+    c_code += f"            int c_arg_idx = i + ({1 if first_arg_is_target else 0});\n"
+    c_code += f"            const char* arg_type_str = entry->arg_types[c_arg_idx];\n"
+    c_code += f"            if (!arg_type_str) {{ LOG_ERR(\"TRANSPILE Error: Missing type for arg %d of '%s'\", c_arg_idx, entry->name); transpile_arg_ok = false; break; }}\n"
+    c_code += f"            // Use target_obj_ptr_render_mode for context, as it might hold a temporary object for @-pointer resolution even in transpile mode planning.\n"
+    c_code += f"            if (!unmarshal_value_to_c_string(json_arg, arg_type_str, &c_code_args[c_code_arg_count++], target_obj_ptr_render_mode)) {{\n"
+    c_code += f"                LOG_ERR_JSON(json_arg, \"TRANSPILE Error: Failed to unmarshal JSON arg %d to C string for func '%s' (type '%s')\", i, entry->name, arg_type_str);\n"
+    c_code += f"                transpile_arg_ok = false; break;\n"
+    c_code += f"            }}\n"
+    c_code += f"        }}\n\n"
+    c_code += f"        if (!transpile_arg_ok) {{\n"
+    c_code += f"            for (int k = 0; k < c_code_arg_count; ++k) lv_free(c_code_args[k]);\n"
+    c_code += f"            return false;\n"
+    c_code += f"        }}\n\n"
+    c_code += f"        char call_str[1024]; call_str[0] = '\\0';\n"
+    c_code += f"        char all_args_c_str[512]; all_args_c_str[0] = '\\0';\n"
+    c_code += f"        int current_c_code_arg = 0;\n"
+
+    # Construct argument list string
+    c_code += f"        for (int k = 0; k < c_code_arg_count; ++k) {{\n"
+    c_code += f"            strcat(all_args_c_str, c_code_args[k]);\n"
+    c_code += f"            if (k < c_code_arg_count - 1) strcat(all_args_c_str, \", \");\n"
+    c_code += f"        }}\n\n"
+
+    c_code += f"        const char* effective_target_c_name = target_obj_c_name_transpile;\n"
+    c_code += f"        // If first arg is target, it's the object itself. If not, target_obj_c_name_transpile might be NULL or irrelevant for static calls.\n"
+    c_code += f"        bool is_method_call = {str(first_arg_is_target).lower()};\n"
+    # Handle return value assignment
+    c_code += f"        if (strcmp(entry->ret_type, \"void\") != 0 && result_c_name_transpile != NULL) {{\n"
+    c_code += "             g_transpile_var_counter++;\n"
+    c_code += f"            *result_c_name_transpile = transpile_generate_c_var_name(NULL, entry->ret_type, g_transpile_var_counter);\n"
+    c_code += f"            if (!*result_c_name_transpile) {{ LOG_ERR(\"TRANSPILE_MODE: Failed to generate result C name for %s\", entry->name); transpile_arg_ok = false; }}\n"
+    c_code += f"            else {{\n"
+    c_code += f"                // transpile_write_line(g_output_h_file, \"extern %s %s; // Result of %s\", entry->ret_type, *result_c_name_transpile, entry->name); // Optional H declaration\n"
+    c_code += f"                if (is_method_call) {{\n"
+    c_code += f"                    snprintf(call_str, sizeof(call_str), \"    %s %s = %s(%s%s%s);\", entry->ret_type, *result_c_name_transpile, entry->name, effective_target_c_name ? effective_target_c_name : \"NULL_TARGET_ERR\", (c_code_arg_count > 0 ? \", \" : \"\"), all_args_c_str);\n"
+    c_code += f"                }} else {{\n"
+    c_code += f"                    snprintf(call_str, sizeof(call_str), \"    %s %s = %s(%s);\", entry->ret_type, *result_c_name_transpile, entry->name, all_args_c_str);\n"
+    c_code += f"                }}\n"
+    c_code += f"            }}\n"
+    c_code += f"        }} else {{\n" // No return value or result_c_name_transpile is NULL
+    c_code += f"            if (is_method_call) {{\n"
+    c_code += f"                snprintf(call_str, sizeof(call_str), \"    %s(%s%s%s);\", entry->name, effective_target_c_name ? effective_target_c_name : \"NULL_TARGET_ERR\", (c_code_arg_count > 0 ? \", \" : \"\"), all_args_c_str);\n"
+    c_code += f"            }} else {{\n"
+    c_code += f"                snprintf(call_str, sizeof(call_str), \"    %s(%s);\", entry->name, all_args_c_str);\n"
+    c_code += f"            }}\n"
+    c_code += f"        }}\n\n"
+    c_code += f"        if (transpile_arg_ok) {{ transpile_write_line(g_output_c_file, call_str); }}\n\n"
+    c_code += f"        for (int k = 0; k < c_code_arg_count; ++k) lv_free(c_code_args[k]);\n"
+    c_code += f"        if (!transpile_arg_ok && result_c_name_transpile && *result_c_name_transpile) {{ lv_free(*result_c_name_transpile); *result_c_name_transpile = NULL; }}\n"
+    c_code += f"        return transpile_arg_ok;\n"
+    c_code += f"    }}\n" # End RENDER_MODE / TRANSPILE_MODE if/else
+    c_code += f"    return true;\n" # Default return for RENDER_MODE if no errors
     c_code += "}\n\n"
     return c_code
 
@@ -340,7 +367,18 @@ def generate_invocation_helpers(signatures, api_info):
 
     c_code = ""
     c_code += "// Forward declaration for the main unmarshaler\n"
-    c_code += "static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest, void *implicit_parent);\n\n"
+    c_code += "static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest, void *implicit_parent);\n"
+    c_code += "// Forward declaration for the C string unmarshaler (to be implemented in unmarshal.py's generated code)\n"
+    c_code += "static bool unmarshal_value_to_c_string(cJSON *json_value, const char *expected_c_type, char **c_string_dest, void *implicit_parent_for_context);\n"
+    c_code += "// Forward declarations for transpilation helpers (defined in C_SOURCE_TEMPLATE of generator.py)\n"
+    c_code += "typedef enum { RENDER_MODE, TRANSPILE_MODE } operation_mode_t;\n"
+    c_code += "extern operation_mode_t g_current_operation_mode;\n"
+    c_code += "extern FILE *g_output_c_file;\n"
+    c_code += "extern FILE *g_output_h_file;\n"
+    c_code += "extern int g_transpile_var_counter;\n"
+    c_code += "static char* transpile_generate_c_var_name(const char* json_id, const char* type, int count);\n"
+    c_code += "static void transpile_write_line(FILE* file, const char *line_fmt, ...);\n\n"
+
     # Forward declare the table struct type for the invoker signatures
     c_code += "struct invoke_table_entry_s;\n"
     c_code += "typedef struct invoke_table_entry_s invoke_table_entry_t;\n\n"
@@ -414,7 +452,15 @@ def generate_invoke_table_def():
     c_code = "// --- Invocation Table ---\n\n"
     c_code += "// Forward declaration of the invoker function signature type\n"
     c_code += "struct invoke_table_entry_s;\n"
-    c_code += "typedef bool (*invoke_fn_t)(const struct invoke_table_entry_s *entry, void *target_obj_ptr, void *dest, cJSON *args_array);\n\n"
+    # Updated invoke_fn_t signature
+    c_code += "typedef bool (*invoke_fn_t)(\n"
+    c_code += "    const struct invoke_table_entry_s *entry,\n"
+    c_code += "    void *target_obj_ptr_render_mode,\n"
+    c_code += "    const char *target_obj_c_name_transpile,\n"
+    c_code += "    void *result_dest_render_mode,\n"
+    c_code += "    char **result_c_name_transpile,\n"
+    c_code += "    cJSON *json_args_array\n"
+    c_code += ");\n\n"
 
     c_code += "// Structure for each entry in the invocation table\n"
     c_code += f"typedef struct invoke_table_entry_s {{\n" # Use struct tag here

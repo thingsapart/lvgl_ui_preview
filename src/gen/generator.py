@@ -114,6 +114,19 @@ extern lv_obj_t *lv_screen_active(void);
 // --- Public API ---
 
 /**
+ * @brief Transpiles a UI described by a cJSON object tree into C code.
+ *
+ * Parses the JSON definition and generates C source and header files that, when compiled,
+ * will create the LVGL UI.
+ * Assumes cJSON library is linked. Requires LVGL to be initialized (for enums, types etc. during generation).
+ *
+ * @param root_json The root cJSON object (must be an array of objects or a single object).
+ * @param output_c_filename_base The base name for the output files (e.g., "my_ui" will produce "my_ui.c" and "my_ui.h").
+ * @return true if transpilation was successful, false otherwise. Errors are logged.
+ */
+bool lvgl_json_transpile_ui(cJSON *root_json, const char *output_c_filename_base);
+
+/**
  * @brief Adds a custom string-to-integer mapping for enum unmarshaling.
  * Allows overriding or extending generated enum values at runtime.
  * The 'name' string must persist for the lifetime of its use or be a literal.
@@ -205,8 +218,10 @@ char* lvgl_json_generate_values_json(void);
 C_SOURCE_TEMPLATE = """
 #include "lvgl_json_renderer.h"
 #include <string.h> // For strcmp, strchr, strncpy, strlen etc.
-#include <stdio.h>  // For snprintf, logging
+#include <stdio.h>  // For snprintf, logging, FILE, vfprintf
 #include <stdlib.h> // For strtoul, strtol
+#include <stdarg.h> // For va_list, va_start, va_end in transpile_write_line
+#include <ctype.h>  // For isalnum in transpile_generate_c_var_name
 
 // LVGL functions used internally (ensure they are linked)
 // extern lv_obj_t * lv_screen_active(void); // Declared in lvgl.h
@@ -254,12 +269,70 @@ static cJSON* get_current_context(void) {{
     return g_current_render_context;
 }}
 
+// --- Transpilation Support ---
+typedef enum {{
+    RENDER_MODE,
+    TRANSPILE_MODE
+}} operation_mode_t;
+
+static operation_mode_t g_current_operation_mode = RENDER_MODE;
+static FILE *g_output_c_file = NULL;
+static FILE *g_output_h_file = NULL;
+static int g_transpile_var_counter = 0; // For generating unique variable names
+// --- End Transpilation Support ---
+
 // --- Invocation Table ---
 {invocation_table_def}
 
 // --- Forward declaration ---
 static const invoke_table_entry_t* find_invoke_entry(const char *name);
 static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest, void *implicit_parent);
+static char* transpile_format_arg_as_c_string(cJSON* json_value, const char* expected_c_type, void* implicit_parent_for_context);
+
+// --- Transpilation Helper Functions ---
+
+// Simple helper to write a line to a file
+static void transpile_write_line(FILE* file, const char *line_fmt, ...) {{
+    if (!file) return;
+    va_list args;
+    va_start(args, line_fmt);
+    vfprintf(file, line_fmt, args);
+    fprintf(file, "\\n"); // Add newline
+    va_end(args);
+}}
+
+// Generates a C variable name. Caller must free the result.
+// Format: <json_id_cleaned>_<type_cleaned>_<count>
+// If json_id is NULL or empty, uses "entity"
+static char* transpile_generate_c_var_name(const char* json_id, const char* type, int count) {{
+    char buffer[256];
+    char cleaned_json_id[128] = "entity";
+    if (json_id && json_id[0]) {{
+        int j = 0;
+        for (int i = 0; json_id[i] && j < sizeof(cleaned_json_id) - 1; i++) {{
+            if (isalnum(json_id[i]) || json_id[i] == '_') {{
+                cleaned_json_id[j++] = json_id[i];
+            }}
+        }}
+        cleaned_json_id[j] = '\\0';
+    }}
+
+    char cleaned_type[128] = "unknown";
+    if (type && type[0]) {{
+        int j = 0;
+        for (int i = 0; type[i] && j < sizeof(cleaned_type) - 1; i++) {{
+            if (isalnum(type[i]) || type[i] == '_') {{
+                cleaned_type[j++] = type[i];
+            }}
+        }}
+        cleaned_type[j] = '\\0';
+    }}
+    snprintf(buffer, sizeof(buffer), "%s_%s_%d", cleaned_json_id, cleaned_type, count);
+    // Ensure lv_strdup is available; it should be via lv_mem.h through lvgl.h
+    // If not, this might need to be replaced with plain strdup and free.
+    return lv_strdup(buffer);
+}}
+// --- End Transpilation Helper Functions ---
 
 // --- Pointer Registry Implementation ---
 {registry_code}

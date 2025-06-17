@@ -1,0 +1,32 @@
+[
+  {
+    "type": "obj",
+    "id": "@main_container",
+    "width": 200,
+    "height": 150,
+    "align": "LV_ALIGN_CENTER",
+    "children": [
+      {
+        "type": "label",
+        "id": "@my_label",
+        "text": "Hello Transpile!",
+        "align": "LV_ALIGN_TOP_MID",
+        "y": 20
+      },
+      {
+        "type": "button",
+        "id": "@my_button",
+        "width": 100,
+        "height": "LV_SIZE_CONTENT",
+        "align": "LV_ALIGN_BOTTOM_MID",
+        "y": -20,
+        "children": [
+          {
+            "type": "label",
+            "text": "Click Me"
+          }
+        ]
+      }
+    ]
+  }
+]

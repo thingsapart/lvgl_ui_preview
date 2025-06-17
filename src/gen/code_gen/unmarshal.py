@@ -451,18 +451,201 @@ def generate_custom_unmarshalers(api_info):
 
     return code
 
+# --- Functions for Transpilation Support ---
+
+def generate_unmarshal_value_to_c_string_prototype():
+    """Returns the C prototype for unmarshal_value_to_c_string."""
+    return "static bool unmarshal_value_to_c_string(cJSON *json_value, const char *expected_c_type, char **dest_c_code_str, void *implicit_parent_for_context);"
+
+def generate_unmarshal_value_to_c_string_helpers():
+    """Generates helper C functions for unmarshal_value_to_c_string."""
+    c_code = "// --- Transpilation String Helper Functions ---\n\n"
+    # Helper to escape a string for C code output
+    c_code += """
+static char* escape_c_string_for_transpile(const char* input_str) {
+    if (!input_str) return NULL;
+    size_t len = strlen(input_str);
+    // Estimate required buffer size: worst case each char needs escaping + quotes + null terminator
+    char *escaped_str = (char*)lv_malloc(len * 2 + 3); // len * 2 for escapes, +2 for quotes, +1 for null
+    if (!escaped_str) return NULL;
+
+    char *p = escaped_str;
+    *p++ = '"'; // Start with a quote
+
+    for (size_t i = 0; i < len; ++i) {
+        switch (input_str[i]) {
+            case '\\\\': *p++ = '\\\\'; *p++ = '\\\\'; break;
+            case '"':  *p++ = '\\\\'; *p++ = '"';  break;
+            case '\\n': *p++ = '\\\\'; *p++ = 'n';  break;
+            case '\\r': *p++ = '\\\\'; *p++ = 'r';  break;
+            case '\\t': *p++ = '\\\\'; *p++ = 't';  break;
+            // Add other escapes as needed (e.g., \\f, \\b, \\v, \\?, \\', \\0NNN, \\xHH)
+            default:
+                // Check for non-printable characters (optional, depends on desired strictness)
+                // if (input_str[i] < 32 || input_str[i] > 126) {
+                //    sprintf(p, "\\\\x%02X", (unsigned char)input_str[i]); p += 4;
+                // } else {
+                    *p++ = input_str[i];
+                // }
+                break;
+        }
+    }
+    *p++ = '"'; // End with a quote
+    *p++ = '\\0';
+    return escaped_str; // Caller must lv_free this
+}
+"""
+    c_code += "\n// --- End Transpilation String Helper Functions ---\n\n"
+    return c_code
+
+def generate_unmarshal_value_to_c_string():
+    """Generates the C code for unmarshal_value_to_c_string."""
+    c_code = "// --- JSON to C Code String Unmarshaler ---\n\n"
+    c_code += "static bool unmarshal_value_to_c_string(cJSON *json_value, const char *expected_c_type, char **dest_c_code_str, void *implicit_parent_for_context) {\n"
+    c_code += "    if (!json_value || !expected_c_type || !dest_c_code_str) {\n"
+    c_code += "        LOG_ERR(\"Transpile Unmarshal Error: NULL argument passed.\");\n"
+    c_code += "        if (dest_c_code_str) *dest_c_code_str = NULL;\n"
+    c_code += "        return false;\n"
+    c_code += "    }\n"
+    c_code += "    *dest_c_code_str = NULL; // Initialize\n"
+    c_code += "    char temp_buf[512]; // For sprintf operations\n\n"
+
+    c_code += "    if (cJSON_IsNull(json_value)) {\n"
+    c_code += "        *dest_c_code_str = lv_strdup(\"NULL\");\n"
+    c_code += "        return (*dest_c_code_str != NULL);\n"
+    c_code += "    }\n\n"
+
+    c_code += "    if (cJSON_IsBool(json_value)) {\n"
+    c_code += "        *dest_c_code_str = lv_strdup(cJSON_IsTrue(json_value) ? \"true\" : \"false\");\n"
+    c_code += "        return (*dest_c_code_str != NULL);\n"
+    c_code += "    }\n\n"
+
+    c_code += "    if (cJSON_IsNumber(json_value)) {\n"
+    c_code += "        if (strcmp(expected_c_type, \"float\") == 0 || strcmp(expected_c_type, \"double\") == 0) {\n"
+    c_code += "            snprintf(temp_buf, sizeof(temp_buf), \"%f\", json_value->valuedouble);\n"
+    c_code += "        } else { // Assume integer or lv_coord_t (which is often int)\n"
+    c_code += "            snprintf(temp_buf, sizeof(temp_buf), \"%lld\", (long long)json_value->valuedouble);\n"
+    c_code += "        }\n"
+    c_code += "        *dest_c_code_str = lv_strdup(temp_buf);\n"
+    c_code += "        return (*dest_c_code_str != NULL);\n"
+    c_code += "    }\n\n"
+
+    c_code += "    if (cJSON_IsString(json_value) && json_value->valuestring) {\n"
+    c_code += "        const char *str_val = json_value->valuestring;\n"
+    c_code += "        size_t len = strlen(str_val);\n\n"
+
+    c_code += "        if (len > 0 && str_val[0] == '$') {\n"
+    c_code += "            // Context variable: use variable name directly (assuming it's a valid C identifier)\n"
+    c_code += "            snprintf(temp_buf, sizeof(temp_buf), \"%s\", str_val + 1);\n"
+    c_code += "            *dest_c_code_str = lv_strdup(temp_buf);\n"
+    c_code += "            return (*dest_c_code_str != NULL);\n"
+    c_code += "        }\n\n"
+
+    c_code += "        if (len > 0 && str_val[0] == '#') {\n"
+    c_code += "            uint32_t hex_val = (uint32_t)strtoul(str_val + 1, NULL, 16);\n"
+    c_code += "            // TODO: Handle #RGB shorthand if lv_color_hex doesn't\n"
+    c_code += "            snprintf(temp_buf, sizeof(temp_buf), \"lv_color_hex(0x%06X)\", hex_val & 0xFFFFFF);\n"
+    c_code += "            *dest_c_code_str = lv_strdup(temp_buf);\n"
+    c_code += "            return (*dest_c_code_str != NULL);\n"
+    c_code += "        }\n\n"
+
+    c_code += "        if (len > 0 && str_val[0] == '@') {\n"
+    c_code += "            const char *name = str_val + 1;\n"
+    c_code += "            // Try to get the C variable name registered for this path\n"
+    c_code += "            char* c_var_name = (char*)lvgl_json_get_registered_ptr(name, \"c_var_name\");\n"
+    c_code += "            if (c_var_name) {\n"
+    c_code += "                *dest_c_code_str = lv_strdup(c_var_name);\n"
+    c_code += "            } else {\n"
+    c_code += "                // Fallback: use the name directly, assuming it's a global C variable/macro or will be resolved by C compiler\n"
+    c_code += "                LOG_WARN(\"Transpile Unmarshal: Registered C variable name for '@%s' not found. Using name directly.\", name);\n"
+    c_code += "                snprintf(temp_buf, sizeof(temp_buf), \"%s\", name);\n"
+    c_code += "                *dest_c_code_str = lv_strdup(temp_buf);\n"
+    c_code += "            }\n"
+    c_code += "            return (*dest_c_code_str != NULL);\n"
+    c_code += "        }\n\n"
+
+    c_code += "        if (len > 0 && str_val[0] == '!') { // Static string for registry\n"
+    c_code += "             // This should resolve to a string literal that was previously registered and will be part of the transpiled binary.\n"
+    c_code += "             // For now, just treat it like a normal string to be escaped. The registry itself isn't part of the transpiled output directly.\n"
+    c_code += "             *dest_c_code_str = escape_c_string_for_transpile(str_val + 1);\n"
+    c_code += "             return (*dest_c_code_str != NULL);\n"
+    c_code += "        }\n\n"
+
+    c_code += "        if (len > 1 && str_val[len - 1] == '%') { // Coordinate percentage\n"
+    c_code += "            if (strcmp(expected_c_type, \"lv_coord_t\") == 0 || strcmp(expected_c_type, \"int32_t\") == 0) {\n"
+    c_code += "                char num_part[32];\n"
+    c_code += "                size_t num_len = len - 1;\n"
+    c_code += "                if (num_len >= sizeof(num_part)) num_len = sizeof(num_part) - 1;\n"
+    c_code += "                strncpy(num_part, str_val, num_len);\n"
+    c_code += "                num_part[num_len] = '\\0';\n"
+    c_code += "                snprintf(temp_buf, sizeof(temp_buf), \"lv_pct(%s)\", num_part);\n"
+    c_code += "                *dest_c_code_str = lv_strdup(temp_buf);\n"
+    c_code += "                return (*dest_c_code_str != NULL);\n"
+    c_code += "            }\n"
+    c_code += "        }\n\n"
+
+    c_code += "        // Default string: Could be an enum or a literal string\n"
+    c_code += "        int temp_int_for_validation;\n"
+    c_code += "        // Create a temporary cJSON string node to pass to unmarshal_enum_value\n"
+    c_code += "        cJSON* temp_json_str_node = cJSON_CreateString(str_val);\n"
+    c_code += "        if (!temp_json_str_node) { LOG_ERR(\"Failed to create temp cJSON node for enum check\"); return false; }\n"
+    c_code += "        bool is_enum = unmarshal_enum_value(temp_json_str_node, expected_c_type, &temp_int_for_validation);\n"
+    c_code += "        cJSON_Delete(temp_json_str_node); // Clean up temp node\n"
+    c_code += "        if (is_enum) {\n"
+    c_code += "            // It's a valid enum, use its C name directly\n"
+    c_code += "            *dest_c_code_str = lv_strdup(str_val);\n"
+    c_code += "            return (*dest_c_code_str != NULL);\n"
+    c_code += "        } else if (strcmp(expected_c_type, \"const char *\") == 0 || strcmp(expected_c_type, \"char *\") == 0) {\n"
+    c_code += "            // It's a literal string for a char* type\n"
+    c_code += "            *dest_c_code_str = escape_c_string_for_transpile(str_val);\n"
+    c_code += "            return (*dest_c_code_str != NULL);\n"
+    c_code += "        }\n"
+    c_code += "        // If it's a string but not an enum and not for a char* type, it might be an error or unhandled case.\n"
+    c_code += "        // For example, a string value for an int type that wasn't caught by other specific prefixes.\n"
+    c_code += "        // LOG_WARN_JSON(json_value, \"Transpile Unmarshal: String '%s' is not a recognized enum for type '%s' and not a char* type.\", str_val, expected_c_type);\n"
+    c_code += "        // Fall through to general error handling for strings not meeting criteria.\n"
+    c_code += "    }\n\n" // End of cJSON_IsString block
+
+    c_code += "    if (cJSON_IsObject(json_value)) {\n"
+    c_code += "        cJSON *call_item = cJSON_GetObjectItemCaseSensitive(json_value, \"call\");\n"
+    c_code += "        cJSON *args_item = cJSON_GetObjectItemCaseSensitive(json_value, \"args\");\n"
+    c_code += "        if (call_item && cJSON_IsString(call_item) && args_item && cJSON_IsArray(args_item)) {\n"
+    c_code += "            const char *func_name = call_item->valuestring;\n"
+    c_code += "            // Basic placeholder for call syntax. Full transpilation is complex.\n"
+    c_code += "            // TODO: Need to look up func_name in invoke_table, get arg types, recurse for each arg, then format call.\n"
+    c_code += "            snprintf(temp_buf, sizeof(temp_buf), \"/* TODO: Transpile call: %s(...) */\", func_name);\n"
+    c_code += "            *dest_c_code_str = lv_strdup(temp_buf);\n"
+    c_code += "            return (*dest_c_code_str != NULL);\n"
+    c_code += "        }\n"
+    c_code += "    }\n\n"
+
+    c_code += "    LOG_ERR_JSON(json_value, \"Transpile Unmarshal Error: Could not format value to C string for type '%s' (JSON type %d)\", expected_c_type, json_value->type);\n"
+    c_code += "    *dest_c_code_str = lv_strdup(\"/* UNABLE_TO_TRANSPILE_ARG */\");\n"
+    c_code += "    return false; // Indicate failure\n"
+    c_code += "}\n\n"
+    c_code += "// --- End JSON to C Code String Unmarshaler ---\n\n"
+    return c_code
+
 def generate_main_unmarshaler():
     """Generates the core unmarshal_value function."""
     code = "// --- Main Value Unmarshaler ---\n\n"
+    code += generate_unmarshal_value_to_c_string_prototype() + "\n\n"; # Add prototype
     code += "// Forward declarations for specific type unmarshalers\n"
     code += "static const invoke_table_entry_t* find_invoke_entry(const char *name);\n"
-    code += "static bool unmarshal_enum_value(cJSON *json_value, const char *enum_type_name, int *dest);\n"
-    code += "static bool unmarshal_color(cJSON *node, lv_color_t *dest);\n"
-    code += "static bool unmarshal_coord(cJSON *node, lv_coord_t *dest);\n" # Added forward decl
-    code += "static bool unmarshal_registered_ptr(cJSON *node, const char* expected_ptr_type, void **dest);\n"
-    code += "static bool unmarshal_context_value(cJSON *json_source_node, const char *expected_c_type, void *dest);\n"
-    # Add forwards for all primitive unmarshalers generated
-    code += "static bool unmarshal_int(cJSON *node, int *dest);\n"
+    # unmarshal_enum_value is already generated by generate_enum_unmarshalers
+    # code += "static bool unmarshal_enum_value(cJSON *json_value, const char *enum_type_name, int *dest);\n"
+    # unmarshal_color is generated by generate_custom_unmarshalers
+    # code += "static bool unmarshal_color(cJSON *node, lv_color_t *dest);\n"
+    # unmarshal_coord is generated by generate_coord_unmarshaler
+    # code += "static bool unmarshal_coord(cJSON *node, lv_coord_t *dest);\n"
+    # unmarshal_registered_ptr and unmarshal_context_value are generated by generate_custom_unmarshalers
+    # code += "static bool unmarshal_registered_ptr(cJSON *node, const char* expected_ptr_type, void **dest);\n"
+    # code += "static bool unmarshal_context_value(cJSON *json_source_node, const char *expected_c_type, void *dest);\n"
+
+    # Primitive unmarshalers are already static and generated before this, no need for forward decls here
+    # if they are in the same C file and defined before unmarshal_value.
+    # However, explicit forward declarations don't hurt.
+    # code += "static bool unmarshal_int(cJSON *node, int *dest);\n"
     code += "static bool unmarshal_int8(cJSON *node, int8_t *dest);\n"
     code += "static bool unmarshal_uint8(cJSON *node, uint8_t *dest);\n"
     code += "static bool unmarshal_int16(cJSON *node, int16_t *dest);\n"
@@ -477,10 +660,10 @@ def generate_main_unmarshaler():
     code += "static bool unmarshal_double(cJSON *node, double *dest);\n"
     code += "static bool unmarshal_bool(cJSON *node, bool *dest);\n"
     code += "static bool unmarshal_string_ptr(cJSON *node, const char **dest);\n"
-    code += "static bool unmarshal_char(cJSON *node, char *dest);\n"
+    # code += "static bool unmarshal_char(cJSON *node, char *dest);\n"
 
     code += "\n"
-    code += "// The core dispatcher for unmarshaling any value from JSON based on expected C type.\n"
+    code += "// The core dispatcher for unmarshaling any value from JSON based on expected C type (RENDER_MODE).\n"
     code += "static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest, void *implicit_parent) {\n"
     code += "    if (!json_value || !expected_c_type || !dest) {\n"
     code += "        LOG_ERR(\"Unmarshal Error: NULL argument passed to unmarshal_value (%p, %s, %p)\", json_value, expected_c_type ? expected_c_type : \"NULL\", dest);\n"
@@ -640,13 +823,20 @@ def generate_main_unmarshaler():
     code += "        // - expected_c_type is an unhandled struct/union/etc.\n"
     code += "        // Let's try one last time to parse as an enum if it looks like one.\n"
     code += "        bool maybe_enum = (strncmp(expected_c_type, \"lv_\", 3) == 0 && strstr(expected_c_type, \"_t\")) || \n"
-    code += "                          (strncmp(expected_c_type, \"LV_\", 3) == 0 && strstr(expected_c_type, \"_T\"))  || strcmp(expected_c_type, \"uint32_t\") == 0;\n"
+    code += "                          (strncmp(expected_c_type, \"LV_\", 3) == 0 && strstr(expected_c_type, \"_T\"))  || strcmp(expected_c_type, \"uint32_t\") == 0 || strcmp(expected_c_type, \"int\") == 0 ;\n" # Added int
     code += "        if (maybe_enum && strcmp(expected_c_type, \"lv_obj_t\") != 0 /* add others */) {\n"
-    code += "             if (unmarshal_enum_value(json_value, expected_c_type, (int*)dest)) return true;\n"
+    code += "             // Ensure json_value is string before trying enum parse for non-numeric types\n"
+    code += "             if (cJSON_IsString(json_value) || cJSON_IsNumber(json_value)) { // Allow numbers for enums too\n"
+    code += "                 if (unmarshal_enum_value(json_value, expected_c_type, (int*)dest)) return true;\n"
+    code += "             }\n"
     code += "        }\n\n"
     code += "        LOG_ERR_JSON(json_value, \"Unmarshal Error: Unhandled expected C type '%s' or invalid JSON value type (%d)\", expected_c_type, json_value->type);\n"
     code += "        return false;\n"
     code += "    }\n"
     code += "}\n\n"
+
+    # Append helper C functions and the main C string unmarshaler
+    code += generate_unmarshal_value_to_c_string_helpers()
+    code += generate_unmarshal_value_to_c_string()
 
     return code
