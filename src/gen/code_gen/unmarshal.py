@@ -604,6 +604,10 @@ def generate_unmarshal_value_to_c_string():
     c_code += "        // For example, a string value for an int type that wasn't caught by other specific prefixes.\n"
     c_code += "        // LOG_WARN_JSON(json_value, \"Transpile Unmarshal: String '%s' is not a recognized enum for type '%s' and not a char* type.\", str_val, expected_c_type);\n"
     c_code += "        // Fall through to general error handling for strings not meeting criteria.\n"
+    c_code += "\n        // If the string was not handled by any specific prefix or type check above:\n"
+    c_code += "        LOG_ERR_JSON(json_value, \"Transpile Unmarshal Error: String value '%s' could not be interpreted for expected type '%s'.\", str_val, expected_c_type);\n"
+    c_code += "        *dest_c_code_str = lv_strdup(\"/* UNHANDLED_STRING_FORMAT_FOR_TYPE */\");\n"
+    c_code += "        return false; // Explicitly return false for unhandled strings\n"
     c_code += "    }\n\n" // End of cJSON_IsString block
 
     c_code += "    if (cJSON_IsObject(json_value) && cJSON_GetObjectItemCaseSensitive(json_value, \"call\")) {\n"
@@ -688,8 +692,9 @@ def generate_main_unmarshaler():
     code += "            size_t args = 0; for (args = 0; entry->arg_types[args] != NULL; ++args) {}\n"
     code += "            lv_obj_t *target_obj_ptr = NULL;\n"
     code += "            if (entry->arg_types[0] && strcmp(entry->arg_types[0], \"lv_obj_t *\") == 0 && cJSON_GetArraySize(args_item) < args) { target_obj_ptr = implicit_parent; }\n" 
-    code += "            // Make the nested call. Result goes into 'dest'. target_obj_ptr is NULL.\n"
-    code += "            if (!entry->invoke(entry, target_obj_ptr, dest, args_item)) {\n"
+    code += "            // Make the nested call. Result goes into 'dest'.\n"
+    code += "            // This is in RENDER_MODE context of unmarshal_value, so transpile params are NULL.\n"
+    code += "            if (!entry->invoke(entry, target_obj_ptr, NULL /*target_obj_c_name_transpile*/, dest /*result_dest_render_mode*/, NULL /*result_c_name_transpile*/, args_item)) {\n"
     code += "                 LOG_ERR_JSON(json_value, \"Unmarshal Error: Nested call to '%s' failed.\", func_name);\n"
     code += "                 return false;\n"
     code += "            }\n"
