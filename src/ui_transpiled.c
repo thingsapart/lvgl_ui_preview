@@ -25,7 +25,7 @@
 #define LV_LOG_ERROR(...) // Log stub
 #endif
 #include "data_binding.h" // For action/observes attributes
-extern data_binding_registry_t* REGISTRY; // Global registry for actions and data bindings
+//extern data_binding_registry_t* REGISTRY; // Global registry for actions and data bindings
 extern void lvgl_json_register_ptr(const char *name, const char *type_name, void *ptr);
 extern void* lvgl_json_get_registered_ptr(const char *name, const char *expected_type_name);
 

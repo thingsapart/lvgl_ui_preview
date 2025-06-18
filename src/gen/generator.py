@@ -269,18 +269,6 @@ static cJSON* get_current_context(void) {{
     return g_current_render_context;
 }}
 
-// --- Transpilation Support ---
-typedef enum {{
-    RENDER_MODE,
-    TRANSPILE_MODE
-}} operation_mode_t;
-
-static operation_mode_t g_current_operation_mode = RENDER_MODE;
-static FILE *g_output_c_file = NULL;
-static FILE *g_output_h_file = NULL;
-static int g_transpile_var_counter = 0; // For generating unique variable names
-// --- End Transpilation Support ---
-
 // --- Invocation Table ---
 {invocation_table_def}
 

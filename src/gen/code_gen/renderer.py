@@ -327,7 +327,7 @@ static bool apply_setters_and_attributes_internal(
                 LOG_ERR_JSON(prop_item, "'with' block is missing 'obj' attribute. Skipping.");
                 continue;
             }
-            if (!do_block_for_with_json || !cJSON_IsObject(do_block_for_with_json)) { // Changed to cJSON_IsObject from cJSON_IsArray
+            if (!do_block_for_with_json || !cJSON_IsObject(do_block_for_with_json)) {
                 LOG_ERR_JSON(prop_item, "'with' block is missing 'do' object or it's not an object. Skipping.");
                 continue;
             }
@@ -335,9 +335,6 @@ static bool apply_setters_and_attributes_internal(
             if (g_current_operation_mode == RENDER_MODE) {
                 lv_obj_t *with_target_obj_render_mode = NULL;
                 // Pass current target_entity_render_mode as implicit_parent for context in unmarshal
-                // For render_json_node_internal, the entity itself is passed as implicit_parent for resolving context like $parent.width etc.
-                // Here, target_entity_render_mode is the 'current_obj_ptr' that is having its attributes applied.
-                // If 'with.obj' refers to something via context like "$sibling", that context should be relative to target_entity_render_mode.
                 if (!unmarshal_value(obj_to_run_with_json, "lv_obj_t *", &with_target_obj_render_mode, target_entity_render_mode)) {
                     LOG_ERR_JSON(obj_to_run_with_json, "RENDER_MODE: Failed to unmarshal 'obj' for 'with' block. Skipping 'with'.");
                     continue;
@@ -347,96 +344,52 @@ static bool apply_setters_and_attributes_internal(
                     continue;
                 }
                 LOG_INFO("RENDER_MODE: Applying 'with.do' attributes to target %p (resolved from 'with.obj')", with_target_obj_render_mode);
-                // Determine actual type of the resolved 'with_target_obj_render_mode' for accurate attribute application.
-                // This is a simplification; ideally, we'd know its actual LVGL type (e.g., "button", "label").
-                // For now, assume it's a generic "obj" for attribute application.
-                // The path_prefix is inherited. The type_name_for_registry is "lv_obj_t" as we don't know more.
                 if (!apply_setters_and_attributes_internal(
-                        do_block_for_with_json,            // The attributes to apply
-                        with_target_obj_render_mode,       // The target entity
-                        NULL,                              // No C var name in render mode
-                        "obj",                             // Assume actual type is "obj" for safety
-                        "obj",                             // Assume create type is "obj"
-                        true,                              // Assume it's a widget
-                        with_target_obj_render_mode,       // Parent for its own children if 'do' has 'children'
-                        NULL,                              // No parent C var name in render mode
-                        path_prefix_for_named_and_children,// Inherit path prefix
-                        "lv_obj_t"                         // Type for named registration if 'do' has 'named'
+                        do_block_for_with_json,
+                        with_target_obj_render_mode, NULL, // No C var name for render mode target
+                        "obj", "obj", true,
+                        with_target_obj_render_mode, NULL, // No C var name for parent in render mode
+                        path_prefix_for_named_and_children,
+                        "lv_obj_t"
                     )) {
                     LOG_ERR_JSON(do_block_for_with_json, "RENDER_MODE: Failed to apply attributes in 'with.do' block.");
                 }
             } else { // TRANSPILE_MODE
-                transpile_write_line(g_output_c_file, "    // Handling 'with' attribute for %s", target_entity_c_var_name ? target_entity_c_var_name : "unknown_target");
-                char* target_with_obj_c_name = NULL;
-
-                // Determine the C variable name for the target of 'with'
-                // The 'implicit_parent_for_context' for unmarshal_value_to_c_string should be related to 'target_entity_c_var_name's context if needed.
-                // However, for "@ref" or direct calls, context isn't usually from the object having the "with" attribute, but global or from call structure.
-                // Passing NULL for context parent, assuming 'obj' value is self-contained or globally resolvable.
-                if (cJSON_IsString(obj_to_run_with_json)) { // It's a reference like "@name" or a direct variable name
-                    if (!unmarshal_value_to_c_string(obj_to_run_with_json, "void *", &target_with_obj_c_name, NULL)) {
-                        LOG_ERR_JSON(obj_to_run_with_json, "TRANSPILE_MODE: Failed to transpile 'with.obj' reference/string to C variable name: %s.", obj_to_run_with_json->valuestring);
-                    }
-                } else if (cJSON_IsObject(obj_to_run_with_json)) { // It's a nested call for object creation or a function call returning an object
-                    cJSON* call_item = cJSON_GetObjectItemCaseSensitive(obj_to_run_with_json, "call");
-                    cJSON* args_item = cJSON_GetObjectItemCaseSensitive(obj_to_run_with_json, "args");
-                    if (call_item && cJSON_IsString(call_item) && args_item && cJSON_IsArray(args_item)) {
-                        const char* func_name = call_item->valuestring;
-                        const invoke_table_entry_t* entry = find_invoke_entry(func_name);
-                        if (entry) {
-                            // Invoke in transpile mode.
-                            // target_obj_c_name_transpile (5th arg for invoke) is the C var name of the object the function is called ON.
-                            // For creation (e.g. lv_btn_create), this is NULL or the parent var name.
-                            // Let's pass current_parent_c_var_name_for_children_transpile_mode, which is the parent of the object having the "with" attribute.
-                            // This might be relevant if the 'with.obj' call is like parent->get_child(...)
-                            // The result_c_name_transpile (6th arg) will capture the C name of the *result* of the call.
-                            // Corrected 6-argument invoke call:
-                            if (!entry->invoke(entry,
-                                             target_entity_render_mode,       /* target_obj_ptr_render_mode (context for nested args) */
-                                             NULL,                            /* target_obj_c_name_transpile (target C name of nested call itself, if method) */
-                                             NULL,                            /* result_dest_render_mode */
-                                             &target_with_obj_c_name,         /* result_c_name_transpile (char** for result C var name) */
-                                             args_item                        /* json_args_array for nested call */
-                                         )) {
-                                LOG_ERR_JSON(obj_to_run_with_json, "TRANSPILE_MODE: Failed to transpile 'with.obj' nested call for '%s'.", func_name);
-                                // target_with_obj_c_name might be NULL or contain partial data, ensure it's handled before potential free
-                            } else {
-                                LOG_DEBUG("TRANSPILE_MODE: Nested call for 'with.obj' yielded C var name '%s'", target_with_obj_c_name ? target_with_obj_c_name : "NULL");
-                            }
-                            // target_with_obj_c_name is now (hopefully) the C variable name of the created/returned object.
-                        } else {
-                            LOG_ERR_JSON(obj_to_run_with_json, "TRANSPILE_MODE: 'with.obj' call: function '%s' not found in invoke table.", func_name);
-                        }
-                    } else {
-                        LOG_ERR_JSON(obj_to_run_with_json, "TRANSPILE_MODE: 'with.obj' is an object but not a valid 'call' structure.");
-                    }
-                } else {
-                    LOG_ERR_JSON(obj_to_run_with_json, "TRANSPILE_MODE: 'with.obj' must be a string (reference/var name) or an object (call).");
+                // For TRANSPILE_MODE, 'with.obj' should resolve to a C variable name string.
+                char* with_target_c_var_name = NULL;
+                // The unmarshal_value needs to be adapted for transpile mode if it's to return a C variable name string.
+                // For now, assume unmarshal_value can get a string if obj_to_run_with_json is like "@some_named_obj"
+                // which would be registered as a c_var_name.
+                // This is a placeholder for more robust 'with.obj' transpilation.
+                if (cJSON_IsString(obj_to_run_with_json) && obj_to_run_with_json->valuestring[0] == '@') {
+                    const char* registered_name = obj_to_run_with_json->valuestring + 1;
+                    with_target_c_var_name = (char*)lvgl_json_get_registered_ptr(registered_name, "c_var_name");
+                    if (with_target_c_var_name) with_target_c_var_name = lv_strdup(with_target_c_var_name); // Duplicate since registry might free original
                 }
 
-                if (target_with_obj_c_name) {
-                    transpile_write_line(g_output_c_file, "    // 'with' actions will target C variable: %s (resolved from 'with.obj')", target_with_obj_c_name);
-                    // Similar to render mode, assume "obj" type for simplicity for now.
-                    // The parent_c_var_name_for_children_transpile_mode for children inside the 'do' block
-                    // should be target_with_obj_c_name itself.
-                    if (!apply_setters_and_attributes_internal(
-                            do_block_for_with_json,       // The attributes to apply
-                            NULL,                         // No render mode entity
-                            target_with_obj_c_name,       // The C variable name of the target
-                            "obj",                        // Assumed actual type
-                            "obj",                        // Assumed create type
-                            true,                         // Assumed widget
-                            NULL,                         // No render mode parent for children
-                            target_with_obj_c_name,       // Parent C var for children in 'do' block
-                            path_prefix_for_named_and_children, // Inherit path prefix
-                            "lv_obj_t"                    // Type for named registration
-                        )) {
-                        LOG_ERR_JSON(do_block_for_with_json, "TRANSPILE_MODE: Failed to apply attributes in 'with.do' block for C var '%s'.", target_with_obj_c_name);
+                if (!with_target_c_var_name) {
+                    // Attempt to format the obj_to_run_with_json directly as a C string (e.g. if it's a function call or direct var)
+                    // This is a simplification; proper resolution is needed.
+                    with_target_c_var_name = transpile_format_arg_as_c_string(obj_to_run_with_json, "lv_obj_t *", NULL); // No implicit parent for context here
+                    if (!with_target_c_var_name) {
+                        LOG_ERR_JSON(obj_to_run_with_json, "TRANSPILE_MODE: Failed to resolve or format 'obj' for 'with' block to a C variable/expression. Skipping 'with'.");
+                        continue;
                     }
-                    lv_free(target_with_obj_c_name); // Free the C name string after use (it's always strdup'd by unmarshal or invoke)
-                } else {
-                    transpile_write_line(g_output_c_file, "    // ERROR: Could not determine target C variable for 'with' block under %s.", target_entity_c_var_name ? target_entity_c_var_name : "unknown_target");
                 }
+
+                LOG_INFO("TRANSPILE_MODE: Applying 'with.do' attributes to target C var '%s' (resolved from 'with.obj')", with_target_c_var_name);
+                // The parent_c_var_name_for_children_transpile_mode for the 'do' block is the with_target_c_var_name itself.
+                if (!apply_setters_and_attributes_internal(
+                        do_block_for_with_json,
+                        NULL, with_target_c_var_name, // No render mode entity
+                        "obj", "obj", true,
+                        NULL, with_target_c_var_name, // No render mode parent
+                        path_prefix_for_named_and_children,
+                        "lv_obj_t"
+                    )) {
+                    LOG_ERR_JSON(do_block_for_with_json, "TRANSPILE_MODE: Failed to apply attributes in 'with.do' block for C var '%s'.", with_target_c_var_name);
+                }
+                if (with_target_c_var_name) lv_free(with_target_c_var_name); // Free if strdup'd or returned by formatter
             }
             continue;
         }
@@ -519,7 +472,7 @@ static bool apply_setters_and_attributes_internal(
             LOG_WARN_JSON(prop_args_array, "No setter/invokable found for property '%s' on type '%s' (create type '%s').", prop_name, target_actual_type_str, target_create_type_str);
         } else {
             if (g_current_operation_mode == RENDER_MODE) {
-                if (!setter_entry->invoke(setter_entry, target_entity_render_mode, NULL /*target_obj_c_name_transpile*/, NULL /*result_dest_render_mode for void setters*/, NULL /*result_c_name_transpile*/, prop_args_array)) {
+                if (!setter_entry->invoke(setter_entry, target_entity_render_mode, NULL, prop_args_array)) {
                     LOG_ERR_JSON(prop_args_array, "RENDER_MODE: Failed to set property '%s' using '%s' on entity %p.", prop_name, setter_entry->name, target_entity_render_mode);
                 } else {
                     LOG_DEBUG("RENDER_MODE: Successfully applied property '%s' using '%s' to entity %p", prop_name, setter_entry->name, target_entity_render_mode);
@@ -735,46 +688,34 @@ static bool apply_setters_and_attributes_internal(
 
     c_code += "    if (g_current_operation_mode == RENDER_MODE) {\n"
     c_code += "        // --- RENDER_MODE: Create actual LVGL entities ---\n"
-    c_code += "        bool custom_creator_called = false;\n"
-    first_custom_type = True
-    # Iterate over custom creators first
-    for obj_type_py, creator_func_py in custom_creators_map.items():
-        if first_custom_type:
-            c_code += f"        if (strcmp(actual_type_str_for_node, \"{obj_type_py}\") == 0) {{\n"
-            first_custom_type = False
-        else:
-            c_code += f"        else if (strcmp(actual_type_str_for_node, \"{obj_type_py}\") == 0) {{\n"
-        c_code +=  "            const char* name_for_custom_creator = (id_str_val && id_str_val[0]) ? id_str_val : effective_path_for_node_and_children;\n"
-        c_code += f"            if (!name_for_custom_creator || !name_for_custom_creator[0]) {{ name_for_custom_creator = \"anonymous_{obj_type_py}\"; }}\n"
-        c_code += f"            created_entity_render_mode = (void*){creator_func_py}(name_for_custom_creator);\n"
+    c_code += "        // Check for custom creators (e.g., for styles)\n"
+    first_creator = True
+    for obj_type, creator_func in custom_creators_map.items():
+        c_code += f"        {'else ' if not first_creator else ''}if (strcmp(actual_type_str_for_node, \"{obj_type}\") == 0) {{\n"
+        c_code += f"            const char* name_for_custom_creator = (effective_path_for_node_and_children[0] != '\\0') ? effective_path_for_node_and_children : NULL;\n"
+        c_code += f"            if (!name_for_custom_creator && id_str_val) name_for_custom_creator = id_str_val;\n"
+        c_code += f"            if (!name_for_custom_creator) {{ \n"
+        c_code += "                 LOG_ERR_JSON(node, \"RENDER_MODE: Type '%s' requires an 'id' to form a registration name.\", actual_type_str_for_node);\n"
+        c_code += "                 if (context_was_locally_changed_by_this_node) set_current_context(original_context_for_this_node_call);\n"
+        c_code += "                 return NULL;\n"
+        c_code += f"            }}\n"
+        c_code += f"            created_entity_render_mode = (void*){creator_func}(name_for_custom_creator);\n"
         c_code += f"            if (!created_entity_render_mode) {{ \n"
-        c_code += f"                 LOG_ERR_JSON(node, \"RENDER_MODE: Custom creator {creator_func_py} for name '%s' (type {obj_type_py}) returned NULL.\", name_for_custom_creator);\n"
-        c_code +=  "                 if (context_was_locally_changed_by_this_node) set_current_context(original_context_for_this_node_call);\n"
-        c_code +=  "                 return NULL; \n"
-        c_code +=  "            }}\n"
-        # Most custom creators are for non-widget types like styles, fonts.
-        # If a custom creator *does* make a widget, this logic might need adjustment or the creator map needs to specify this.
-        c_code +=  "            is_widget = false; // Assume custom creators are for non-widgets unless specified otherwise\n"
-        c_code += f"            snprintf(type_name_for_registry_buf, sizeof(type_name_for_registry_buf), \"lv_{obj_type_py}_t\");\n"
-        c_code +=  "            custom_creator_called = true;\n"
-        c_code +=  "        }\n" # Corrected closing brace
-
-    # Handle 'with' type if it's not in custom_creators_map (it shouldn't be)
-    # Ensure 'with' is properly chained with 'else if' or 'if' depending on whether custom_creators_map was empty
-    with_keyword = "if" if first_custom_type else "else if" # first_custom_type is true if map was empty
-    c_code += f"        {with_keyword} (strcmp(actual_type_str_for_node, \"with\") == 0) {{\n"
-    c_code += "            created_entity_render_mode = (void*)parent_render_mode; /* 'with' acts on parent or specified obj */\n"
-    c_code += "            is_widget = true; /* Operates on widgets */ \n"
-    c_code += "            snprintf(type_name_for_registry_buf, sizeof(type_name_for_registry_buf), \"lv_obj_t\"); \n"
-    c_code += "            actual_type_str_for_node = \"obj\"; /* Treat as obj for attribute application */ \n"
-    c_code += "            create_type_str_for_node = \"obj\"; \n"
-    c_code += "            LOG_DEBUG(\"RENDER_MODE: Processing 'with' node. Target entity will be resolved by apply_setters_and_attributes.\");\n"
-    c_code += "            custom_creator_called = true; /* Mark as handled to skip standard widget creation */ \n"
-    c_code += "        }}\n"
-
-    # Standard widget creation path if not handled by custom creators or 'with'
-    c_code += "        if (!custom_creator_called) {\n"
-    c_code += "            // This is the path for standard widgets not covered by custom_creators_map\n"
+        c_code += "                  LOG_ERR_JSON(node, \"RENDER_MODE: Custom creator %s for name '%s' returned NULL.\", \"{creator_func}\", name_for_custom_creator);\n"
+        c_code += "                  if (context_was_locally_changed_by_this_node) set_current_context(original_context_for_this_node_call);\n"
+        c_code += "                  return NULL; \n"
+        c_code += "            }\n"
+        c_code += f"            is_widget = false;\n"
+        c_code += f"            snprintf(type_name_for_registry_buf, sizeof(type_name_for_registry_buf), \"lv_{obj_type}_t\");\n"
+        c_code += f"        }}\n"
+        first_creator = False
+    c_code += f"        {'else ' if not first_creator else ''}if (strcmp(actual_type_str_for_node, \"with\") == 0) {{\n"
+    c_code += "            created_entity_render_mode = (void*)parent_render_mode;\n"
+    c_code += "            is_widget = true; snprintf(type_name_for_registry_buf, sizeof(type_name_for_registry_buf), \"lv_obj_t\"); \n"
+    c_code += "            actual_type_str_for_node = \"obj\"; create_type_str_for_node = \"obj\";\n"
+    c_code += "            LOG_DEBUG(\"RENDER_MODE: Processing 'with' node.\");\n"
+    c_code += f"        }}\n"
+    c_code += f"        {'else ' if not first_creator else ''} {{\n"
     c_code += "            char create_func_name[64];\n"
     c_code += "            snprintf(create_func_name, sizeof(create_func_name), \"lv_%s_create\", create_type_str_for_node);\n"
     c_code += "            const invoke_table_entry_t* create_entry = find_invoke_entry(create_func_name);\n"
@@ -784,34 +725,22 @@ static bool apply_setters_and_attributes_internal(
     c_code += "                 return NULL;\n"
     c_code += "            }\n"
     c_code += "            lv_obj_t* new_widget = NULL;\n"
-    c_code += "            // Using the 6-argument invoke signature for RENDER_MODE widget creation:\n"
-    c_code += "            if (!create_entry->invoke(create_entry, \n"
-    c_code += "                                     (void*)parent_render_mode,      /* target_obj_ptr_render_mode */ \n"
-    c_code += "                                     NULL,                           /* target_obj_c_name_transpile */ \n"
-    c_code += "                                     &new_widget,                    /* result_dest_render_mode */ \n"
-    c_code += "                                     NULL,                           /* result_c_name_transpile */ \n"
-    c_code += "                                     NULL                            /* json_args_array - create functions don't use this directly */\n"
-    c_code += "                                     )) { \n"
+    c_code += "            if (!create_entry->invoke(create_entry, (void*)parent_render_mode, &new_widget, NULL)) { \n"
     c_code += "                 LOG_ERR_JSON(node, \"RENDER_MODE: Failed to invoke %s.\", create_func_name);\n"
     c_code += "                 if (context_was_locally_changed_by_this_node) set_current_context(original_context_for_this_node_call);\n"
     c_code += "                 return NULL;\n"
     c_code += "            }\n"
-    c_code += "            if (!new_widget) { \n"
-    c_code += "                 LOG_ERR_JSON(node, \"RENDER_MODE: %s returned NULL.\", create_func_name); \n"
-    c_code += "                 if (context_was_locally_changed_by_this_node) set_current_context(original_context_for_this_node_call); \n"
-    c_code += "                 return NULL; \n"
-    c_code += "            }\n"
+    c_code += "            if (!new_widget) {{ LOG_ERR_JSON(node, \"RENDER_MODE: %s returned NULL.\", create_func_name); if (context_was_locally_changed_by_this_node) set_current_context(original_context_for_this_node_call); return NULL; }}\n"
     c_code += "            created_entity_render_mode = (void*)new_widget;\n"
     c_code += "            is_widget = true;\n"
     c_code += "            snprintf(type_name_for_registry_buf, sizeof(type_name_for_registry_buf), \"lv_%s_t\", create_type_str_for_node);\n"
-    c_code += "            // Register if ID is present and path is valid\n"
     c_code += "            if (id_str_val && id_str_val[0] && effective_path_for_node_and_children[0] != '\\0') {\n"
     c_code += "                lvgl_json_register_ptr(effective_path_for_node_and_children, type_name_for_registry_buf, created_entity_render_mode);\n"
     c_code += "                LOG_INFO(\"RENDER_MODE: Registered widget %p as '%s' (type %s)\", created_entity_render_mode, effective_path_for_node_and_children, type_name_for_registry_buf);\n"
     c_code += "            } else if (id_str_val && id_str_val[0]) {\n"
-    c_code += "                LOG_WARN_JSON(node, \"RENDER_MODE: Widget with id '%s' created, but path is empty. Not registered by id path.\", id_str_val);\n"
+    c_code += "                LOG_WARN(\"RENDER_MODE: Widget with id '%s' created, but path is empty. Not registered by id.\", id_str_val);\n"
     c_code += "            }\n"
-    c_code += "        } // End if (!custom_creator_called)\n"
+    c_code += "        }\n"
     c_code += "    } else { // TRANSPILE_MODE\n"
     c_code += "        g_transpile_var_counter++;\n"
     c_code += "        created_entity_c_var_name_transpile = transpile_generate_c_var_name(id_str_val, actual_type_str_for_node, g_transpile_var_counter);\n"
@@ -829,7 +758,7 @@ static bool apply_setters_and_attributes_internal(
     c_code += "            snprintf(c_type_for_declaration, sizeof(c_type_for_declaration), \"lv_obj_t\"); // Default to lv_obj_t for widgets\n"
     c_code += "            // If you want specific types: snprintf(c_type_for_declaration, sizeof(c_type_for_declaration), \"lv_%s_t\", create_type_str_for_node);\n"
     c_code += "        }\n"
-    c_code += "        snprintf(type_name_for_registry_buf, sizeof(type_name_for_registry_buf), \"%s *\", c_type_for_declaration); // For registry, store as "lv_obj_t *" etc.\n"
+    c_code += "        snprintf(type_name_for_registry_buf, sizeof(type_name_for_registry_buf), \"%s *\", c_type_for_declaration); // For registry, store as \"lv_obj_t *\" etc.\n"
     c_code += "\n"
     c_code += "        // Write declaration to header file (if it's a global or needs to be known across C files)\n"
     c_code += "        // For now, let's assume they are declared locally within the create_ui function.\n"

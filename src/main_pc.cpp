@@ -53,7 +53,6 @@ static char *monitored_filepath = NULL;
 static time_t last_mod_time = 0; // Store last modification time
 static uint32_t last_file_check_time = 0; // Track time for polling interval
 
-
 volatile sig_atomic_t bRunning = true; // Keep the signal handler flag
 
 void signal_handler(int interrupt) {
@@ -63,6 +62,9 @@ void signal_handler(int interrupt) {
   }
 }
 
+#include "data_binding.h"
+
+app_context_t *REGISTRY = NULL;
 
 // --- Helper Function: Load UI from File ---
 // (Copied from previous file-watching example, adapted logging)

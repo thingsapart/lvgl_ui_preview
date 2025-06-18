@@ -116,7 +116,6 @@ typedef enum {
     _ACTION_COUNT // Sentinel value for array sizing. Must be last.
 } app_action_t;
 
-
 // --- Part 2: UI Display (Data from Application Logic to UI) ---
 
 /**
@@ -133,7 +132,6 @@ typedef enum {
 
     _DATA_COUNT // Sentinel value for array sizing. Must be last.
 } app_data_t;
-
 
 // --- Core Data Structures ---
 
@@ -180,6 +178,7 @@ typedef struct app_context_t {
                      // This provides the action handlers with access to your logic.
 } app_context_t;
 
+extern app_context_t *REGISTRY;
 
 // --- API Functions ---
 

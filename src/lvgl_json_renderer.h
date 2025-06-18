@@ -74,6 +74,19 @@ extern lv_obj_t *lv_screen_active(void);
 // --- Public API ---
 
 /**
+ * @brief Transpiles a UI described by a cJSON object tree into C code.
+ *
+ * Parses the JSON definition and generates C source and header files that, when compiled,
+ * will create the LVGL UI.
+ * Assumes cJSON library is linked. Requires LVGL to be initialized (for enums, types etc. during generation).
+ *
+ * @param root_json The root cJSON object (must be an array of objects or a single object).
+ * @param output_c_filename_base The base name for the output files (e.g., "my_ui" will produce "my_ui.c" and "my_ui.h").
+ * @return true if transpilation was successful, false otherwise. Errors are logged.
+ */
+bool lvgl_json_transpile_ui(cJSON *root_json, const char *output_c_filename_base);
+
+/**
  * @brief Adds a custom string-to-integer mapping for enum unmarshaling.
  * Allows overriding or extending generated enum values at runtime.
  * The 'name' string must persist for the lifetime of its use or be a literal.

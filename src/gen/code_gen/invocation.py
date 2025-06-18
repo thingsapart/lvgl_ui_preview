@@ -154,6 +154,7 @@ def _generate_generic_invoke_fn(signature_category, sig_c_name, function_list, a
 
     # Check JSON array validity and size
     c_code += f"    // Expecting {num_json_args_expected} arguments from JSON array for function '{representative_func}'\n"
+    c_code += f"    const int num_json_args_expected = {num_json_args_expected};\n"
     c_code += f"    if (!cJSON_IsArray(args_array)) {{\n"
     c_code += f"       if ({num_json_args_expected} == 0 && args_array == NULL) {{ /* Okay */ }}\n"
     c_code += f"       else {{ LOG_ERR_JSON(args_array, \"Invoke Error: args_array is not a valid array for {sig_c_name} (func '%s')\", entry->name); return false; }}\n"
@@ -250,6 +251,7 @@ def _generate_generic_invoke_fn(signature_category, sig_c_name, function_list, a
         num_json_args_expected = num_c_args - 1
         c_code += f"        if (!entry->arg_types[0]) {{ LOG_ERR(\"Invoke Error: Missing type string for target arg 0 of '%s'\", entry->name); return false; }}\n"
         c_code += f"        arg_buf0 = (void*)target_obj_ptr_render_mode;\n"
+    c_code += f"        const int num_json_args_expected = {num_json_args_expected};\n"
     c_code += f"        if (!cJSON_IsArray(args_array)) {{\n"
     c_code += f"           if ({num_json_args_expected} == 0 && args_array == NULL) {{ /* Okay */ }}\n"
     c_code += f"           else {{ LOG_ERR_JSON(args_array, \"Invoke Error: args_array is not a valid array for {sig_c_name} (func '%s')\", entry->name); return false; }}\n"
@@ -301,6 +303,7 @@ def _generate_generic_invoke_fn(signature_category, sig_c_name, function_list, a
     c_code += f"            c_arg_idx_for_unmarshal = 1;\n"
     c_code += f"        }}\n\n"
     c_code += f"        int num_json_args_to_process = (args_array == NULL) ? 0 : cJSON_GetArraySize(args_array);\n"
+    c_code += f"        const int num_json_args_expected = {num_json_args_expected};\n"
     c_code += f"        if (num_json_args_to_process != num_json_args_expected) {{\n"
     c_code += f"            LOG_ERR_JSON(args_array, \"TRANSPILE Error: Expected %d JSON args for func '%s', got %d\", num_json_args_expected, entry->name, num_json_args_to_process);\n"
     c_code += f"            return false;\n"
