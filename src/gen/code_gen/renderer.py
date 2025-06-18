@@ -390,11 +390,18 @@ static bool apply_setters_and_attributes_internal(
                             // Let's pass current_parent_c_var_name_for_children_transpile_mode, which is the parent of the object having the "with" attribute.
                             // This might be relevant if the 'with.obj' call is like parent->get_child(...)
                             // The result_c_name_transpile (6th arg) will capture the C name of the *result* of the call.
-                            if (!entry->invoke(entry, NULL, NULL, args_item,
-                                             parent_c_var_name_for_children_transpile_mode, // C name of obj on which 'call' is made (if method) or parent (if creation)
-                                             &target_with_obj_c_name,
-                                             g_output_c_file, g_output_h_file)) {
+                            // Corrected 6-argument invoke call:
+                            if (!entry->invoke(entry,
+                                             target_entity_render_mode,       /* target_obj_ptr_render_mode (context for nested args) */
+                                             NULL,                            /* target_obj_c_name_transpile (target C name of nested call itself, if method) */
+                                             NULL,                            /* result_dest_render_mode */
+                                             &target_with_obj_c_name,         /* result_c_name_transpile (char** for result C var name) */
+                                             args_item                        /* json_args_array for nested call */
+                                         )) {
                                 LOG_ERR_JSON(obj_to_run_with_json, "TRANSPILE_MODE: Failed to transpile 'with.obj' nested call for '%s'.", func_name);
+                                // target_with_obj_c_name might be NULL or contain partial data, ensure it's handled before potential free
+                            } else {
+                                LOG_DEBUG("TRANSPILE_MODE: Nested call for 'with.obj' yielded C var name '%s'", target_with_obj_c_name ? target_with_obj_c_name : "NULL");
                             }
                             // target_with_obj_c_name is now (hopefully) the C variable name of the created/returned object.
                         } else {
@@ -750,7 +757,7 @@ static bool apply_setters_and_attributes_internal(
         c_code +=  "            is_widget = false; // Assume custom creators are for non-widgets unless specified otherwise\n"
         c_code += f"            snprintf(type_name_for_registry_buf, sizeof(type_name_for_registry_buf), \"lv_{obj_type_py}_t\");\n"
         c_code +=  "            custom_creator_called = true;\n"
-        c_code +=  "        }}\n"
+        c_code +=  "        }\n" # Corrected closing brace
 
     # Handle 'with' type if it's not in custom_creators_map (it shouldn't be)
     # Ensure 'with' is properly chained with 'else if' or 'if' depending on whether custom_creators_map was empty
