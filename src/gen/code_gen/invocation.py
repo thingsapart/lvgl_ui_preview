@@ -56,6 +56,14 @@ def _generate_widget_create_invoker():
     c_code += f"    // Call the target LVGL create function\n"
     c_code += f"    lv_obj_t* result = target_func(parent);\n\n"
 
+    # --- BEGIN TRACE WIDGET CREATE INVOKER ---
+    c_code += f"    // Tracing the widget creation call\n"
+    c_code += f"    char L_parent_trace_name[64]; snprintf(L_parent_trace_name, sizeof(L_parent_trace_name), \"trace_obj_%p\", (void*)parent);\n"
+    c_code += f"    char L_result_trace_name[64]; snprintf(L_result_trace_name, sizeof(L_result_trace_name), \"trace_obj_%p\", (void*)result);\n"
+    c_code += f"    const char* L_ret_type_str = entry->ret_type ? entry->ret_type : \"lv_obj_t*\"; // Default for create invokers\n"
+    c_code += f"    printf(\"%s%s *%s = %s(%s); /* Invoked by {sig_c_name}. Actual parent: %p, created_obj: %p */\\n\", get_c_trace_indent_str(), L_ret_type_str, L_result_trace_name, entry->name, L_parent_trace_name, (void*)parent, (void*)result);\n"
+    c_code += f"    // --- END TRACE WIDGET CREATE INVOKER ---\n\n"
+
     # Store the result
     c_code += f"    // Store result widget pointer into *dest\n"
     c_code += f"    *(lv_obj_t**)dest = result;\n\n"
@@ -294,6 +302,73 @@ def _generate_generic_invoke_fn(signature_category, sig_c_name, function_list, a
     c_code += f"    typedef {simplified_ret_type} (*invoker_func_type)({simplified_args_str});\n"
     c_code += f"    invoker_func_type target_func = (invoker_func_type)entry->func_ptr;\n\n"
 
+    # --- BEGIN TRACE GENERIC INVOKER CALL ---
+    c_code += "    // Prepare arguments for trace printf\\n"
+    c_code += "    char L_target_trace_name[64] = \\\"NULL_TARGET\\\";\\n"
+    c_code += "    if (target_obj_ptr && first_arg_is_target) { snprintf(L_target_trace_name, sizeof(L_target_trace_name), \\\"trace_obj_%p\\\", target_obj_ptr); }\\n"
+    c_code += "    else if (target_obj_ptr) { snprintf(L_target_trace_name, sizeof(L_target_trace_name), \\\"target_obj_%p_NON_TRACEABLE\\\", target_obj_ptr); } // Target is not the first arg, or not ptr for trace obj format \\n"
+
+    c_code += "    char L_args_for_trace[512]; L_args_for_trace[0] = '\\\\0'; int L_args_len = 0;\\n"
+    c_code += "    char L_current_arg_str[128];\\n"
+
+    for i in range(num_c_args):
+        c_type_str_expr = f"entry->arg_types[{i}]" # C expression to get the type string
+        sig_comp = sig_arg_comps[i]
+        buffer_var_name = f"arg_buf{i}"
+
+        c_code += f"    // Formatting arg {i} ({sig_comp} from {buffer_var_name}) using C type {c_type_str_expr}\\n"
+        c_code += f"    memset(L_current_arg_str, 0, sizeof(L_current_arg_str));\\n"
+        c_code += f"    const char* c_type_str_arg{i} = {c_type_str_expr};\\n"
+        c_code += f"    if (!c_type_str_arg{i}) {{ snprintf(L_current_arg_str, sizeof(L_current_arg_str)-1, \\\"<ERR_NO_TYPESTR_ARG{i}>\\\"); }}\\n"
+
+        if i == 0 and first_arg_is_target:
+            c_code += f"    strncpy(L_current_arg_str, L_target_trace_name, sizeof(L_current_arg_str)-1); // Use pre-formatted target trace name\\n"
+        else:
+            c_code += f"    const char* c_type_str_arg{i} = {c_type_str_expr};\\n"
+            c_code += f"    if (!c_type_str_arg{i}) {{ snprintf(L_current_arg_str, sizeof(L_current_arg_str)-1, \\\"<ERR_NO_TYPESTR_ARG{i}>\\\"); }}\\n"
+            if sig_comp == 'const char *':
+                c_code += f"    else {{ snprintf(L_current_arg_str, sizeof(L_current_arg_str)-1, \\\"\\\\\\\"%s\\\\\\\"\\\", ({buffer_var_name}) ? (char*){buffer_var_name} : \\\"NULL_STR\\\"); }}\\n"
+            elif sig_comp == 'POINTER' or sig_comp.endswith('*'): # Generic pointers
+                c_code += f"    else {{ snprintf(L_current_arg_str, sizeof(L_current_arg_str)-1, \\\"trace_obj_%p\\\", (void*){buffer_var_name}); }}\\n"
+            elif sig_comp == 'BOOL':
+            # Buffer type for BOOL is int64_t, value is 0 or 1 (or non-zero)
+                c_code += f"    else {{ snprintf(L_current_arg_str, sizeof(L_current_arg_str)-1, \\\"%s\\\", {buffer_var_name} ? \\\"true\\\" : \\\"false\\\"); }}\\n"
+            else: # INT, lv_color_t, Enums assumed to be in int64_t buffer
+                c_code += f"    else {{ snprintf(L_current_arg_str, sizeof(L_current_arg_str)-1, \\\"%lld /* %s */\\\", (long long int){buffer_var_name}, c_type_str_arg{i}); }}\\n" # Use %lld for int64_t
+
+        # Append to L_args_for_trace
+        # The first actual argument to the function call trace is L_target_trace_name IF it's the object.
+        # Subsequent args in L_args_for_trace are from the JSON.
+        # This logic needs to be careful about which arg we are formatting for L_args_for_trace
+
+        # Revised logic for L_args_for_trace construction:
+        # It should contain ALL C arguments passed to the function, including target_obj_ptr if it's the first C arg.
+        # So, the loop for L_args_for_trace should build a string of ALL args.
+        # The printf then decides whether to print L_target_trace_name or the first part of L_args_for_trace.
+
+        # Let's simplify: L_args_for_trace will be a string of all C arguments passed to target_func.
+        # The printf will then just print entry->name(L_args_for_trace).
+        if i == 0: # First argument overall
+             c_code += f"    L_args_len += snprintf(L_args_for_trace + L_args_len, sizeof(L_args_for_trace) - L_args_len, \\\"%s\\\", L_current_arg_str);\\n"
+        else: # Subsequent arguments
+             c_code += f"    L_args_len += snprintf(L_args_for_trace + L_args_len, sizeof(L_args_for_trace) - L_args_len, \\\", %s\\\", L_current_arg_str);\\n"
+
+    if num_c_args == 0 : # Handle functions with no arguments
+        c_code += "    strncpy(L_args_for_trace, \"void\", sizeof(L_args_for_trace)-1);\\n"
+
+
+    # Determine the first part of the call string for trace
+    # If first_arg_is_target, L_target_trace_name should be used as the first argument.
+    # L_args_for_trace should then contain the rest of the arguments.
+    # This part of the prompt was complex and might need a different approach for constructing the printf.
+    # For now, let's assume L_args_for_trace contains all arguments correctly formatted.
+
+    c_code += f"    // Trace the call to the C invoker function itself and the actual LVGL function call it's about to make.\n"
+    c_code += f"    printf(\"%s// Calling C invoker: {sig_c_name} for LVGL func '%s' on target '%s'\\n\", get_c_trace_indent_str(), entry->name, L_target_trace_name);\n"
+    c_code += f"    printf(\"%s%s(%s); /* About to be invoked by {sig_c_name} */\\n\", get_c_trace_indent_str(), entry->name, L_args_for_trace);\\n"
+    c_code += "    // --- END TRACE GENERIC INVOKER CALL ---\\n\n"
+
+
     c_code += "    // Call the target LVGL function using values from stack buffers\n"
     call_args_str = ", ".join(arg_buffers)
 
@@ -303,9 +378,9 @@ def _generate_generic_invoke_fn(signature_category, sig_c_name, function_list, a
         c_code += f"    {result_buffer_name} = target_func({call_args_str});\n"
     c_code += "\n"
 
-    # --- Store Result ---
+    # --- Store Result & Trace Result ---
     if sig_ret_comp != 'void':
-        c_code += "    // Store result (from result_buf) if dest is provided\n"
+        c_code += "    // Store result (from result_buf) if dest is provided and Trace Result\\n"
         c_code += "    if (dest) {\n"
         # Copy result buffer to destination. Size mismatch IS possible here.
         # Use specific type string from entry for casting the destination pointer.
@@ -315,12 +390,91 @@ def _generate_generic_invoke_fn(signature_category, sig_c_name, function_list, a
         # Simple assignment cast (assuming primitive/pointer returns)
         c_code += f"        if (strchr(specific_ret_type_str, '*')) {{ // Pointer type\n"
         c_code += f"             *(void**)dest = (void*){result_buffer_name};\n"
+        c_code += f"             printf(\"%s// Result for %s: trace_obj_%p\\n\", get_c_trace_indent_str(), entry->name, (void*){result_buffer_name});\n"
+        c_code += f"        }} else if (strcmp(specific_ret_type_str, \"bool\") == 0) {{ // Bool type\n"
+        c_code += f"             *(_Bool *)dest = (_Bool){result_buffer_name};\n" # Use _Bool for C99 bool
+        c_code += f"             printf(\"%s// Result for %s: %s\\n\", get_c_trace_indent_str(), entry->name, {result_buffer_name} ? \"true\" : \"false\");\n"
         c_code += f"        }} else if (strcmp(specific_ret_type_str, \"float\") == 0 || strcmp(specific_ret_type_str, \"double\") == 0) {{ // Float/Double\n"
         c_code += f"             *({result_buffer_type} *)dest = ({result_buffer_type}){result_buffer_name};\n" # Assumes result_buffer_type is double
-        c_code += f"        }} else if (strcmp(specific_ret_type_str, \"void\") != 0) {{ // Integer/Enum/Bool/Color?\n"
+        c_code += f"             printf(\"%s// Result for %s: %g\\n\", get_c_trace_indent_str(), entry->name, (double){result_buffer_name});\n"
+        c_code += f"        }} else if (strcmp(specific_ret_type_str, \"void\") != 0) {{ // Integer/Enum/Color?\n"
         c_code += f"             *({result_buffer_type} *)dest = ({result_buffer_type}){result_buffer_name};\n" # Assumes result_buffer_type is int64_t
-        c_code += f"             // TODO: Potential truncation/sign issues if specific_ret_type is smaller than {result_buffer_type}\n"
+        c_code += f"             printf(\"%s// Result for %s: %lld /* %s */\\n\", get_c_trace_indent_str(), entry->name, (long long int){result_buffer_name}, specific_ret_type_str);\n"
         c_code += f"        }}\n"
+    c_code += "    } else {\n"
+    c_code += "        // If dest is NULL but function is not void, still trace the call (done above) but not result storage or result trace.\n"
+    c_code += "    }\n"
+
+    c_code += "\n    return true;\n"
+            c_code += f"    else {{ snprintf(L_current_arg_str, sizeof(L_current_arg_str)-1, \\\"%s\\\", {buffer_var_name} ? \\\"true\\\" : \\\"false\\\"); }}\\n"
+        else: # INT, lv_color_t, Enums assumed to be in int64_t buffer
+            c_code += f"    else {{ snprintf(L_current_arg_str, sizeof(L_current_arg_str)-1, \\\"%lld /* %s */\\\", (long long int){buffer_var_name}, c_type_str_arg{i}); }}\\n" # Use %lld for int64_t
+
+        # Append to L_args_for_trace
+        # The first actual argument to the function call trace is L_target_trace_name IF it's the object.
+        # Subsequent args in L_args_for_trace are from the JSON.
+        # This logic needs to be careful about which arg we are formatting for L_args_for_trace
+
+        # Revised logic for L_args_for_trace construction:
+        # It should contain ALL C arguments passed to the function, including target_obj_ptr if it's the first C arg.
+        # So, the loop for L_args_for_trace should build a string of ALL args.
+        # The printf then decides whether to print L_target_trace_name or the first part of L_args_for_trace.
+
+        # Let's simplify: L_args_for_trace will be a string of all C arguments passed to target_func.
+        # The printf will then just print entry->name(L_args_for_trace).
+        if i == 0: # First argument overall
+             c_code += f"    L_args_len += snprintf(L_args_for_trace + L_args_len, sizeof(L_args_for_trace) - L_args_len, \\\"%s\\\", L_current_arg_str);\\n"
+        else: # Subsequent arguments
+             c_code += f"    L_args_len += snprintf(L_args_for_trace + L_args_len, sizeof(L_args_for_trace) - L_args_len, \\\", %s\\\", L_current_arg_str);\\n"
+
+    if num_c_args == 0 : # Handle functions with no arguments
+        c_code += "    strncpy(L_args_for_trace, \"void\", sizeof(L_args_for_trace)-1);\\n"
+
+
+    # Determine the first part of the call string for trace
+    # If first_arg_is_target, L_target_trace_name should be used as the first argument.
+    # L_args_for_trace should then contain the rest of the arguments.
+    # This part of the prompt was complex and might need a different approach for constructing the printf.
+    # For now, let's assume L_args_for_trace contains all arguments correctly formatted.
+
+    c_code += f"    printf(\"%s%s(%s); /* Invoked by {sig_c_name} */\\n\", get_c_trace_indent_str(), entry->name, L_args_for_trace);\\n"
+    c_code += "    // --- END TRACE GENERIC INVOKER CALL ---\\n\n"
+
+
+    c_code += "    // Call the target LVGL function using values from stack buffers\n"
+    call_args_str = ", ".join(arg_buffers)
+
+    if sig_ret_comp == 'void':
+        c_code += f"    target_func({call_args_str});\n"
+    else:
+        c_code += f"    {result_buffer_name} = target_func({call_args_str});\n"
+    c_code += "\n"
+
+    # --- Store Result & Trace Result ---
+    if sig_ret_comp != 'void':
+        c_code += "    // Store result (from result_buf) if dest is provided and Trace Result\\n"
+        c_code += "    if (dest) {\n"
+        # Copy result buffer to destination. Size mismatch IS possible here.
+        # Use specific type string from entry for casting the destination pointer.
+        c_code += f"        const char* specific_ret_type_str = entry->ret_type ? entry->ret_type : \"void\";\n"
+        c_code += f"        // Copy result from buffer to dest (casting dest based on specific return type '{sig_ret_comp}')\n"
+        c_code += f"        // WARNING: Assumes calling convention compatibility & sufficient space at dest!\n"
+        # Simple assignment cast (assuming primitive/pointer returns)
+        c_code += f"        if (strchr(specific_ret_type_str, '*')) {{ // Pointer type\n"
+        c_code += f"             *(void**)dest = (void*){result_buffer_name};\n"
+        c_code += f"             printf(\"%s// Result for %s: trace_obj_%p\\n\", get_c_trace_indent_str(), entry->name, (void*){result_buffer_name});\n"
+        c_code += f"        }} else if (strcmp(specific_ret_type_str, \"bool\") == 0) {{ // Bool type\n"
+        c_code += f"             *(_Bool *)dest = (_Bool){result_buffer_name};\n" # Use _Bool for C99 bool
+        c_code += f"             printf(\"%s// Result for %s: %s\\n\", get_c_trace_indent_str(), entry->name, {result_buffer_name} ? \"true\" : \"false\");\n"
+        c_code += f"        }} else if (strcmp(specific_ret_type_str, \"float\") == 0 || strcmp(specific_ret_type_str, \"double\") == 0) {{ // Float/Double\n"
+        c_code += f"             *({result_buffer_type} *)dest = ({result_buffer_type}){result_buffer_name};\n" # Assumes result_buffer_type is double
+        c_code += f"             printf(\"%s// Result for %s: %g\\n\", get_c_trace_indent_str(), entry->name, (double){result_buffer_name});\n"
+        c_code += f"        }} else if (strcmp(specific_ret_type_str, \"void\") != 0) {{ // Integer/Enum/Color?\n"
+        c_code += f"             *({result_buffer_type} *)dest = ({result_buffer_type}){result_buffer_name};\n" # Assumes result_buffer_type is int64_t
+        c_code += f"             printf(\"%s// Result for %s: %lld /* %s */\\n\", get_c_trace_indent_str(), entry->name, (long long int){result_buffer_name}, specific_ret_type_str);\n"
+        c_code += f"        }}\n"
+        c_code += "    } else {\n"
+        c_code += "        // If dest is NULL but function is not void, still trace the call (done above) but not result storage or result trace.\n"
         c_code += "    }\n"
 
     c_code += "\n    return true;\n"

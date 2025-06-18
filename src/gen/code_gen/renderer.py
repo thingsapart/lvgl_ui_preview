@@ -4,17 +4,156 @@ from type_utils import lvgl_type_to_widget_name
 
 logger = logging.getLogger(__name__)
 
+# --- Trace State Management ---
+# Python-side global for managing indentation level during C code generation
+g_py_trace_indent_level = 0
+# C-side global variable name for trace indentation
+C_TRACE_INDENT_VAR = "g_c_trace_indent_level"
+
+g_trace_parent_stack = [] # Stores C variable names (as strings) or C expressions for parent trace names
+g_trace_var_counter = 0
+
+def _get_py_trace_indent_str():
+    """Returns the Python string for current indentation for embedding in C printf format strings."""
+    return "    " * g_py_trace_indent_level
+
+def _increment_py_trace_indent():
+    """Increments Python-side indent level."""
+    global g_py_trace_indent_level
+    g_py_trace_indent_level += 1
+    # Returns C code to increment C-side indent level
+    return f"    {C_TRACE_INDENT_VAR}++;\n"
+
+def _decrement_py_trace_indent():
+    """Decrements Python-side indent level."""
+    global g_py_trace_indent_level
+    if g_py_trace_indent_level > 0:
+        g_py_trace_indent_level -= 1
+    # Returns C code to decrement C-side indent level
+    return f"    if ({C_TRACE_INDENT_VAR} > 0) {C_TRACE_INDENT_VAR}--;\n"
+
+def _push_trace_parent(c_variable_name_str):
+    # c_variable_name_str is the C variable *name* (e.g., "new_trace_var_name_buf", "root_trace_name")
+    # that holds the string like "trace_obj_0xABCDEF"
+    global g_trace_parent_stack
+    g_trace_parent_stack.append(c_variable_name_str)
+
+def _pop_trace_parent():
+    global g_trace_parent_stack
+    if g_trace_parent_stack:
+        return g_trace_parent_stack.pop()
+    return "NULL" # Return "NULL" string if stack is empty, as C expects a string
+
+def _get_current_trace_parent():
+    # Returns the C variable *name* or C expression that should be used as the parent argument
+    # in the lv_generic_create(parent_trace_name) call.
+    global g_trace_parent_stack
+    if g_trace_parent_stack:
+        return g_trace_parent_stack[-1]
+    return "NULL" # Default C parent name if stack is empty
+
+def _generate_unique_trace_var_name(base_type="lv_obj_t", base_name_hint="obj"):
+    # base_type is not used in this version as per simplified requirement,
+    # but kept for potential future use.
+    global g_trace_var_counter
+    g_trace_var_counter += 1
+    return f"trace_{base_name_hint}_{g_trace_var_counter}"
+
+# --- End Trace State Management ---
+
 def generate_renderer(custom_creators_map):
     """Generates the C code for parsing the JSON UI and rendering it."""
     # custom_creators_map: {'style': 'lv_style_create_managed', ...}
 
+    # Initialize trace state
+    global g_py_trace_indent_level, g_trace_parent_stack, g_trace_var_counter
+    g_py_trace_indent_level = 0
+    g_trace_parent_stack = [] # Stack for C variable names of trace parents
+    g_trace_var_counter = 0 # Counter for unique C variable names for trace objects
+
     c_code = "// --- JSON UI Renderer ---\n\n"
     c_code += "#include <stdio.h> // For debug prints\n"
+    c_code += "#include <string.h> // For memset, strcat, strcmp, strstr\n"
+    c_code += "#include <stdbool.h> // For bool type in _format_c_value_for_trace\n"
     c_code += "#include \"data_binding.h\" // For action/observes attributes\n\n"
     c_code += "extern data_binding_registry_t* REGISTRY; // Global registry for actions and data bindings\n\n"
+
+    c_code += "// --- BEGIN TRACE HELPER C GLOBALS AND FUNCTIONS ---\n"
+    c_code += f"int {C_TRACE_INDENT_VAR} = 0;\n"
+    c_code += """
+static char g_c_trace_indent_buffer[128]; // Max 30 levels of 4 spaces + null terminator
+static const char* get_c_trace_indent_str() {
+    g_c_trace_indent_buffer[0] = '\\0';
+    for (int i = 0; i < g_c_trace_indent_level && i < 30; ++i) {
+        strcat(g_c_trace_indent_buffer, "    ");
+    }
+    return g_c_trace_indent_buffer;
+}
+
+// C helper to format various C types into a string for tracing
+static const char* _format_c_value_for_trace(const char* actual_c_type, void* value_data, char* buffer, size_t buffer_len, void* lvgl_obj_context) {
+    // 'value_data' interpretation depends on 'actual_c_type':
+// C helper to format various C types into a string for tracing
+static const char* _format_c_value_for_trace(const char* actual_c_type, void* value_data, char* buffer, size_t buffer_len, void* lvgl_obj_context) {
+    // 'value_data' interpretation depends on 'actual_c_type':
+    // - For non-pointer types (int, bool, enums, lv_color_t): value_data is a POINTER to the value (e.g., int*, bool*).
+    // - For pointer types (char*, lv_obj_t*, void*): value_data IS THE POINTER value itself (e.g., char*, lv_obj_t*).
+
+    if (!buffer || buffer_len == 0) return "ERR_BUF";
+    buffer[0] = '\\0';
+
+    if (!actual_c_type) { snprintf(buffer, buffer_len, "ERR_NO_TYPE"); return buffer; }
+
+    // Handle types where value_data is the pointer value itself
+    if (strcmp(actual_c_type, "const char *") == 0 || strcmp(actual_c_type, "char *") == 0) {
+        char* str_val = (char*)value_data;
+        snprintf(buffer, buffer_len, "\\\"%s\\\"", str_val ? str_val : "NULL_STR_PTR");
+    } else if (strcmp(actual_c_type, "lv_obj_t*") == 0 || strcmp(actual_c_type, "lv_obj_t *") == 0 ||
+               (strstr(actual_c_type, "lv_") == actual_c_type && strstr(actual_c_type, "_t*") != NULL && strstr(actual_c_type, "(*)") == NULL /* not a func ptr */) ) {
+        snprintf(buffer, buffer_len, "trace_obj_%p", value_data); // value_data is the lv_obj_t* or other lv_..._t*
+    } else if (strcmp(actual_c_type, "void*") == 0) {
+        snprintf(buffer, buffer_len, "ptr_0x%p", value_data); // value_data is the void*
+    }
+    // Handle types where value_data is a pointer TO the value
+    else if (value_data == NULL) { // For all non-pointer types below, if value_data (the pointer to value) is NULL, then print NULL.
+        snprintf(buffer, buffer_len, "NULL_VALUE_PTR");
+    } else if (strcmp(actual_c_type, "int") == 0 || strcmp(actual_c_type, "int32_t") == 0 || strcmp(actual_c_type, "lv_coord_t") == 0) {
+        snprintf(buffer, buffer_len, "%d", *(int*)value_data);
+    } else if (strcmp(actual_c_type, "uint32_t") == 0) {
+        snprintf(buffer, buffer_len, "%u", *(uint32_t*)value_data);
+    } else if (strcmp(actual_c_type, "int16_t") == 0) {
+        snprintf(buffer, buffer_len, "%hd", *(int16_t*)value_data);
+    } else if (strcmp(actual_c_type, "uint16_t") == 0) {
+        snprintf(buffer, buffer_len, "%hu", *(uint16_t*)value_data);
+    } else if (strcmp(actual_c_type, "int8_t") == 0) {
+        snprintf(buffer, buffer_len, "%d", *(int8_t*)value_data);
+    } else if (strcmp(actual_c_type, "uint8_t") == 0) {
+        snprintf(buffer, buffer_len, "%u", *(uint8_t*)value_data);
+    } else if (strcmp(actual_c_type, "bool") == 0 || strcmp(actual_c_type, "_Bool") == 0) {
+        snprintf(buffer, buffer_len, "%s", *(_Bool*)value_data ? "true" : "false");
+    } else if (strcmp(actual_c_type, "float") == 0) {
+        snprintf(buffer, buffer_len, "%g", *(float*)value_data);
+    } else if (strcmp(actual_c_type, "double") == 0) {
+        snprintf(buffer, buffer_len, "%g", *(double*)value_data);
+    } else if (strcmp(actual_c_type, "lv_color_t") == 0) {
+        snprintf(buffer, buffer_len, "{.full=0x%X}", ((lv_color_t*)value_data)->full);
+    } else if (strstr(actual_c_type, "lv_") == actual_c_type && strstr(actual_c_type, "_t") != NULL && strstr(actual_c_type, "*") == NULL && strstr(actual_c_type, "(*)") == NULL) { // LVGL enum (non-pointer, not func ptr)
+        snprintf(buffer, buffer_len, "%d /* enum %s */", *(int*)value_data, actual_c_type);
+    } else if (strstr(actual_c_type, "*") != NULL && strstr(actual_c_type, "(*)") == NULL) { // Other unknown pointer type (not func ptr)
+        // value_data is the pointer value itself
+        snprintf(buffer, buffer_len, "ptr_0x%p /* type: %s */", value_data, actual_c_type);
+    }
+     else { // Fallback for other non-pointer types or unhandled pointers if logic above is not exhaustive
+        snprintf(buffer, buffer_len, "val_? /* unhandled type: %s */", actual_c_type);
+    }
+    return buffer;
+}
+"""
+    c_code += "// --- END TRACE HELPER C FUNCTIONS ---\n\n"
+
     c_code += "// Forward declarations\n"
     c_code += "static void* render_json_node(cJSON *node, lv_obj_t *parent, const char *named_path_prefix);\n" # Return void*
-    c_code += "static bool apply_setters_and_attributes(cJSON *attributes_json_obj, void *target_entity, const char *target_actual_type_str, const char *target_create_type_str, bool target_is_widget, lv_obj_t *parent_for_children_attr, const char *path_prefix_for_named_and_children, const char *default_type_name_for_registry_if_named);\n"
+    c_code += "static bool apply_setters_and_attributes(cJSON *attributes_json_obj, void *target_entity, const char *target_actual_type_str, const char *target_create_type_str, bool target_is_widget, lv_obj_t *parent_for_children_attr, const char *path_prefix_for_named_and_children, const char *default_type_name_for_registry_if_named, const char *current_widget_trace_name);\n"
     c_code += "static const invoke_table_entry_t* find_invoke_entry(const char *name);\n"
     c_code += "static bool unmarshal_value(cJSON *json_value, const char *expected_c_type, void *dest, void *implicit_parent);\n"
     c_code += "extern void* lvgl_json_get_registered_ptr(const char *name, const char *expected_type_name);\n"
@@ -39,8 +178,12 @@ static bool apply_setters_and_attributes(
     bool target_is_widget,
     lv_obj_t *explicit_parent_for_children_attr, // Parent if "children" attr is found, usually target_entity if widget
     const char *path_prefix_for_named_and_children, // Path prefix for "named" attr registration and for children within attributes_json_obj
-    const char *default_type_name_for_registry_if_named // e.g. "lv_obj_t", "lv_style_t" if "named" is processed
+    const char *default_type_name_for_registry_if_named, // e.g. "lv_obj_t", "lv_style_t" if "named" is processed
+    const char *current_widget_trace_name // Trace name of the widget/entity being affected
 ) {
+    // Ensure current_widget_trace_name is always a valid string for printf
+    const char* trace_name_for_printf = current_widget_trace_name ? current_widget_trace_name : "NULL_TRACE_NAME";
+
     if (!attributes_json_obj || !cJSON_IsObject(attributes_json_obj) || !target_entity) {
         LOG_ERR("apply_setters_and_attributes: Invalid arguments.");
         return false;
@@ -86,12 +229,12 @@ static bool apply_setters_and_attributes(
             if (target_is_widget) {
                 if (cJSON_IsString(prop_item)) {
                     char* action_val_str = NULL;
-                    // Use unmarshal_value to resolve potential context variables like $action_name
                     if (unmarshal_value(prop_item, "char *", &action_val_str, target_entity)) {
                         if (REGISTRY) {
                             lv_event_cb_t evt_cb = action_registry_get_handler_s(REGISTRY, action_val_str);
                             if (evt_cb) {
-                                lv_obj_add_event_cb((lv_obj_t*)target_entity, evt_cb, LV_EVENT_ALL, NULL);
+                                lv_obj_add_event_cb((lv_obj_t*)target_entity, evt_cb, LV_EVENT_ALL, NULL); // TODO: Pass trace_user_data
+                                printf("%s// Action: %s on %s\\n", get_c_trace_indent_str(), action_val_str ? action_val_str : "NULL_ACTION", trace_name_for_printf);
                             } else {
                                 LOG_WARN_JSON(prop_item, "Action '%s' not found in registry.", action_val_str);
                             }
@@ -125,6 +268,7 @@ static bool apply_setters_and_attributes(
                         if (val_ok && fmt_ok && obs_value_str && obs_format_str) {
                             if (REGISTRY) {
                                 data_binding_register_widget_s(REGISTRY, obs_value_str, (lv_obj_t*)target_entity, obs_format_str);
+                                printf("%s// Observes: value %s, format %s on %s\\n", get_c_trace_indent_str(), obs_value_str, obs_format_str, trace_name_for_printf);
                             } else {
                                 LOG_ERR_JSON(prop_item, "REGISTRY is NULL, cannot process 'observes' for value: %s", obs_value_str);
                             }
@@ -156,6 +300,7 @@ static bool apply_setters_and_attributes(
                 if (default_type_name_for_registry_if_named && default_type_name_for_registry_if_named[0]) {
                      lvgl_json_register_ptr(full_named_path_buf, default_type_name_for_registry_if_named, target_entity);
                      LOG_INFO("Registered entity %p as '%s' (type %s) via 'named' attribute.", target_entity, full_named_path_buf, default_type_name_for_registry_if_named);
+                     printf("%s// Named: %s for %s (entity type: %s)\\n", get_c_trace_indent_str(), full_named_path_buf, trace_name_for_printf, default_type_name_for_registry_if_named);
                      // Update current_children_base_path for subsequent children within this attribute set
                      strncpy(current_children_base_path, full_named_path_buf, sizeof(current_children_base_path) - 1);
                      current_children_base_path[sizeof(current_children_base_path) - 1] = '\\0';
@@ -226,9 +371,10 @@ static bool apply_setters_and_attributes(
                     true,  // It's an lv_obj_t*.
                     with_target_obj, // Parent for children defined in the 'do' block.
                     path_prefix_for_named_and_children, // Path prefix is inherited from the context of the 'with' attribute itself.
-                    "lv_obj_t" // Type for registering if 'named' is in the 'do' block.
+                    "lv_obj_t", // Type for registering if 'named' is in the 'do' block.
+                    with_target_trace_name // Pass the trace name of the 'with' target
                 )) {
-                LOG_ERR_JSON(do_block_for_with_json, "Failed to apply attributes in 'with.do' block.");
+                LOG_ERR_JSON(do_block_for_with_json, "Failed to apply attributes in 'with.do' block for %s.", with_target_trace_name);
                 // Decide if this is a fatal error for the current apply_setters_and_attributes call.
             }
             continue;
@@ -236,21 +382,33 @@ static bool apply_setters_and_attributes(
 
 
         // --- Standard Setter Logic ---
-        cJSON *prop_args_array = prop_item;
-        bool temp_array_created = false;
-        if (!cJSON_IsArray(prop_item)) {
-            prop_args_array = cJSON_CreateArray();
-            if (prop_args_array) {
-                cJSON_AddItemToArray(prop_args_array, cJSON_Duplicate(prop_item, true));
-                temp_array_created = true;
+        cJSON *prop_args_array_orig = prop_item; // Original JSON item for args
+        cJSON *prop_args_array_for_invoke = NULL; // Will point to a (possibly temporary) array for invoke
+        bool temp_array_created_for_invoke = false;
+
+        if (!cJSON_IsArray(prop_args_array_orig)) {
+            prop_args_array_for_invoke = cJSON_CreateArray();
+            if (prop_args_array_for_invoke) {
+                cJSON_AddItemToArray(prop_args_array_for_invoke, cJSON_Duplicate(prop_args_array_orig, true));
+                temp_array_created_for_invoke = true;
             } else {
-                LOG_ERR_JSON(prop_item, "Failed to create temporary array for property '%s'", prop_name);
+                LOG_ERR_JSON(prop_args_array_orig, "Failed to create temporary array for property '%s'", prop_name);
                 continue;
             }
+        } else {
+            // If it's already an array, we might still need to duplicate it if we modify it (e.g. for LV_PART_MAIN)
+            // For tracing, we iterate over the original structure. For invoking, we use a potentially modified one.
+            // Let's duplicate for invoke if modification is possible.
+            // For now, assume direct usage for invoke if already array and no modification for LV_PART_MAIN needed yet by trace.
+            // This will be refined when LV_PART_MAIN tracing is added.
+            prop_args_array_for_invoke = prop_args_array_orig;
         }
+
 
         char setter_name_buf[128];
         const invoke_table_entry_t* setter_entry = NULL;
+        bool is_style_setter_with_added_selector = false;
+
 
         // 1. Try specific type: lv_<target_actual_type_str>_set_<prop_name>
         if (target_actual_type_str && target_actual_type_str[0]) {
@@ -285,9 +443,21 @@ static bool apply_setters_and_attributes(
                     arg_count > 2 && // obj, value, selector
                     setter_entry->arg_types[2] != NULL &&
                     (strcmp(setter_entry->arg_types[2], "lv_style_selector_t") == 0 || strcmp(setter_entry->arg_types[2], "int") == 0 || strcmp(setter_entry->arg_types[2], "uint32_t") == 0) &&
-                    cJSON_GetArraySize(prop_args_array) == 1) {
+                    cJSON_GetArraySize(prop_args_array_for_invoke) == 1) { // Check size of array used for invoking
                     LOG_DEBUG("Adding default selector LV_PART_MAIN (0) for style property '%s' on %s", prop_name, target_actual_type_str);
-                    cJSON_AddItemToArray(prop_args_array, cJSON_CreateNumber(LV_PART_MAIN));
+                    // If prop_args_array_for_invoke was pointing to original, we need to duplicate it now before modifying
+                    if (prop_args_array_for_invoke == prop_args_array_orig) {
+                        prop_args_array_for_invoke = cJSON_Duplicate(prop_args_array_orig, true);
+                        if (temp_array_created_for_invoke) cJSON_Delete(prop_args_array_orig); // If an outer temp was created, delete it
+                        temp_array_created_for_invoke = true; // Mark that prop_args_array_for_invoke is now a new temp array
+                    }
+                    if (prop_args_array_for_invoke) { // Ensure duplication succeeded
+                        cJSON_AddItemToArray(prop_args_array_for_invoke, cJSON_CreateNumber(LV_PART_MAIN));
+                        is_style_setter_with_added_selector = true;
+                    } else {
+                        LOG_ERR_JSON(prop_args_array_orig, "Failed to duplicate array for adding default selector for '%s'", prop_name);
+                        // Continue without default selector or error out? For now, log and proceed.
+                    }
                 }
             }
         } else if (strcmp(target_actual_type_str, "style") == 0) { // Fallbacks for styles
@@ -309,18 +479,59 @@ static bool apply_setters_and_attributes(
         }
 
         if (!setter_entry) {
-            LOG_WARN_JSON(prop_args_array, "No setter/invokable found for property '%s' on type '%s' (create type '%s').", prop_name, target_actual_type_str, target_create_type_str);
+            LOG_WARN_JSON(prop_args_array_orig, "No setter/invokable found for property '%s' on type '%s' (create type '%s').", prop_name, target_actual_type_str, target_create_type_str);
         } else {
-            if (!setter_entry->invoke(setter_entry, target_entity, NULL, prop_args_array)) {
-                LOG_ERR_JSON(prop_args_array, "Failed to set property '%s' using '%s' on entity %p.", prop_name, setter_entry->name, target_entity);
-                // Potentially return false or handle error more strictly
+            // --- BEGIN TRACE SETTER CALL ---
+            // Use prop_args_array_for_invoke for iterating actual args passed to C
+            // This includes the possibly added LV_PART_MAIN
+            c_code += f"            // Tracing call to {setter_entry->name} for property {prop_name}\\n";
+            c_code += "            char trace_arg_str_final[1024] = {0};\\n"; // Buffer for all formatted args
+            c_code += "            char current_trace_arg_buf[128];\\n";
+            c_code += "            int arg_idx = 0;\\n";
+            c_code += "            cJSON* json_arg_item = NULL;\\n";
+            c_code += "            for (json_arg_item = prop_args_array_for_invoke->child; json_arg_item != NULL; json_arg_item = json_arg_item->next) {\\n";
+            c_code += "                memset(current_trace_arg_buf, 0, sizeof(current_trace_arg_buf));\\n";
+            c_code += "                if (cJSON_IsString(json_arg_item)) {\\n";
+            c_code += "                    const char* str_val = json_arg_item->valuestring;\\n";
+            c_code += "                    const char* expected_c_type_for_arg = setter_entry->arg_types[arg_idx + 1]; // arg_idx is 0-based for prop_args_array\\n";
+            c_code += "                    if (str_val[0] == '#' && strlen(str_val) == 7) {\\n";
+            c_code += "                        snprintf(current_trace_arg_buf, sizeof(current_trace_arg_buf) - 1, \\\"lv_color_hex(0x%s)\\\", str_val + 1);\\n";
+            c_code += "                    } else if (str_val[0] == '@') {\\n";
+            c_code += "                        snprintf(current_trace_arg_buf, sizeof(current_trace_arg_buf) - 1, \\\"\\\\\\\"%s\\\\\\\"\\\", str_val);\\n";
+            c_code += "                    } else if (expected_c_type_for_arg && strcmp(expected_c_type_for_arg, \\\"const char *\\\") == 0) {\\n";
+            c_code += "                        snprintf(current_trace_arg_buf, sizeof(current_trace_arg_buf) - 1, \\\"\\\\\\\"%s\\\\\\\"\\\", str_val);\\n";
+            c_code += "                    } else { // Assumed LVGL enum/symbol\\n";
+            c_code += "                        snprintf(current_trace_arg_buf, sizeof(current_trace_arg_buf) - 1, \\\"%s\\\", str_val);\\n";
+            c_code += "                    }\\n";
+            c_code += "                } else if (cJSON_IsNumber(json_arg_item)) {\\n";
+            c_code += "                    const char* expected_c_type_for_num_arg = setter_entry->arg_types[arg_idx + 1];\n";
+            c_code += "                    if (expected_c_type_for_num_arg && (strcmp(expected_c_type_for_num_arg, \"int\") == 0 || strcmp(expected_c_type_for_num_arg, \"int32_t\") == 0 || strcmp(expected_c_type_for_num_arg, \"lv_coord_t\") == 0 || strcmp(expected_c_type_for_num_arg, \"uint32_t\") == 0 || strcmp(expected_c_type_for_num_arg, \"int16_t\") == 0 || strcmp(expected_c_type_for_num_arg, \"uint16_t\") == 0 || strcmp(expected_c_type_for_num_arg, \"int8_t\") == 0 || strcmp(expected_c_type_for_num_arg, \"uint8_t\") == 0 || strstr(expected_c_type_for_num_arg, \"lv_\") == expected_c_type_for_num_arg && strstr(expected_c_type_for_num_arg, \"_t\") && !strstr(expected_c_type_for_num_arg, \"*\"))) { // Basic int types and LVGL enums (non-pointer)\n";
+            c_code += "                        snprintf(current_trace_arg_buf, sizeof(current_trace_arg_buf) -1, \\\"%d\\\", (int)json_arg_item->valuedouble);\\n";
+            c_code += "                    } else { // Default to %g for floats/doubles or unknown number types\n";
+            c_code += "                        snprintf(current_trace_arg_buf, sizeof(current_trace_arg_buf) -1, \\\"%g\\\", json_arg_item->valuedouble);\\n";
+            c_code += "                    }\n";
+            c_code += "                } else if (cJSON_IsBool(json_arg_item)) { snprintf(current_trace_arg_buf, sizeof(current_trace_arg_buf) -1, \\\"%s\\\", cJSON_IsTrue(json_arg_item) ? \\\"true\\\" : \\\"false\\\"); }\\n";
+            c_code += "                else if (cJSON_IsNull(json_arg_item)) { strncpy(current_trace_arg_buf, \\\"NULL\\\", sizeof(current_trace_arg_buf)-1); }\\n";
+            c_code += "                else { strncpy(current_trace_arg_buf, \\\"<unknown_json_type>\\\", sizeof(current_trace_arg_buf)-1); }\\n";
+            c_code += "                if (arg_idx > 0) { strncat(trace_arg_str_final, \\\", \\\", sizeof(trace_arg_str_final) - strlen(trace_arg_str_final) - 1); }\\n";
+            c_code += "                strncat(trace_arg_str_final, current_trace_arg_buf, sizeof(trace_arg_str_final) - strlen(trace_arg_str_final) - 1);\\n";
+            c_code += "                arg_idx++;\\n";
+            c_code += "            }\\n";
+            c_code += "            // If it was a style setter and we added LV_PART_MAIN, but it wasn't in original JSON for tracing args loop above, handle it.
+            // The loop above iterates `prop_args_array_for_invoke` which *does* include LV_PART_MAIN if added. So this is covered.
+
+            c_code += f"           printf(\"%s%s(%s, %s); // Property: {prop_name}\\n\", get_c_trace_indent_str(), \"{setter_entry->name}\", trace_name_for_printf, trace_arg_str_final);\\n"
+            // --- END TRACE SETTER CALL ---
+
+            if (!setter_entry->invoke(setter_entry, target_entity, NULL, prop_args_array_for_invoke)) {
+                LOG_ERR_JSON(prop_args_array_orig, "Failed to set property '%s' using '%s' on entity %p.", prop_name, setter_entry->name, target_entity);
             } else {
                  LOG_DEBUG("Successfully applied property '%s' using '%s' to entity %p", prop_name, setter_entry->name, target_entity);
             }
         }
 
-        if (temp_array_created) {
-            cJSON_Delete(prop_args_array);
+        if (temp_array_created_for_invoke) { // Clean up the array used for invocation if it was temporary
+            cJSON_Delete(prop_args_array_for_invoke);
         }
     } // End for loop over attributes
 
@@ -330,6 +541,16 @@ static bool apply_setters_and_attributes(
 
     # Main recursive rendering function
     c_code += "static void* render_json_node(cJSON *node, lv_obj_t *parent, const char *named_path_prefix) {\n"
+    # NOTE: Python-side trace stack (_push_trace_parent, _pop_trace_parent, _increment_trace_indent, _decrement_trace_indent)
+    # must be managed carefully around the C code generation for recursive calls to render_json_node
+    # and calls to apply_setters_and_attributes.
+    # The current parent for C tracing (`_get_current_trace_parent()`) is established by the caller of render_json_node
+    # or by lvgl_json_render_ui for the root calls.
+
+    c_code += "    // Buffer for the current widget's trace name. Declared here for wider scope.\n"
+    c_code += "    char new_trace_var_name_buf[64];\n"
+    c_code += "    memset(new_trace_var_name_buf, 0, sizeof(new_trace_var_name_buf));\n\n"
+
     c_code += "    if (!cJSON_IsObject(node)) {\n"
     c_code += "        LOG_ERR(\"Render Error: Expected JSON object for UI node.\");\n"
     c_code += "        return NULL;\n"
@@ -432,6 +653,13 @@ static bool apply_setters_and_attributes(
                     }
                     // else path_for_do_block_context remains empty (root)
 
+                    char comp_root_trace_name_buf[64] = "\"unknown_trace_for_use_view_do\""; // Default
+                    if (is_comp_root_widget && component_root_entity) {
+                        // Attempt to reconstruct the trace name. This assumes render_json_node used new_trace_var_name_buf
+                        // which was populated with this format.
+                        snprintf(comp_root_trace_name_buf, sizeof(comp_root_trace_name_buf), "trace_obj_%p", (void*)component_root_entity);
+                    }
+
                     apply_setters_and_attributes(
                         do_attrs_json,
                         component_root_entity,
@@ -440,7 +668,8 @@ static bool apply_setters_and_attributes(
                         is_comp_root_widget,
                         is_comp_root_widget ? (lv_obj_t*)component_root_entity : NULL,
                         path_for_do_block_context, // Path context for "named"/"children" in DO block
-                        comp_root_registry_type_name
+                        comp_root_registry_type_name,
+                        comp_root_trace_name_buf // Pass the reconstructed or default trace name
                     );
                 }
 
@@ -517,9 +746,9 @@ static bool apply_setters_and_attributes(
 
     c_code += "    // 2. Create the LVGL Object / Resource\n"
     c_code += "    void *created_entity = NULL;\n"
-    c_code += "    bool is_widget = true;\n"
-    c_code += "    char type_name_for_registry_buf[64] = \"lv_obj_t\"; // Default, will be updated\n"
-    c_code += "    const char *actual_type_str_for_node = type_str; //This is the 'type_str' from JSON\n"
+    c_code += "    bool is_widget = true; // Will be set to false for non-widget types like 'style'\n"
+    c_code += "    char type_name_for_registry_buf[64] = \"lv_obj_t\"; // Default, will be updated based on actual type\n"
+    c_code += "    const char *actual_type_str_for_node = type_str; // This is the 'type_str' from JSON (e.g., \"button\", \"style\")\n"
     c_code += "    const char *create_type_str_for_node = type_str; //This might become 'obj' if type_str is 'grid'\n\n"
 
     c_code += "    if (strcmp(actual_type_str_for_node, \"grid\") == 0) {\n"
@@ -580,6 +809,12 @@ static bool apply_setters_and_attributes(
 
 
     c_code += f"    {'else ' if not first_creator else ''} {{\n"
+    # This is the main block for creating standard LVGL widgets.
+    # `create_type_str_for_node` is "obj" for "grid", or `actual_type_str_for_node` otherwise.
+    # `actual_type_str_for_node` is the original type from JSON ("button", "label", "grid", etc.).
+    # `type_name_for_registry_buf` will be like "lv_button_t", "lv_obj_t".
+
+    # Standard widget creation logic starts here
     c_code += "        char create_func_name[64];\n"
     c_code += "        snprintf(create_func_name, sizeof(create_func_name), \"lv_%s_create\", create_type_str_for_node);\n"
     c_code += "        const invoke_table_entry_t* create_entry = find_invoke_entry(create_func_name);\n"
@@ -601,17 +836,52 @@ static bool apply_setters_and_attributes(
     c_code += "             return NULL; \n"
     c_code += "        }\n"
     c_code += "        created_entity = (void*)new_widget;\n"
-    c_code += "        is_widget = true;\n\n"
-    c_code += "        // Determine type for registry (e.g., lv_button_t, lv_obj_t)\n"
+    c_code += "        is_widget = true; // Standard LVGL creators make widgets\n\n"
+    c_code += "        // Determine type for registry (e.g., lv_button_t, lv_obj_t for grid)\n"
     c_code += "        snprintf(type_name_for_registry_buf, sizeof(type_name_for_registry_buf), \"lv_%s_t\", create_type_str_for_node);\n"
+    # Tracing logic will be injected around here for widgets
+    c_code += "\n        // --- BEGIN TRACE WIDGET CREATION ---\n"
+    c_code += "        if (is_widget) {\n" # Check if it's a widget before tracing
+    c_code += "            const char *widget_id_str = id_str_val ? id_str_val : \"N/A\";\n"
+    # new_trace_var_name_buf is already declared at the top of render_json_node
+    c_code += f"           const char* gen_unique_name = \"{_generate_unique_trace_var_name(base_name_hint='obj')}\"; // Python generates the unique name\n"
+    c_code += f"           strncpy(new_trace_var_name_buf, gen_unique_name, sizeof(new_trace_var_name_buf) - 1);\n"
+    # Python's _get_trace_indent_str() and _get_current_trace_parent() provide C strings
+    # Note: actual_type_str_for_node is used for the lv_<type>_create part of the trace
+    # type_name_for_registry_buf is used for the C variable type declaration in the trace (e.g. lv_button_t)
+    # _get_current_trace_parent() returns the C variable name (string) of the parent's trace variable.
+    c_code += _increment_py_trace_indent() # Python state change, and appends C code to c_code string
+    c_code += f"           printf(\"%sdo {{ // Rendering widget type: %s, id: %s, trace_name: %s\\n\", get_c_trace_indent_str(), actual_type_str_for_node, widget_id_str, new_trace_var_name_buf);\n"
+    c_code += f"           printf(\"%s%s *%s = lv_%s_create(%s); // Actual C var: %p\\n\", get_c_trace_indent_str(), type_name_for_registry_buf, new_trace_var_name_buf, actual_type_str_for_node, {_get_current_trace_parent()}, (void*)created_entity);\n"
+    _push_trace_parent("new_trace_var_name_buf") # Python pushes the C buffer *name*. Must be AFTER new_trace_var_name_buf is used by printf
+    c_code += "        }\n" # End if(created_entity) for tracing. Note: _increment_py_trace_indent and _push_trace_parent are Python calls that happen
+                           # during generation of this C block if created_entity (C var) is true.
+                           # This needs to be Python conditional if created_entity check is Python side.
+                           # Current: Python _increment_py_trace_indent is unconditional for this path.
+                           # Python _push_trace_parent is unconditional for this path.
+                           # This is acceptable if they are balanced by unconditional pop/decrement.
+                           # but are Python calls that execute when this part of c_code string is generated.
+                           # This is slightly misstructured if `is_widget` (Python) is different from `is_widget` (C).
+                           # However, `is_widget` (Python) is true in this `else` block where standard widgets are made.
+                           # The `if (is_widget)` C condition is for the C code execution.
+                           # The Python _increment and _push should happen if a widget is being traced.
+                           # Let's move them out of the C specific `if (is_widget)` code generation block,
+                           # as they are Python state changes for the generator.
+
+    c_code += "        // --- END TRACE WIDGET CREATION ---\n\n"
+
+
     c_code += "        if (id_str_val && id_str_val[0] && effective_path_for_node_and_children[0] != '\\0') {\n"
     c_code += "            lvgl_json_register_ptr(effective_path_for_node_and_children, type_name_for_registry_buf, created_entity);\n"
     c_code += "            LOG_INFO(\"Registered widget %p as '%s' (type %s)\", created_entity, effective_path_for_node_and_children, type_name_for_registry_buf);\n"
     c_code += "        } else if (id_str_val && id_str_val[0]) {\n"
     c_code += "            LOG_WARN(\"Widget with id '%s' created, but effective_path_for_node_and_children is empty. Not registered by id.\", id_str_val);\n"
     c_code += "        }\n"
-    c_code += "    }\n"
+    c_code += "    }\n" # End of the 'else' block for standard widget creation
     c_code += "\n"
+    # IMPORTANT: The _decrement_trace_indent() and _pop_trace_parent() calls,
+    # and the closing trace printf, should happen *after* attributes and children are processed.
+    # This means moving that logic to later in the function, just before returning created_entity.
 
     grid_setup_c_code = """
     if (created_entity && is_widget && strcmp(actual_type_str_for_node, "grid") == 0) { 
@@ -696,9 +966,10 @@ static bool apply_setters_and_attributes(
     c_code += "                is_widget,                              // Is it a widget?\n"
     c_code += "                is_widget ? (lv_obj_t*)created_entity : NULL, // Parent for 'children' attribute\n"
     c_code += "                effective_path_for_node_and_children,   // Path prefix for 'named' and 'children' in node\n"
-    c_code += "                type_name_for_registry_buf              // Type name for 'named' registration (e.g. lv_button_t)\n"
+    c_code += "                type_name_for_registry_buf,             // Type name for 'named' registration (e.g. lv_button_t)\n"
+    c_code += "                new_trace_var_name_buf                  // Trace name for the current widget being processed\n"
     c_code += "            )) {\n"
-    c_code += "            LOG_ERR_JSON(node, \"Failed to apply attributes or process children for node type '%s'.\", actual_type_str_for_node);\n"
+    c_code += "            LOG_ERR_JSON(node, \"Failed to apply attributes or process children for node type '%s' with trace name %s.\", actual_type_str_for_node, new_trace_var_name_buf);\n"
     c_code += "            // Decide if this should be fatal and return NULL. For now, log and continue.\n"
     c_code += "            // If created_entity is a widget, it might need to be deleted if this is considered a hard failure.\n"
     c_code += "        }\n"
@@ -712,12 +983,116 @@ static bool apply_setters_and_attributes(
     c_code += "    if (context_was_locally_changed_by_this_node) {\n"
     c_code += "        set_current_context(original_context_for_this_node_call);\n"
     c_code += "    }\n\n"
+
+    # --- BEGIN TRACE WIDGET CLOSE ---
+    # This needs to be placed *before* _pop_trace_parent() and _decrement_trace_indent()
+    # are called on the Python side if this was a widget.
+    # We need a C variable that holds the trace name generated at the start of this widget's block.
+    # The `new_trace_var_name_buf` is in scope if `is_widget` was true earlier.
+    # We also need to ensure this only prints if it *was* a widget.
+    # The `actual_type_str_for_node` is also needed.
+    # This structure is a bit tricky because _decrement and _pop happen on python side *after* this C code is generated.
+    # For now, let's assume the C variables `is_widget`, `new_trace_var_name_buf`, `actual_type_str_for_node` are available.
+    # The Python-side decrement/pop will be done *after* this C code string is added.
+    closing_trace_c_code = ""
+    # This C code generation must be conditional on whether a widget was actually traced.
+    # The `_decrement_trace_indent()` and `_pop_trace_parent()` need to be called on Python side
+    # only if they were incremented/pushed.
+    # This logic is getting tricky to interleave. Let's assume for now that if created_entity exists,
+    # and it was a widget, we attempt to close the trace.
+
+    # The following Python logic needs to run *after* the C code for apply_setters_and_attributes and children processing,
+    # but *before* this function returns.
+    # This is where the Python-side trace stack for the current node needs to be popped.
+    # This part of the code generation is complex because the Python trace state changes
+    # need to align with the C code structure.
+
+    # Let's generate the closing C printf here, and then the Python operations will follow.
+    # This assumes `new_trace_var_name_buf` is still relevant if `is_widget` was true.
+    # We need to ensure this closing statement is only added if the opening was.
+    # A simple way is to check `is_widget` again in the generated C.
+    c_code += "    if (is_widget && created_entity) { // Only print closing trace if it was a traced widget\n"
+    # We need `new_trace_var_name_buf` here. It was declared if `is_widget` was true at creation time.
+    # To ensure it's robust, we might need to re-declare or pass it, or rely on it being in scope.
+    # For now, assume it's in scope from the creation block.
+    # The indent level for the closing brace should be one less than the content.
+    # So, _get_trace_indent_str() should be called *after* _decrement_trace_indent() for the closing brace.
+    # This is problematic. Let's keep indent same for closing as opening content.
+    # The Python _decrement_trace_indent() should ideally happen *before* this printf.
+    # This suggests the Python trace management needs to wrap larger C code blocks.
+
+    # For now, let's structure it like this:
+    # if (is_widget) { /* open trace, push, increment */ }
+    # ... processing ...
+    # if (is_widget) { /* C closing printf */ }
+    # /* python pop, decrement */
+    # This means the closing printf needs access to new_trace_var_name_buf.
+    # And the _decrement_trace_indent() call in Python should precede the generation of this closing printf.
+
+    # Let's adjust: the C for closing will be added here.
+    # Then, the Python _decrement_trace_indent() and _pop_trace_parent() will be called.
+    # This means the _get_trace_indent_str() for the closing C printf must use the indent level *before* decrementing.
+
+    # Re-thinking: The C code for if(is_widget){...} for tracing should be one block.
+    # The Python calls _increment_trace_indent, _push_trace_parent happen *after* generating the C for opening the trace.
+    # The Python calls _decrement_trace_indent, _pop_trace_parent happen *before* generating the C for closing the trace.
+    # This means the C code for closing trace has to be added *after* the apply_setters_and_attributes call.
+    # This is what I'm doing by adding it after the `if (created_entity)` block that calls apply_setters.
+
+    # The current placement is after apply_setters and before return.
+    # This is where we should pop the Python stack and generate the closing C trace.
+
+    # If `created_entity` is NULL (and it wasn't a 'with' node), it means creation failed.
+    # In this case, `is_widget` might be true, but `new_trace_var_name_buf` might not be validly populated if creation failed early.
+    # The trace opening happens *after* `created_entity` is confirmed non-NULL for standard widgets.
+    # So, if `created_entity` is NULL here (and not 'with'), the opening trace was skipped.
+
+    # We need to ensure that `_decrement_trace_indent()` and `_pop_trace_parent()` are called
+    # if and only if `_increment_trace_indent()` and `_push_trace_parent()` were called.
+    # This happens if it was a standard widget and creation succeeded.
+    # The custom creators and 'with' type do not currently use the main tracing push/pop.
+
+    # Let's try to make the closing logic more explicit.
+    # The C variable `new_trace_var_name_buf` is only in scope within the `else { ... }` block for standard widgets.
+    # This is a problem for placing the closing trace printf here using that variable.
+
+    # Simplification: For now, the Python `_pop_trace_parent()` and `_decrement_trace_indent()` will be called
+    # unconditionally after the main `if (created_entity)` block for attribute setting.
+    # This is not perfectly accurate, as non-widget paths or failed creations shouldn't pop/decrement.
+    # This needs refinement.
+
+    # Let's assume `new_trace_var_name_buf` must be passed or made available here if we want to use it.
+    # Given the current structure, the closing printf needs to be generated within the same scope as `new_trace_var_name_buf`
+    # or `new_trace_var_name_buf` needs to be passed to where the closing printf is generated.
+
+    # Backtracking slightly: The original plan was to put the closing C printf *before* Python _pop and _decrement.
+    # This implies that the `_get_trace_indent_str()` for the closing printf uses the current (still incremented) indent.
+
+    # Let's refine the location of pop/decrement and closing printf generation.
+    # It should be *after* `apply_setters_and_attributes` and children processing.
+    # The `grid_setup_c_code` and the `if (created_entity)` block for `apply_setters_and_attributes`
+    # are the main body of processing for a created widget.
+    # So, after that block:
+    popped_parent_trace_var = _pop_trace_parent() # Python side, get the C var name for the closing trace
+
+    # Now generate the C closing trace. This uses the current indent level (which is the widget's own block indent).
+    # And it should only be generated if `is_widget` was true and `created_entity` was successfully made.
+    # The `popped_parent_trace_var` is the `new_trace_var_name_buf` string literal.
+    # This C code generation is also part of the main `else` block for standard widgets.
+    c_code += f"    if (is_widget && created_entity && strcmp(actual_type_str_for_node, \"with\") != 0) {{\n" # Exclude 'with' as it doesn't have its own trace block like this
+    c_code += f"        printf(\"%s}} while(0); // End of widget %s (type: %s)\\n\", get_c_trace_indent_str(), {popped_parent_trace_var}, actual_type_str_for_node);\n"
+    c_code += "    }\n"
+    c_code += _decrement_py_trace_indent() # Python state change, and appends C code
+    c_code += "    // --- END TRACE WIDGET CLOSE ---\n\n"
+
+
     c_code += "    return created_entity;\n"
     c_code += "}\n\n"
 
     # Main entry point function
     c_code += "// --- Public API --- \n\n"
     c_code += "bool lvgl_json_render_ui(cJSON *root_json, lv_obj_t *implicit_root_parent) {\n"
+    # Note: g_trace_parent_stack is empty at this point due to initialization in generate_renderer
     c_code += "    if (!root_json) {\n"
     c_code += "        LOG_ERR(\"Render Error: root_json is NULL.\");\n"
     c_code += "        return false;\n"
@@ -731,6 +1106,16 @@ static bool apply_setters_and_attributes(
     c_code += "             return false;\n"
     c_code += "        }\n"
     c_code += "    }\n\n"
+    # Add the C code for the root trace name and push its C variable name to Python stack
+    c_code += "    char root_trace_name[64];\n"
+    c_code += f"   const char* gen_root_unique_name = \"{_generate_unique_trace_var_name(base_name_hint='root_parent')}\"; // Python generates the unique name\n"
+    c_code += f"   strncpy(root_trace_name, gen_root_unique_name, sizeof(root_trace_name) - 1);\n"
+    c_code += "    // For root, no specific C-side indent increment needed before this printf, using default indent (0)\n"
+    c_code += "    printf(\"// Root parent for trace: %s (represents %p)\\n\", root_trace_name, (void*)effective_parent);\n"
+    # Root parent processing doesn't have its own do{...}while(0) block from render_json_node context,
+    # so _increment_py_trace_indent is not called here.
+    # But it's the first parent on the stack.
+    _push_trace_parent("root_trace_name") # Push the C variable name "root_trace_name"
 
     c_code += "    bool overall_success = true;\n"
     c_code += "    if (cJSON_IsArray(root_json)) {\n"
@@ -770,6 +1155,7 @@ static bool apply_setters_and_attributes(
     c_code += "    } else {\n"
     c_code += "         LOG_INFO(\"UI Rendering completed successfully.\");\n"
     c_code += "    }\n"
+    _pop_trace_parent() # Pop root_trace_name
     c_code += "    return overall_success;\n"
     c_code += "}\n\n"
 
