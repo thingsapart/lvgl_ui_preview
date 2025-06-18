@@ -867,7 +867,7 @@ static bool apply_setters_and_attributes_internal(
 
     grid_setup_c_code = """
     if (g_current_operation_mode == RENDER_MODE && created_entity_render_mode && is_widget && strcmp(actual_type_str_for_node, "grid") == 0) {
-        lv_obj_t* grid_obj = (lv_obj_t*)created_entity;
+        lv_obj_t* grid_obj = (lv_obj_t*)created_entity_render_mode; // CORRECTED
         cJSON *cols_item_json = cJSON_GetObjectItemCaseSensitive(node, "cols");
         cJSON *rows_item_json = cJSON_GetObjectItemCaseSensitive(node, "rows");
 
@@ -881,7 +881,7 @@ static bool apply_setters_and_attributes_internal(
             if (col_dsc_array) {
                 for (int i = 0; i < num_cols; i++) {
                     cJSON *val_item = cJSON_GetArrayItem(cols_item_json, i);
-                    if (!unmarshal_value(val_item, "int32_t", &col_dsc_array[i], created_entity)) { 
+                    if (!unmarshal_value(val_item, "int32_t", &col_dsc_array[i], created_entity_render_mode)) { // CORRECTED
                         LOG_ERR_JSON(val_item, "Grid Error: Failed to parse 'cols' array item %d as int32_t.", i);
                         LV_FREE(col_dsc_array); col_dsc_array = NULL; grid_setup_ok = false;
                         break;
@@ -903,7 +903,7 @@ static bool apply_setters_and_attributes_internal(
             if (row_dsc_array) {
                 for (int i = 0; i < num_rows; i++) {
                     cJSON *val_item = cJSON_GetArrayItem(rows_item_json, i);
-                    if (!unmarshal_value(val_item, "int32_t", &row_dsc_array[i], created_entity)) { 
+                    if (!unmarshal_value(val_item, "int32_t", &row_dsc_array[i], created_entity_render_mode)) { // CORRECTED
                         LOG_ERR_JSON(val_item, "Grid Error: Failed to parse 'rows' array item %d as int32_t.", i);
                         LV_FREE(row_dsc_array); row_dsc_array = NULL; grid_setup_ok = false;
                         break;
@@ -949,7 +949,7 @@ static bool apply_setters_and_attributes_internal(
     c_code += "    if (g_current_operation_mode == RENDER_MODE && created_entity_render_mode) {\n"
     c_code += "        if (!apply_setters_and_attributes(\n"
     c_code += "                node,                                   // Attributes are from the node itself\n"
-    c_code += "                created_entity,                         // Target is the newly created entity\n"
+    c_code += "                created_entity_render_mode,             // Target is the newly created entity (CORRECTED)\n"
     c_code += "                actual_type_str_for_node,               // Actual type (e.g. \"button\", \"grid\", \"style\")\n"
     c_code += "                create_type_str_for_node,               // Create type (e.g. \"button\", \"obj\" for grid)\n"
     c_code += "                is_widget,                              // Is it a widget?\n"
@@ -981,55 +981,27 @@ static bool apply_setters_and_attributes_internal(
     c_code += "        LOG_ERR(\"Render Error: root_json is NULL.\");\n"
     c_code += "        return false;\n"
     c_code += "    }\n"
+    c_code += "    g_current_operation_mode = RENDER_MODE;\n"
+    c_code += "    g_output_c_file = NULL; \n"
+    c_code += "    g_output_h_file = NULL;\n"
+    c_code += "    lvgl_json_reset_registry_for_render(); // Clear any previous render's named objects\n"
     c_code += "    lv_obj_t* effective_parent = implicit_root_parent;\n"
     c_code += "    if (!effective_parent) {\n"
-    c_code += "        LOG_WARN(\"Render Warning: implicit_root_parent is NULL. Using lv_screen_active().\");\n"
+    c_code += "        // LOG_WARN(\"Render Warning: implicit_root_parent is NULL. Using lv_screen_active().\");\n"
     c_code += "        effective_parent = lv_screen_active();\n"
     c_code += "        if (!effective_parent) {\n"
     c_code += "             LOG_ERR(\"Render Error: Cannot get active screen.\");\n"
     c_code += "             return false;\n"
     c_code += "        }\n"
-    c_code += "    }\n\n"
-
-    c_code += "    bool overall_success = true;\n"
-    c_code += "    if (cJSON_IsArray(root_json)) {\n"
-    c_code += "        cJSON *node_in_array = NULL;\n"
-    c_code += "        cJSON_ArrayForEach(node_in_array, root_json) {\n"
-    c_code += "            if (render_json_node(node_in_array, effective_parent, NULL) == NULL) { \n"
-    c_code += "                // Check if the node was a component definition, which returns non-NULL on success (like (void*)1)\n"
-    c_code += "                // but is not an actual LVGL object. Only true failures (NULL) should stop processing here.\n"
-    c_code += "                cJSON *type_item_check = cJSON_GetObjectItemCaseSensitive(node_in_array, \"type\");\n"
-    c_code += "                if (type_item_check && cJSON_IsString(type_item_check) && strcmp(type_item_check->valuestring, \"component\") == 0) {\n"
-    c_code += "                     // If component registration failed, render_json_node returns NULL. This is an error.\n"
-    c_code += "                     LOG_ERR_JSON(node_in_array, \"Render Error: Failed to process top-level 'component' definition. Aborting.\");\n"
-    c_code += "                     overall_success = false; break;\n"
-    c_code += "                } else {\n"
-    c_code += "                     LOG_ERR_JSON(node_in_array, \"Render Error: Failed to render top-level node. Aborting.\");\n"
-    c_code += "                     overall_success = false; break;\n"
-    c_code += "                }\n"
-    c_code += "            }\n"
-    c_code += "        }\n"
-    c_code += "    } else if (cJSON_IsObject(root_json)) {\n"
-    c_code += "        if (render_json_node(root_json, effective_parent, NULL) == NULL) {\n"
-    c_code += "            cJSON *type_item_check = cJSON_GetObjectItemCaseSensitive(root_json, \"type\");\n"
-    c_code += "            if (!(type_item_check && cJSON_IsString(type_item_check) && strcmp(type_item_check->valuestring, \"component\") == 0)) {\n"
-    c_code += "                 overall_success = false;\n"
-    c_code += "            } else {\n"
-    c_code += "                 // Component definition failed at root level\n"
-    c_code += "                 LOG_ERR_JSON(root_json, \"Render Error: Failed to process root 'component' definition.\");\n"
-    c_code += "                 overall_success = false;\n"
-    c_code += "            }\n"
-    c_code += "        }\n"
-    c_code += "    } else {\n"
-    c_code += "        LOG_ERR_JSON(root_json, \"Render Error: root_json must be a JSON object or array.\");\n"
-    c_code += "        overall_success = false;\n"
-    c_code += "    }\n\n"
-    c_code += "    if (!overall_success) {\n"
+    c_code += "    }\n"
+    c_code += "    // The initial_parent_c_var_name is not relevant for RENDER_MODE call to process_json_ui_internal.\n"
+    c_code += "    bool success = process_json_ui_internal(root_json, effective_parent, NULL, NULL, NULL);\n"
+    c_code += "    if (!success) {\n"
     c_code += "         LOG_ERR(\"UI Rendering failed.\");\n"
     c_code += "    } else {\n"
     c_code += "         LOG_INFO(\"UI Rendering completed successfully.\");\n"
     c_code += "    }\n"
-    c_code += "    return overall_success;\n"
+    c_code += "    return success;\n"
     c_code += "}\n\n"
 
     return c_code
